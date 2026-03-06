@@ -99,10 +99,16 @@ export default function DemandeQrInputs() {
             try {
                 setLoadingData(true)
                 const merchantList = await merchantsData.findMerchant()
-                // console.log(merchantList)
+                // console.log('Total' ,merchantList.length)
+
+                const uniqueMerchants = Array.from(
+                    new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
+                );
+                // console.log(uniqueMerchants)
+                // console.log(('unique', uniqueMerchants.length))
 
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
-                const countByPointMarchand = merchantList.reduce((acc, { CHAINE, POINT_MARCHAND }) => {
+                const countByPointMarchand = uniqueMerchants.reduce((acc, { CHAINE, POINT_MARCHAND }) => {
                     const key = `${CHAINE}__${POINT_MARCHAND}`
                     if (!acc[key]) {
                         acc[key] = {
