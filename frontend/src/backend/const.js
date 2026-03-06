@@ -1,5 +1,3 @@
-import { url } from "../../../backend/config/clouddinaryConifg"
-
 const urlLocal = "http://localhost:5500"
 const urlOnline = "51.75.95.225:5500"
 const urlServer = '/api'
