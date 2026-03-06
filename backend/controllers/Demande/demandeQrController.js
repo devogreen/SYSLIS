@@ -1297,6 +1297,315 @@ const getAllFormFiles = async (req, res) => {
     }
 }
 
+const modifyDemandeQr = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            liste_demande,
+            quantite_marchand,
+            quantite_qr,
+            userId,
+        } = req.body
+
+        const files = req.files?.files || [];
+        const files_content = files.length
+        ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+        : [];
+        
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+        
+        const details = typeof liste_demande === "string"
+        ? JSON.parse(liste_demande)
+        : liste_demande;
+        
+        const updatedDemandeQr = await prisma.$transaction(async (tx) => {
+            const demande = await tx.demande_qr.findUnique({
+                where: {
+                    id: parseInt(id)
+                }
+            }) 
+            const demandeForm = await tx.forms.findUnique({
+                where: {
+                    id: demande.form_id
+                }
+            })
+            await tx.forms.update({
+                where: {
+                    id: demandeForm.id
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: new Date(),
+                    last_modified_at: new Date(),
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                },
+            })
+            await tx.demande_qr.update({
+                where: {
+                    id: parseInt(id)
+                },
+                data: {
+                    quantite_qr: Number(quantite_qr),
+                    quantite_marchand: Number(quantite_marchand),
+                    liste_demande: JSON.stringify(details),
+                }
+            })
+
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: +userId,
+                        form_id: demandeForm.id,
+                        type_formulaire: 'demande_qr',
+                        role: 'demandeur',
+                        created_at: new Date(),
+                    }))
+                })
+            }
+
+            return {
+                demandeForm, demande
+            }
+        })
+
+        /*****************          GESTION MAIL             *****************/
+
+        const roleGenerateur = await prisma.user_roles.findMany({
+            where: {
+                role_id: 16,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const roleImpression = await prisma.user_roles.findMany({
+            where: {
+                role_id: 17,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const roleSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 22,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const generateurs = roleGenerateur.map(us => us.users)
+        const imprimeurs = roleImpression.map(us => us.users)
+        const superviseurs = roleSupervision.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/demande-qr-details/${updatedDemandeQr.demande.id}`;
+
+        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
+            const subject = `MODIFICATION DEMANDE DE QR CODE(S)`;
+            let html = `
+                <p>Bonjour,</p>
+                <p>la demande de QR code(s) ${updatedDemandeQr.demande.id} a été modifiée.</p>
+                <ul>
+                <li><strong>Nombre de marchands :</strong> ${quantite_marchand}</li>
+                <li><strong>Nombre de QR Code :</strong> ${quantite_qr}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+            for (const generateur of generateurs) {
+                await sendMail({
+                    to: generateur.email,
+                    subject,
+                    html,
+                });
+            }
+            for (const imprimeur of imprimeurs) {
+                await sendMail({
+                    to: imprimeur.email,
+                    subject,
+                    html,
+                });
+            }
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log("Demande modifiée avec succès ! ")
+        res.status(201).json({
+            message: "Demande modifiée avec succès",
+            demandeQr: updatedDemandeQr,
+        });
+        
+    } catch (error) {
+        console.error("Erreur lors de la modification de la demande de QR Codes :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const cancelDemandeQr = async (req, res) => {
+    try {
+        const {
+            id 
+        } = req.params
+        const {
+            userId,
+        } = req.body
+        
+        const canceledDemande = await prisma.$transaction(async (tx) => {
+            const demande = await tx.demande_qr.findUnique({
+                where: {
+                    id: parseInt(id)
+                }
+            })
+            if (!demande) {
+                console.error('Demande introuvable !')
+                return res.status(404).json({ message: "Demande introuvable !" });
+            }
+            await tx.forms.update({
+                where: {
+                    id: demande.form_id 
+                },
+                data: {
+                    updated_by: parseInt(userId),
+                    updated_at: new Date(),
+                    last_modified_at: new Date(),
+                    is_deleted: true
+                }
+            });
+            await tx.fichiers.updateMany({
+                where: {
+                    form_id: demande.form_id, 
+                },
+                data: {
+                    is_deleted: true,
+                }
+            })
+            return {
+                demande
+            }
+        })
+
+        /*****************          GESTION MAIL             *****************/
+
+        const roleGenerateur = await prisma.user_roles.findMany({
+            where: {
+                role_id: 16,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const roleImpression = await prisma.user_roles.findMany({
+            where: {
+                role_id: 17,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const roleSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 22,
+            },
+            include: {
+                users: true
+            }
+        })
+
+        const generateurs = roleGenerateur.map(us => us.users)
+        const imprimeurs = roleImpression.map(us => us.users)
+        const superviseurs = roleSupervision.map(us => us.users)
+
+        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
+            const subject = `ANNULATION DEMANDE DE QR CODE(S)`;
+            let html = `
+                <p>Bonjour,</p>
+                <p>la demande de QR code(s) ${canceledDemande.demande.id} a été annulée.</p>
+                <p><strong>Plus d'actions ne seront menées sur cette demande</strong</p>
+                <br>
+                <br>
+                <br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+            for (const generateur of generateurs) {
+                await sendMail({
+                    to: generateur.email,
+                    subject,
+                    html,
+                });
+            }
+            for (const imprimeur of imprimeurs) {
+                await sendMail({
+                    to: imprimeur.email,
+                    subject,
+                    html,
+                });
+            }
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log("Demande annulée avec succès ! ")
+        res.status(201).json({
+            message: "Demande annulée avec succès",
+            demandeQr: canceledDemande.demande,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'annulation de la demande de QR Codes :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -1310,4 +1619,6 @@ module.exports = {
     getAllFormatsQr,
     regularisationDemandeQr,
     getAllFormFiles,
+    modifyDemandeQr,
+    cancelDemandeQr,
 }

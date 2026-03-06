@@ -133,4 +133,26 @@ export class DemandeQr {
             throw error.response.data
         }
     };
+
+    async modifyDemandeQr(id, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/modifyDemandeQr/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async cancelDemandeQr(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/cancelDemandeQr/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
 }

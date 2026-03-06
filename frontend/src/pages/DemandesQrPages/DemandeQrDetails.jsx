@@ -1,7 +1,6 @@
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router";
-import { useParams } from "react-router";
+import { useParams, Link, useNavigate } from "react-router";
 import { DemandeQr } from "../../backend/demandeQr/DemandeQr";
 import { Users } from "../../backend/users/Users";
 import {
@@ -35,6 +34,7 @@ export default function DemandeQrDetails() {
     const [loadingImpression, setLoadingImpression] = useState(false)
     const [loadingLivraison, setLoadingLivraison] = useState(false)
     const [loadingReception, setLoadingReception] = useState(false)
+    const [loadingCancel, setLoadingCancel] = useState(false)
 
     const [dateDemande, setDateDemande] = useState('')
     const [statutDemande, setStatutDemande] = useState('')
@@ -99,6 +99,8 @@ export default function DemandeQrDetails() {
 
     const [fileId, setFileId] = useState(null);
 
+    const [isModalCancelOpen, setIsModalCancelOpen] = useState(false)
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
@@ -113,7 +115,18 @@ export default function DemandeQrDetails() {
                 // console.log(demande)
 
                 const formDemande = demande.forms
-                // console.log(formDemande)
+                // console.log(formDemande)$
+                if(formDemande.is_deleted) {
+                    Swal.fire({
+                        title: "Demande supprimée",
+                        text: "Cette demande a été supprimée.",
+                        icon: "warning",
+                        confirmButtonColor: "#3085d6",
+                        confirmButtonText: "OK"
+                    });
+                    navigate('/toutes-les-demandes-qr')
+                    return;
+                }
 
                 const listeDemande = JSON.parse(demande.liste_demande)
                 setListeDemande(listeDemande)
@@ -169,6 +182,10 @@ export default function DemandeQrDetails() {
                     if (rolesId.includes(16)) {
                         setIsGenerateur(true)
                     }
+                    if (rolesId.includes(15)) {
+                        setIsDemandeur(true)
+                    }
+
                 } else if (statut == 'generee' && generation) {
                     setStatutDemande('générée')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-500')
@@ -526,6 +543,33 @@ export default function DemandeQrDetails() {
         }
     }
 
+    const handleCancelDemande = async () => {
+        setIsModalCancelOpen(false)
+        try {
+            const payload = {
+                userId,
+            }
+            setLoadingCancel(true)
+            await demandeData.cancelDemandeQr(idDemande, payload)
+            Swal.fire({
+                title: "Succès",
+                text: "Demande annulée avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur d'annulation : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de l'annulation !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingCancel(false)
+        }
+    }
+
     return (
         <>
             <PageBreadcrumb pageTitle={`Détails demande QRC ${idDemande}`} />
@@ -565,6 +609,40 @@ export default function DemandeQrDetails() {
                                     <div className="text-right">
                                         <div className="grid grid-cols-2">
                                             <div className='col-start-2 space-y-0.5'>
+                                                {isDemandeur ? (
+                                                    <>
+                                                        <div>
+                                                            {loadingCancel ? (
+                                                                <>
+                                                                    <div className='text-center'>
+                                                                        <span className=''>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div className="space-y-0.5">
+                                                                        <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                            <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
+                                                                        </Link>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                            onClick={() => {
+                                                                                setIsModalCancelOpen(true)
+                                                                            }}
+                                                                        >
+                                                                            <span className='mr-4'><i className="pi pi-times-circle"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
                                                 {isGenerateur ? (
                                                     <>
                                                         {loadingGenerate ? (
@@ -1179,6 +1257,34 @@ export default function DemandeQrDetails() {
                         <span className="text-error-500 text-xs">
                             {errorSignReception}
                         </span>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalCancelOpen} onClose={() => setIsModalCancelOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-7">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-black text-white font-medium">Annuler</span>
+                    </div>
+                    <div className="text-center text-sm font-medium">
+                        <span>Êtes-vous sûr de vouloir annuler cette demande ?</span>
+                    </div>
+                    <div>
+                        <div className="flex justify-between">
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={() => setIsModalCancelOpen(false)}
+                                >
+                                    Non
+                                </button>
+                            </div>
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={handleCancelDemande}
+                                >
+                                    Oui
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </Modal>
