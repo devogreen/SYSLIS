@@ -455,7 +455,7 @@ const faireDemande = async (req, res) => {
     }
 
     const files = req.files?.files || [];
-
+    
     const files_content = files.length
       ? files.map(file => ({
         name: file.originalname,
@@ -3640,15 +3640,15 @@ const generateDemandePDF = async (req, res) => {
       service_demandeur = serviceDemandeur.nom_service.toUpperCase()
     }
 
-    const serviceDonneur = await prisma.services.findUnique({
-      where: {
-        id: parseInt(details.service)
-      }
-    })
-    if (serviceDonneur) {
-      service_donneur = serviceDonneur.nom_service.toUpperCase()
-    }
-    console.log(serviceDonneur)
+    // const serviceDonneur = await prisma.services.findUnique({
+    //   where: {
+    //     id: parseInt(details.service)
+    //   }
+    // })
+    // if (serviceDonneur) {
+    //   service_donneur = serviceDonneur.nom_service.toUpperCase()
+    // }
+    // console.log(serviceDonneur)
 
     const autresChamps = champsAutres.map((data, index) => {
       let row = ""
@@ -3677,24 +3677,34 @@ const generateDemandePDF = async (req, res) => {
 
     const quantite_livree = details.quantiteMouvement
 
-    const type_demande = details.typeMouvement
-    const mouvement = await prisma.type_mouvement_stock.findUnique({
-      where: {
-        id: +type_demande
-      }
-    })
+    let mouvement = null
+    let type_demande = null
+    let typeMouvement = ''
+    let stock_depart = 0
+    let stock_final = 0
+    if(demande.demande_livree){
+      type_demande = details.typeMouvement
+      mouvement = await prisma.type_mouvement_stock.findUnique({
+        where: {
+          id: +type_demande
+        }
+      })
+      typeMouvement = mouvement.titre
+      stock_depart = type_demande == 1 ? details.stockInitialLot : type_demande == 2 ?
+        details.stockInitialCartonLot : type_demande == 3 ?
+          details.stockInitialPieceCarton : type_demande == 4 ?
+            details.stockInitialCarton : type_demande == 5 ?
+              details.stockInitialPiece : 0
+  
+      stock_final = type_demande == 1 ? details.stockFinalLot : type_demande == 2 ?
+        details.stockFinalCartonLot : type_demande == 3 ?
+          details.stockFinalPieceCarton : type_demande == 4 ?
+            details.stockFinalCarton : type_demande == 5 ?
+              details.stockFinalPiece : 0
+    } else {
+      typeMouvement = details.typeDemande
+    }
 
-    const stock_depart = type_demande == 1 ? details.stockInitialLot : type_demande == 2 ?
-      details.stockInitialCartonLot : type_demande == 3 ?
-        details.stockInitialPieceCarton : type_demande == 4 ?
-          details.stockInitialCarton : type_demande == 5 ?
-            details.stockInitialPiece : 0
-
-    const stock_final = type_demande == 1 ? details.stockFinalLot : type_demande == 2 ?
-      details.stockFinalCartonLot : type_demande == 3 ?
-        details.stockFinalPieceCarton : type_demande == 4 ?
-          details.stockFinalCarton : type_demande == 5 ?
-            details.stockFinalPiece : 0
 
     const validation = demande.validation_demande[index]
 
@@ -3713,8 +3723,6 @@ const generateDemandePDF = async (req, res) => {
     let commentaire_livraison = 'N/A'
     let commentaire_reception = 'N/A'
     let quantite_livraison = 'N/A'
-
-
 
     if (demandeLivraison) {
       templateFile = templatesMap[2]
@@ -3737,7 +3745,7 @@ const generateDemandePDF = async (req, res) => {
       .replaceAll("{{pieces_demandees}}", piece.nom_piece.toUpperCase())
       .replaceAll("{{motif_demande}}", demande.motif_demande)
       .replaceAll("{{service_donneur}}", service_donneur)
-      .replaceAll("{{mouvement}}", mouvement.titre)
+      .replaceAll("{{mouvement}}", typeMouvement)
       .replaceAll("{{nom_validateur}}", nomValidateur)
       .replaceAll("{{nom_demandeur}}", nomDemandeur)
       .replaceAll("{{service_demandeur}}", service_demandeur)

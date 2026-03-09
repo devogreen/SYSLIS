@@ -133,7 +133,7 @@ export default function DemandeDetails() {
 
     const [quantiteValidee, setQuantiteValidee] = useState(0)
 
-    const [demandeurFiles, setDemandeuFiles] = useState([])
+    const [demandeurFiles, setDemandeurFiles] = useState([])
 
     const [fileId, setFileId] = useState(null);
 
@@ -353,7 +353,7 @@ export default function DemandeDetails() {
                     const dFiles = allFiles.filter((item) => {
                         return item.role == 'demandeur'
                     })
-                    setDemandeuFiles(dFiles)
+                    setDemandeurFiles(dFiles)
 
                 } catch (error) {
                     console.log("Error fetchind data ", error)

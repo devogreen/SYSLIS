@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Livraisons {
@@ -276,6 +277,8 @@ model roles {
   livraison     livraison[]
   remplacements remplacements[]
   user_roles    user_roles[]
+
+  @@index([nom_role], map: "nom_role")
 }
 
 model services {
@@ -426,8 +429,12 @@ model users {
   demandes_demandes_user_idTousers      demandes[]                   @relation("demandes_user_idTousers")
   demandes_demandes_id_demandeurTousers demandes[]                   @relation("demandes_id_demandeurTousers")
   fichiers                              fichiers[]
+  form_signatures                       form_signatures[]
+  forms_forms_created_byTousers         forms[]                      @relation("forms_created_byTousers")
+  forms_forms_updated_byTousers         forms[]                      @relation("forms_updated_byTousers")
   items                                 items[]
   livraison                             livraison[]
+  qr_codes                              qr_codes[]
   reception_livraison                   reception_livraison[]
   reception_piece                       reception_piece[]
   remplacements                         remplacements[]
@@ -578,6 +585,7 @@ model fichiers {
   mimeType        String?                  @db.VarChar(255)
   size            Int?
   uploaded_by     Int
+  form_id         Int?
   livraison_id    Int?
   remplacement_id Int?
   demande_id      Int?
@@ -590,16 +598,193 @@ model fichiers {
   remplacements   remplacements?           @relation(fields: [remplacement_id], references: [id], map: "fichiers_ibfk_3")
   demandes        demandes?                @relation(fields: [demande_id], references: [id], map: "fichiers_ibfk_4")
   users           users                    @relation(fields: [uploaded_by], references: [id_user], onDelete: NoAction, map: "fichiers_ibfk_5")
+  forms           forms?                   @relation(fields: [form_id], references: [id], map: "fichiers_ibfk_6")
 
   @@index([demande_id], map: "demande_id")
   @@index([livraison_id], map: "livraison_id")
   @@index([remplacement_id], map: "remplacement_id")
   @@index([uploaded_by], map: "uploaded_by")
+  @@index([form_id], map: "form_id")
 }
 
 model types_formulaires {
   id             Int    @id @default(autoincrement())
   nom_formulaire String @db.VarChar(255)
+}
+
+model demande_qr {
+  id                Int               @id @default(autoincrement())
+  form_id           Int
+  statut            demande_qr_statut
+  quantite_qr       Int?
+  quantite_marchand Int?
+  liste_demande     String?           @db.LongText
+  is_reg            Boolean           @default(false)
+  forms             forms             @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "demande_qr_ibfk_3")
+  generation_qr     generation_qr[]
+  impression_qr     impression_qr[]
+  livraison_qr      livraison_qr[]
+  marchands_qr      marchands_qr[]
+  qr_codes          qr_codes[]
+  reception_qr      reception_qr[]
+
+  @@index([form_id], map: "form_id")
+}
+
+model form_signatures {
+  id            Int                  @id @default(autoincrement())
+  form_id       Int
+  signature_url String               @db.VarChar(255)
+  signed_by     Int
+  signed_at     DateTime             @default(now()) @db.DateTime(0)
+  role          form_signatures_role
+  is_deleted    Boolean              @default(false)
+  users         users                @relation(fields: [signed_by], references: [id_user], map: "form_signatures_ibfk_2")
+  forms         forms                @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "form_signatures_ibfk_3")
+
+  @@index([signed_by], map: "signed_by")
+  @@index([form_id], map: "form_id")
+}
+
+model generation_qr {
+  id            Int             @id @default(autoincrement())
+  form_id       Int
+  quantite_qr   Int?
+  demande_id    Int
+  demande_qr    demande_qr      @relation(fields: [demande_id], references: [id], map: "generation_qr_ibfk_2")
+  forms         forms           @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "generation_qr_ibfk_3")
+  impression_qr impression_qr[]
+  qr_codes      qr_codes[]
+
+  @@index([demande_id], map: "demande_id")
+  @@index([form_id], map: "form_id")
+}
+
+model impression_qr {
+  id            Int           @id @default(autoincrement())
+  form_id       Int
+  generation_id Int
+  quantite_qr   Int?
+  demande_id    Int
+  demande_qr    demande_qr    @relation(fields: [demande_id], references: [id], map: "impression_qr_ibfk_2")
+  forms         forms         @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "impression_qr_ibfk_3")
+  generation_qr generation_qr @relation(fields: [generation_id], references: [id], onUpdate: Restrict, map: "impression_qr_ibfk_4")
+
+  @@index([demande_id], map: "demande_id")
+  @@index([form_id], map: "form_id")
+  @@index([generation_id], map: "generation_id")
+}
+
+model livraison_qr {
+  id           Int            @id @default(autoincrement())
+  form_id      Int
+  demande_id   Int
+  quantite_qr  Int?
+  demande_qr   demande_qr     @relation(fields: [demande_id], references: [id], map: "livraison_qr_ibfk_2")
+  forms        forms          @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "livraison_qr_ibfk_3")
+  reception_qr reception_qr[]
+
+  @@index([demande_id], map: "demande_id")
+  @@index([form_id], map: "form_id")
+}
+
+model marchands_qr {
+  id            Int            @id @default(autoincrement())
+  chaine        String?        @db.VarChar(255)
+  nom_marchand  String?        @db.VarChar(255)
+  quantite_sn   Int?
+  quantite_qr   Int?
+  type_qr       String?        @db.VarChar(255)
+  type_id       Int?
+  format_id     Int
+  format        String         @db.VarChar(255)
+  demande_id    Int
+  created_at    DateTime       @default(now()) @db.DateTime(0)
+  is_deleted    Boolean        @default(false)
+  demande_qr    demande_qr     @relation(fields: [demande_id], references: [id], map: "marchands_qr_ibfk_1")
+  type_paiement type_paiement? @relation(fields: [type_id], references: [id], onDelete: Restrict, map: "marchands_qr_ibfk_2")
+  format_qr     format_qr      @relation(fields: [format_id], references: [id], map: "marchands_qr_ibfk_3")
+
+  @@index([demande_id], map: "demande_id")
+  @@index([type_id], map: "type_id")
+  @@index([format_id], map: "format_id")
+}
+
+model qr_codes {
+  id            Int           @id @default(autoincrement())
+  path          String        @db.VarChar(255)
+  filename      String        @db.VarChar(255)
+  originalName  String?       @db.VarChar(255)
+  mimeType      String?       @db.VarChar(255)
+  size          Int?
+  created_at    DateTime      @default(now()) @db.DateTime(0)
+  uploaded_by   Int
+  demande_id    Int?
+  generation_id Int
+  is_deleted    Boolean       @default(false)
+  demande_qr    demande_qr?   @relation(fields: [demande_id], references: [id], onDelete: Restrict, map: "qr_codes_ibfk_1")
+  users         users         @relation(fields: [uploaded_by], references: [id_user], map: "qr_codes_ibfk_2")
+  generation_qr generation_qr @relation(fields: [generation_id], references: [id], map: "qr_codes_ibfk_3")
+
+  @@index([demande_id], map: "demande_id")
+  @@index([uploaded_by], map: "uploaded_by")
+  @@index([generation_id], map: "generation_id")
+}
+
+model reception_qr {
+  id           Int          @id @default(autoincrement())
+  form_id      Int
+  demande_id   Int
+  livraison_id Int
+  quantite_qr  Int?
+  demande_qr   demande_qr   @relation(fields: [demande_id], references: [id], map: "reception_qr_ibfk_2")
+  livraison_qr livraison_qr @relation(fields: [livraison_id], references: [id], map: "reception_qr_ibfk_3")
+  forms        forms        @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "reception_qr_ibfk_4")
+
+  @@index([demande_id], map: "demande_id")
+  @@index([livraison_id], map: "livraison_id")
+  @@index([form_id], map: "form_id")
+}
+
+model type_paiement {
+  id           Int                @id @default(autoincrement())
+  nom          String             @db.VarChar(255)
+  abrv         String?            @db.VarChar(255)
+  type         type_paiement_type
+  qr_code      Boolean            @default(false)
+  marchands_qr marchands_qr[]
+}
+
+model forms {
+  id                            Int               @id @default(autoincrement())
+  type                          forms_type
+  created_by                    Int
+  updated_by                    Int?
+  created_at                    DateTime          @default(now()) @db.DateTime(0)
+  updated_at                    DateTime?         @db.DateTime(0)
+  last_modified_at              DateTime          @default(now()) @db.DateTime(0)
+  nom_user                      String?           @db.VarChar(255)
+  commentaire                   String?           @db.LongText
+  is_deleted                    Boolean           @default(false)
+  demande_qr                    demande_qr[]
+  fichiers                      fichiers[]
+  form_signatures               form_signatures[]
+  users_forms_created_byTousers users             @relation("forms_created_byTousers", fields: [created_by], references: [id_user], map: "forms_ibfk_1")
+  users_forms_updated_byTousers users?            @relation("forms_updated_byTousers", fields: [updated_by], references: [id_user], map: "forms_ibfk_2")
+  generation_qr                 generation_qr[]
+  impression_qr                 impression_qr[]
+  livraison_qr                  livraison_qr[]
+  reception_qr                  reception_qr[]
+
+  @@index([created_by], map: "created_by")
+  @@index([updated_by], map: "updated_by")
+  @@index([type], map: "type")
+}
+
+model format_qr {
+  id           Int            @id @default(autoincrement())
+  format       String         @db.VarChar(255)
+  marchands_qr marchands_qr[]
 }
 
 enum livraison_statut_livraison {
@@ -668,10 +853,47 @@ enum remplacements_statut {
   annule
 }
 
+enum type_paiement_type {
+  mobile
+  bancaire
+}
+
+enum demande_qr_statut {
+  soumise
+  generee
+  imprimee
+  livree
+  recue
+}
+
+enum forms_type {
+  livraison_sn
+  reception_sn
+  remplacement_sn
+  reception_remplacement
+  demande_stock
+  validation_stock
+  reception_stock
+  demande_qr
+  generation_qr
+  impression_qr
+  livraison_qr
+  reception_qr
+}
+
+enum form_signatures_role {
+  livreur
+  receveur
+  demandeur
+  validateur
+  regularisateur
+}
+
 enum fichiers_type_formulaire {
   livraison
   remplacement
   demande
+  demande_qr
 }
 
 enum fichiers_role {
@@ -679,4 +901,6 @@ enum fichiers_role {
   receveur
   demandeur
   validateur
+  regularisateur
+  generateur
 }

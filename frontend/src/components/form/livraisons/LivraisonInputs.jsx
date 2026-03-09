@@ -840,7 +840,6 @@ export default function LivraisonInputs() {
                   </TableRow>
                 ))}
               </TableBody>
-
             </Table>
           </div>
         </div>

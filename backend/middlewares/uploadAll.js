@@ -10,6 +10,10 @@ const storage = multer.diskStorage({
       dir = "uploads/signatures/";
     }
 
+    if(file.fieldname === "qrCodes") {
+      dir = "uploads/qrCodes/"
+    }
+
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -47,7 +51,7 @@ const fileFilterUpload = (req, file, cb) => {
       cb(new Error("Signature must be an image"));
     }
 
-  } else if (file.fieldname === "files") {
+  } else if (file.fieldname === "files" || file.fieldname == "qrCodes") {
 
     const ext = path.extname(file.originalname).toLowerCase();
 

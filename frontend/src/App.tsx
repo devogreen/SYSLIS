@@ -180,6 +180,17 @@ import RegularisationDemandeForm from "./pages/Forms/DemandesForms/Regularisatio
 // @ts-ignore
 import LivraisonDemandeForm from "./pages/Forms/DemandesForms/LivraisonDemandeForm"
 
+// @ts-ignore
+import RegularisationDemandeQrForm from "./pages/Forms/DemandesQrForms/RegularisationDemandeQrForm"
+// @ts-ignore
+import DemandeQrForm from "./pages/Forms/DemandesQrForms/DemandeQrForm"
+// @ts-ignore
+import AllDemandesQr from "./pages/DemandesQrPages/AllDemandesQr"
+// @ts-ignore
+import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
+// @ts-ignore
+import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
+
 export default function App() {
   return (
     <>
@@ -208,6 +219,13 @@ export default function App() {
               <Route path="/demande-livraison/:id" element={<DemandeDeliveryDetails />} />
               <Route path="/livraison-pieces/:id" element={<LivraisonPiecesForm />} />
               <Route path="/modifier-livraison-pieces/:id" element={<ModifyLivraisonPiecesForm />} />
+
+              {/* Demandes QR CODE */}
+              <Route path="/regularisation-demande-qr" element={<RegularisationDemandeQrForm />} />
+              <Route path="/demande-qr" element={<DemandeQrForm />} />
+              <Route path="/toutes-les-demandes-qr" element={<AllDemandesQr />} />
+              <Route path="/demande-qr-details/:id" element={<DemandeQrDetails />} />
+              <Route path="/modifier-demande-qr/:id" element={<ModifyDemandeQrForm />} />
 
               {/* Stock */}
               <Route path="/voir-items" element={<AllItems />} />
