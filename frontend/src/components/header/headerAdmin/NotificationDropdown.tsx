@@ -3,7 +3,7 @@ import { Dropdown } from "../../ui/dropdown/Dropdown";
 import { DropdownItem } from "../../ui/dropdown/DropdownItem";
 import { Link, useNavigate } from "react-router";
 
-import { ClipboardCheck } from "../../../icons";
+import { ClipboardCheck, CheckCircleIcon } from "../../../icons";
 // @ts-ignore
 import { Demandes } from "../../../backend/demandes/Demandes"
 // import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -11,9 +11,9 @@ import { Demandes } from "../../../backend/demandes/Demandes"
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifying, setNotifying] = useState(false);
-  // @ts-ignore
-  const [demandesEnAttentes, setDemandesEnAttentes] = useState([])
-  // const demandes = new Demandes();
+  const [demandesEnAttentes, setDemandesEnAttentes] = useState<any[]>([])
+  const [demandesValidees, setDemandesValidees] = useState<any[]>([])
+  const demandes = new Demandes();
   const navigate = useNavigate()
 
   function toggleDropdown() {
@@ -24,40 +24,71 @@ export default function NotificationDropdown() {
     setIsOpen(false);
   }
   
-
-
   const handleClick = () => {
     toggleDropdown();
     setNotifying(false);
   };
 
-  useEffect( ()=>{
-    const fetchDemandes = async () =>{
-      try{
-        // let data = await demandes.getAllDemandes()
-        // console.log(data)
-        // // @ts-ignore
-        // const enAttente = data
-        // // @ts-ignore
-        // .filter(item => {
-        //   return item.statut_demande === 'valide' && item.demande_livree == false;
-        // })
-        // // @ts-ignore
-        // .map(item => ({
-        //   ...item,
-        //   timeAgo: formatDistanceToNow(parseISO(item.date_demande), { addSuffix: true })
-        // }));
-        // if (enAttente.length > 0){
-        //   setNotifying(true)
-        // }
-
-        // setDemandesEnAttentes(enAttente)
-
-      } catch(error){
-        console.error('Error fetching demandes:', error);
+  // Fonction pour récupérer les demandes en attente
+  const fetchDemandesEnAttente = async () => {
+    try {
+      const data = await demandes.getDemandesEnAttente();
+      const formattedData = data.map((item: any) => ({
+        ...item,
+        timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      }));
+      
+      if (formattedData.length > 0) {
+        setNotifying(true);
       }
-    };fetchDemandes();
-  },[]);
+      
+      setDemandesEnAttentes(formattedData);
+    } catch (error) {
+      console.error('Error fetching demandes en attente:', error);
+    }
+  };
+
+  // Fonction pour récupérer les demandes validées et non livrées
+  const fetchDemandesValidees = async () => {
+    try {
+      const data = await demandes.getDemandesValidees();
+      const formattedData = data.map((item: any) => ({
+        ...item,
+        timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      }));
+      
+      setDemandesValidees(formattedData);
+    } catch (error) {
+      console.error('Error fetching demandes validées:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch immediately on mount
+    fetchDemandesEnAttente();
+    fetchDemandesValidees();
+
+    // Poll every 30 seconds
+    const interval = setInterval(() => {
+      fetchDemandesEnAttente();
+      fetchDemandesValidees();
+    }, 30000);
+
+    // Cleanup on unmount
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative">
@@ -116,40 +147,82 @@ export default function NotificationDropdown() {
             </svg>
           </button>
         </div>
+        
+        {/* Demandes validées et non livrées */}
+        {demandesValidees.length > 0 && (
+          <div className="mb-2 mt-2 pt-2 border-t border-gray-100">
+            <h6 className="text-xs font-semibold text-green-600 uppercase mb-2">Validées - Non livrées</h6>
+          </div>
+        )}
         <ul className="flex flex-col h-auto overflow-y-auto custom-scrollbar">
-          {/* Example notification items */}
-          {demandesEnAttentes.map(demande =>{
-
-            let demandeTitle = ''
-            // @ts-ignore
-            if (demande.type_demande_id === 1) {
-              demandeTitle = 'Livraison Demande CHARGEUR (DECOM RI NOK)';
-              // @ts-ignore
-          }
+          {demandesValidees.map((demande: any) => {
+            const demandeTitle = demande.items?.nom_piece || 'Demande';
             return(
-              <li>
+              <li key={`validee-${demande.id}`}>
                 <DropdownItem
-                  onItemClick={() =>{
-                    closeDropdown
-                    // @ts-ignore
-                    navigate(`/demande-livraison/${demande.id_demande}`)
+                  onItemClick={() => {
+                    closeDropdown();
+                    navigate(`/demande-livraison/${demande.id}`)
                   }}
                   className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
-                  >
-                  <div className=" flex justify-center items-center bg-gray-100 w-full h-10 rounded-full z-1 max-w-10">
+                >
+                  <div className="flex justify-center items-center bg-green-100 w-full h-10 rounded-full z-1 max-w-10">
+                    <span className="text-2xl text-green-600"><CheckCircleIcon /></span>
+                  </div>
+
+                  <span className="block">
+                    <span className="mb-1.5 flex flex-col text-theme-sm text-gray-500 dark:text-gray-400 space-x-1">
+                      <span>
+                        <span className="font-medium">{demandeTitle}</span>
+                        <span className="ms-2.5 font-bold">#{demande.id}</span>
+                      </span>
+                      <span className="font-medium text-gray-800 dark:text-white/90">Quantité :
+                        {demande.qte_total_demande}
+                      </span>
+                      
+                    </span>
+
+                    <span className="flex items-center gap-2 text-gray-500 text-theme-xs dark:text-gray-400">
+                      <span className="text-green-600 font-medium">validée - Non livrée</span>
+                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                      <span>{demande.timeAgo}</span>
+                    </span>
+                  </span>
+                </DropdownItem>
+              </li>
+            )
+          })}
+        </ul>
+
+        {/* Demandes en attente */}
+        {demandesEnAttentes.length > 0 && (
+          <div className="mb-2">
+            <h6 className="text-xs font-semibold text-orange-600 uppercase mb-2">En attente de validation</h6>
+          </div>
+        )}
+        <ul className="flex flex-col h-auto overflow-y-auto custom-scrollbar">
+          {demandesEnAttentes.map((demande: any) => {
+            const demandeTitle = demande.items?.nom_piece || 'Demande';
+            return(
+              <li key={`en-attente-${demande.id}`}>
+                <DropdownItem
+                  onItemClick={() => {
+                    closeDropdown();
+                    navigate(`/demande-livraison/${demande.id}`)
+                  }}
+                  className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
+                >
+                  <div className="flex justify-center items-center bg-gray-100 w-full h-10 rounded-full z-1 max-w-10">
                     <span className="text-2xl"><ClipboardCheck /></span>
                   </div>
 
                   <span className="block">
-                    <span className="mb-1.5 flex flex-col  text-theme-sm text-gray-500 dark:text-gray-400 space-x-1">
+                    <span className="mb-1.5 flex flex-col text-theme-sm text-gray-500 dark:text-gray-400 space-x-1">
                       <span>
-                        <span>{demandeTitle}</span>
-                        {/* @ts-ignore */}
-                        <span className="ms-2.5 font-bold">#{demande.id_demande}</span>
-                        
+                        <span className="font-medium">{demandeTitle}</span>
+                        <span className="ms-2.5 font-bold">#{demande.id}</span>
                       </span>
-                      <span className="font-medium text-gray-800 dark:text-white/90">
-                      {/* @ts-ignore */}
+                      <span className="font-medium text-gray-800 dark:text-white/90">Quantité :
                         {demande.qte_total_demande}
                       </span>
                     </span>
@@ -157,17 +230,15 @@ export default function NotificationDropdown() {
                     <span className="flex items-center gap-2 text-gray-500 text-theme-xs dark:text-gray-400">
                       <span className="text-warning-300">en attente</span>
                       <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                      {/* @ts-ignore */}
                       <span>{demande.timeAgo}</span>
                     </span>
                   </span>
                 </DropdownItem>
               </li>
             )
-          }
-          )}
-          {/* Add more items as needed */}
+          })}
         </ul>
+
         <Link
           to="/toutes-les-demandes-livraison"
           className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
@@ -178,3 +249,4 @@ export default function NotificationDropdown() {
     </div>
   );
 }
+

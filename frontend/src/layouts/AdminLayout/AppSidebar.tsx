@@ -13,6 +13,7 @@ import {
   UserCircleIcon,
   StockBox,
   DeliveryAdd,
+  QrCodeIcon,
 } from "../../icons";
 import { useSidebar } from "../../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -37,15 +38,20 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    name: "Formulaire",
+    name: "Gestion des Livraisons",
     icon: <ListIcon />,
     subItems: [
       { name: "Nouvelle Livraison", path: "/form-livraison", roles:[1], pro: false },
       { name: "Toutes les livraisons", path:"/toutes-les-livraisons", pro: false},
       { name: "Nouveau Remplacement", path: "/nouveau-remplacement", roles:[1], pro: false},
       { name: "Tous les remplacements", path: "/tous-les-remplacements", pro: false},
-      { name: "Nouvelle Demande Stock", path:"/nouvelle-demande", roles:[3], pro: false},
-      { name: "Toutes les demandes Stock", path: "/toutes-les-demandes",roles:[3,11], pro: false },
+    ],
+    
+  },
+   {
+    name: "Gestion des QRcodes",
+    icon: <QrCodeIcon />,
+    subItems: [
       { name: "REG Demande QRC", path: "/regularisation-demande-qr",roles:[21], pro: false },
       { name: "Nouvelle Demande QRC", path: "/demande-qr",roles:[15], pro: false },
       { name: "Toutes les demandes QRC", path: "/toutes-les-demandes-qr",roles:[15, 16, 17, 18, 19, 20, 21, 22], pro: false},
@@ -75,6 +81,8 @@ const navItems: NavItem[] = [
     roles:[7],
     subItems: [
       // { name: "Ajouter Element Stock", path: "/ajouter-stock", pro: false },
+      { name: "Nouvelle Demande Stock", path:"/nouvelle-demande", roles:[3], pro: false},
+      { name: "Toutes les demandes Stock", path: "/toutes-les-demandes",roles:[3,11], pro: false },
       { name: "Voir Elements Stock", path: "/voir-items", pro: false },
       { name: "Créer Nouveau Stock", path: "/creer-stock", pro: false} ,
       { name: "Voir tous les Stocks", path: "/voir-stocks", pro: false} ,
