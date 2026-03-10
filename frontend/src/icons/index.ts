@@ -70,6 +70,7 @@ import { ReactComponent as StockBox } from "./stock-box.svg?react"
 import { ReactComponent as DeliveryAdd} from "./delivery-add.svg?react"
 import { ReactComponent as PiecesSolid } from "./pieces-solid.svg?react"
 import { ReactComponent as MultipleCogs}  from "./cogs.svg?react"
+import { ReactComponent as TimeRecover } from "./time-past.svg?react"
 export {
   ErrorHexaIcon,
   AlertHexaIcon,
@@ -142,4 +143,5 @@ export {
   DeliveryAdd,
   PiecesSolid,
   MultipleCogs,
+  TimeRecover,
 };

@@ -6,7 +6,8 @@ const uploadAll = require("../middlewares/uploadAll")
 const {
     getAllTypePaiement, faireDemandeQr, getAllDemandesQr, getOneDemandeQr, uploadDemandeQr,
     downloadQrCodes, impressionDemandeQr, livraisonDemandeQr, receptionDemandeQr, getAllFormatsQr,
-    regularisationDemandeQr, getAllFormFiles, modifyDemandeQr, cancelDemandeQr,
+    regularisationDemandeQrV2, getAllFormFiles, modifyDemandeQr, cancelDemandeQr, regularisationLivraisonDemandeQr,
+    regularisationReceptionDemandeQr,
 } = require("../controllers/Demande/demandeQrController")
 
 router.get('/getAllTypePaiement', getAllTypePaiement);
@@ -30,11 +31,17 @@ router.get('/getAllFormatsQr', getAllFormatsQr);
 router.post('/regularisationDemandeQr', uploadAll.fields([
     { name: 'signature' },
     { name: 'files' },
-]), regularisationDemandeQr)
+]), regularisationDemandeQrV2)
 router.get('/getAllFormFiles/:id', getAllFormFiles);
 router.put('/modifyDemandeQr/:id', uploadAll.fields([
     { name: 'files' },
 ]), modifyDemandeQr);
 router.put('/cancelDemandeQr/:id', cancelDemandeQr);
+router.put('/regularisationLivraisonDemandeQr/:idDemande', uploadAll.fields([
+    { name: 'signature' },
+]), regularisationLivraisonDemandeQr);
+router.put('/regularisationReceptionDemandeQr/:idDemande/:idLivraison', uploadAll.fields([
+    { name: 'signature' },
+]), regularisationReceptionDemandeQr);
 
 module.exports = router

@@ -404,26 +404,26 @@ export default function RegularisationDemandeQrInputs() {
             setErrorAjout('Vous devez choisir la date de la demande !')
             return false
         }
-        if (!selectedDateGeneration) {
-            setErrorAjout('Vous devez choisir la date de la génération !')
-            return false
-        }
-        if (!selectedDateImpression) {
-            setErrorAjout("Vous devez choisir la date de l'impression !")
-            return false
-        }
-        if (!selectedDateLivraison) {
-            setErrorAjout('Vous devez choisir la date de la livraison !')
-            return false
-        }
-        if (!selectedDateReception) {
-            setErrorAjout('Vous devez choisir la date de la réception !')
-            return false
-        }
-        if (selectedDateLivraison.getDate() < selectedDateDemande.getDate()) {
-            setErrorAjout('La date de la livraison ne peut pas être avant la date de la demande !')
-            return false
-        }
+        // if (!selectedDateGeneration) {
+        //     setErrorAjout('Vous devez choisir la date de la génération !')
+        //     return false
+        // }
+        // if (!selectedDateImpression) {
+        //     setErrorAjout("Vous devez choisir la date de l'impression !")
+        //     return false
+        // }
+        // if (!selectedDateLivraison) {
+        //     setErrorAjout('Vous devez choisir la date de la livraison !')
+        //     return false
+        // }
+        // if (!selectedDateReception) {
+        //     setErrorAjout('Vous devez choisir la date de la réception !')
+        //     return false
+        // }
+        // if (selectedDateLivraison.getDate() < selectedDateDemande.getDate()) {
+        //     setErrorAjout('La date de la livraison ne peut pas être avant la date de la demande !')
+        //     return false
+        // }
         if (!selectedTypeQr) {
             setErrorAjout('Vous devez sélectionner le type du QR Code !')
             return false
@@ -568,10 +568,10 @@ export default function RegularisationDemandeQrInputs() {
     }
 
     const handleValidate = async () => {
-        if (signature.isEmpty()) {
-            setErrorSign('Vous devez signer pour valider !')
-            return;
-        }
+        // if (signature.isEmpty()) {
+        //     setErrorSign('Vous devez signer pour valider !')
+        //     return;
+        // }
         setIsSignModalOpen(false)
         setIsConfirmModalOpen(false)
         setLoadingValidation(true)
@@ -581,25 +581,25 @@ export default function RegularisationDemandeQrInputs() {
                 ...new Set(listeLivraison.map(item => item.pointMarchand))
             ]
             // console.log(listeMarchand)
-            const sign = signature.toDataURL('image/png')
-            const fd = new FormData();
-            if (sign) {
-                const blob = await fetch(sign).then(res => res.blob());
-                fd.append('signature', blob, 'signature.png');
-            }
-            selectedFiles.forEach((file) => {
-                fd.append("files", file);
-            });
-            fd.append("commentaire", commentaire)
-            fd.append("liste_demande", JSON.stringify(listeLivraison))
-            fd.append("quantite_marchand", listeMarchand.length)
-            fd.append("quantite_qr", Number(totalQr))
-            fd.append("userId", Number(userId))
-            fd.append("date_demande", new Date(selectedDateDemande))
-            fd.append("date_generation", new Date(selectedDateGeneration))
-            fd.append("date_impression", new Date(selectedDateImpression))
-            fd.append("date_livraison", new Date(selectedDateLivraison))
-            fd.append("date_reception", new Date(selectedDateReception))
+            // const sign = signature.toDataURL('image/png')
+            // const fd = new FormData();
+            // if (sign) {
+            //     const blob = await fetch(sign).then(res => res.blob());
+            //     fd.append('signature', blob, 'signature.png');
+            // }
+            // selectedFiles.forEach((file) => {
+            //     fd.append("files", file);
+            // });
+            // fd.append("commentaire", commentaire)
+            // fd.append("liste_demande", JSON.stringify(listeLivraison))
+            // fd.append("quantite_marchand", listeMarchand.length)
+            // fd.append("quantite_qr", Number(totalQr))
+            // fd.append("userId", Number(userId))
+            // fd.append("date_demande", new Date(selectedDateDemande))
+            // fd.append("date_generation", new Date(selectedDateGeneration))
+            // fd.append("date_impression", new Date(selectedDateImpression))
+            // fd.append("date_livraison", new Date(selectedDateLivraison))
+            // fd.append("date_reception", new Date(selectedDateReception))
 
             console.log("Sending data : ")
             // for (let pair of fd.entries()) {
@@ -612,10 +612,11 @@ export default function RegularisationDemandeQrInputs() {
                 quantite_marchand: listeMarchand.length,
                 quantite_qr: Number(totalQr),
                 userId: Number(userId),
+                date_demande: new Date(selectedDateDemande),
             }
             console.log(payload)
 
-            await demandeData.regularisationDemandeQr(fd)
+            await demandeData.regularisationDemandeQr(payload)
 
             Swal.fire({
                 title: "Succès",
@@ -670,83 +671,86 @@ export default function RegularisationDemandeQrInputs() {
                                                         className="w-full"
                                                     />
                                                 </div>
-                                                {selectedDateDemande ? (
-                                                    <>
-                                                        <div>
-                                                            <Label>Date Génération <span className="text-red-700">*</span></Label>
-                                                            <Calendar
-                                                                value={selectedDateGeneration}
-                                                                locale="fr"
-                                                                onChange={(e) => setSelectedDateGeneration(e.value)}
-                                                                dateFormat="dd/mm/yy"
-                                                                placeholder="dd/mm/yyyy"
-                                                                maxDate={new Date()}
-                                                                minDate={new Date(selectedDateDemande)}
-                                                                className="w-full"
-                                                            />
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {selectedDateGeneration ? (
-                                                    <>
-                                                        <div>
-                                                            <Label>Date Impression <span className="text-red-700">*</span></Label>
-                                                            <Calendar
-                                                                value={selectedDateImpression}
-                                                                locale="fr"
-                                                                onChange={(e) => setSelectedDateImpression(e.value)}
-                                                                dateFormat="dd/mm/yy"
-                                                                placeholder="dd/mm/yyyy"
-                                                                maxDate={new Date()}
-                                                                minDate={new Date(selectedDateGeneration)}
-                                                                className="w-full"
-                                                            />
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {selectedDateImpression ? (
-                                                    <>
-                                                        <div>
-                                                            <Label>Date Livraison <span className="text-red-700">*</span></Label>
-                                                            <Calendar
-                                                                value={selectedDateLivraison}
-                                                                locale="fr"
-                                                                onChange={(e) => setSelectedDateLivraison(e.value)}
-                                                                dateFormat="dd/mm/yy"
-                                                                placeholder="dd/mm/yyyy"
-                                                                maxDate={new Date()}
-                                                                minDate={new Date(selectedDateImpression)}
-                                                                className="w-full"
-                                                            />
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {selectedDateLivraison ? (
-                                                    <>
-                                                        <div>
-                                                            <Label>Date Réception <span className="text-red-700">*</span></Label>
-                                                            <Calendar
-                                                                value={selectedDateReception}
-                                                                locale="fr"
-                                                                onChange={(e) => setSelectedDateReception(e.value)}
-                                                                dateFormat="dd/mm/yy"
-                                                                placeholder="dd/mm/yyyy"
-                                                                maxDate={new Date()}
-                                                                minDate={new Date(selectedDateLivraison)}
-                                                                className="w-full"
-                                                            />
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                    </>
-                                                )}
+                                                <div>
+                                                    {/* {selectedDateDemande ? (
+                                                        <>
+                                                            <div>
+                                                                <Label>Date Génération <span className="text-red-700">*</span></Label>
+                                                                <Calendar
+                                                                    value={selectedDateGeneration}
+                                                                    locale="fr"
+                                                                    onChange={(e) => setSelectedDateGeneration(e.value)}
+                                                                    dateFormat="dd/mm/yy"
+                                                                    placeholder="dd/mm/yyyy"
+                                                                    maxDate={new Date()}
+                                                                    minDate={new Date(selectedDateDemande)}
+                                                                    className="w-full"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {selectedDateGeneration ? (
+                                                        <>
+                                                            <div>
+                                                                <Label>Date Impression <span className="text-red-700">*</span></Label>
+                                                                <Calendar
+                                                                    value={selectedDateImpression}
+                                                                    locale="fr"
+                                                                    onChange={(e) => setSelectedDateImpression(e.value)}
+                                                                    dateFormat="dd/mm/yy"
+                                                                    placeholder="dd/mm/yyyy"
+                                                                    maxDate={new Date()}
+                                                                    minDate={new Date(selectedDateGeneration)}
+                                                                    className="w-full"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {selectedDateImpression ? (
+                                                        <>
+                                                            <div>
+                                                                <Label>Date Livraison <span className="text-red-700">*</span></Label>
+                                                                <Calendar
+                                                                    value={selectedDateLivraison}
+                                                                    locale="fr"
+                                                                    onChange={(e) => setSelectedDateLivraison(e.value)}
+                                                                    dateFormat="dd/mm/yy"
+                                                                    placeholder="dd/mm/yyyy"
+                                                                    maxDate={new Date()}
+                                                                    minDate={new Date(selectedDateImpression)}
+                                                                    className="w-full"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {selectedDateLivraison ? (
+                                                        <>
+                                                            <div>
+                                                                <Label>Date Réception <span className="text-red-700">*</span></Label>
+                                                                <Calendar
+                                                                    value={selectedDateReception}
+                                                                    locale="fr"
+                                                                    onChange={(e) => setSelectedDateReception(e.value)}
+                                                                    dateFormat="dd/mm/yy"
+                                                                    placeholder="dd/mm/yyyy"
+                                                                    maxDate={new Date()}
+                                                                    minDate={new Date(selectedDateLivraison)}
+                                                                    className="w-full"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                        </>
+                                                    )} */}
+
+                                                </div>
                                                 <div>
                                                     <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
                                                     <div
@@ -1104,7 +1108,7 @@ export default function RegularisationDemandeQrInputs() {
                                             <>
                                                 <div className="w-full flex justify-center items-center">
                                                     <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                        onClick={handleConfirmSign}
+                                                        onClick={handleConfirmValidate}
                                                     >
                                                         Valider
                                                     </button>
