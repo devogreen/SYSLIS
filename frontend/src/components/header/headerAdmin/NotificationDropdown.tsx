@@ -162,7 +162,7 @@ export default function NotificationDropdown() {
                 <DropdownItem
                   onItemClick={() => {
                     closeDropdown();
-                    navigate(`/demande-livraison/${demande.id}`)
+                    navigate(`/demande-details/${demande.id}`)
                   }}
                   className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
                 >
@@ -208,7 +208,7 @@ export default function NotificationDropdown() {
                 <DropdownItem
                   onItemClick={() => {
                     closeDropdown();
-                    navigate(`/demande-livraison/${demande.id}`)
+                    navigate(`/demande-details/${demande.id}`)
                   }}
                   className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
                 >
