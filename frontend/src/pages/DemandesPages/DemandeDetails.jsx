@@ -198,8 +198,7 @@ export default function DemandeDetails() {
                             setIsGestionStock(true)
                         }
                         setAttente(true)
-                    }
-                    if (demandeData.statut_demande == 'valide') {
+                    } else if (demandeData.statut_demande == 'valide') {
                         setActionButtons(true)
                         setStatutDemande('Validée')
                         setAttente(false)

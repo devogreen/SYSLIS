@@ -3864,6 +3864,48 @@ const downloadFile = async (req, res) => {
   }
 };
 
+const getDemandesEnAttente = async (req, res) => {
+  try {
+    const demandes = await prisma.demandes.findMany({
+      where: {
+        statut_demande: 'en_cours',
+      },
+      orderBy: { date_demande: 'desc' },
+      include: {
+        items: true,
+        services: true,
+      }
+    });
+
+    res.status(200).json(demandes);
+  } catch (error) {
+    console.log("Erreur serveur: ", error)
+    res.status(500).json({ message: "Erreur lors de la récupération des demandes en attente", error });
+  }
+};
+
+// Récupérer les demandes validées et non livrées (statut: valide, demande_livree: false)
+const getDemandesValideesNonLivrees = async (req, res) => {
+  try {
+    const demandes = await prisma.demandes.findMany({
+      where: {
+        statut_demande: 'valide',
+        demande_livree: false,
+      },
+      orderBy: { date_demande: 'desc' },
+      include: {
+        items: true,
+        services: true,
+        validation_demande: true,
+      }
+    });
+
+    res.status(200).json(demandes);
+  } catch (error) {
+    console.log("Erreur serveur: ", error)
+    res.status(500).json({ message: "Erreur lors de la récupération des demandes validées non livrées", error });
+  }
+};
 
 module.exports = {
   faireDemande,
@@ -3878,4 +3920,6 @@ module.exports = {
   preValidateDemande,
   getAllDemandeFiles,
   downloadFile,
+  getDemandesEnAttente,
+  getDemandesValideesNonLivrees,
 }
