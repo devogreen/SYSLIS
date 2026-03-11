@@ -7,7 +7,9 @@ import { Users } from "../../backend/users/Users";
 import { Stock } from "../../backend/stock/Stock";
 
 import Input from "../form/input/InputField";
+import Label from "../form/Label";
 import { Calendar } from 'primereact/calendar';
+import { addLocale } from "primereact/api";
 import DatePicker from "../../components/form/date-picker";
 
 import 'primeicons/primeicons.css';
@@ -71,18 +73,41 @@ export default function AllDeliveriesList({ filterType }) {
 
     const [loadingExtract, setLoadingExtract] = useState(false)
 
+    const [datesLivraison, setDatesLivraison] = useState(
+        savedFilters?.datesLivraison
+            ? savedFilters.datesLivraison.map((d) => new Date(d))
+            : null
+    );
+
+    const [datesReception, setDatesReception] = useState(
+        savedFilters?.datesReception
+            ? savedFilters.datesReception.map((d) => new Date(d))
+            : null
+    );
+
+    addLocale('fr', {
+        firstDayOfWeek: 1,
+        showMonthAfterYear: false,
+        dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+        dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+        dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+        monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+        today: 'Aujourd\'hui',
+        clear: 'Effacer'
+    });
+
     useEffect(() => {
         saveFilters({
             globalFilter,
             selectedStatus,
             selectedType,
-            startDate,
-            endDate,
+            datesLivraison: datesLivraison?.map(d => d?.toISOString()),
+            datesReception: datesReception?.map(d => d?.toISOString()),
             selectedService,
             selectedModels,
         });
-    }, [globalFilter, selectedStatus, selectedType, startDate, endDate, selectedService, selectedModels]);
-
+    }, [globalFilter, selectedStatus, selectedType, datesLivraison, datesReception, selectedService, selectedModels]);
     useEffect(() => {
         const fetchDeliveriesData = async () => {
             setLoading(true);
@@ -262,27 +287,36 @@ export default function AllDeliveriesList({ filterType }) {
         setselectedService([]);
         setSelectedType([]);
         setSelectedModels([]);
-        setStartDate(null);
-        setEndDate(null);
+        setDatesLivraison(null);
+        setDatesReception(null);
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
     const filteredDeliveryForms = deliveryForms.filter((item) => {
-        let itemDate = new Date(item.date_livraison);
+        const dateLivraison = new Date(item.date_livraison);
+        const dayLivraisonPlus = datesLivraison ? new Date(datesLivraison[1]) : null;
+        dayLivraisonPlus?.setDate(dayLivraisonPlus.getDate() + 1);
+        const nextDayLivraison = dayLivraisonPlus ? new Date(dayLivraisonPlus) : null;
+
+        const dayReceptionPlus = datesReception ? new Date(datesReception[1]) : null;
+        dayReceptionPlus?.setDate(dayReceptionPlus.getDate() + 1);
+        const nextDayReception = dayReceptionPlus ? new Date(dayReceptionPlus) : null;
+        let dateReception = null
         if (item.validations.length > 0) {
             let index = item.validations.length - 1
-            itemDate = new Date(item.validations[index].date_validation)
+            const validation = item.validations[index]
+            dateReception = new Date(validation.date_validation)
         }
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_livraison) : true;
         const matchesType = selectedType.length > 0 ? selectedType.includes(item.type_livraison_id) : true;
         const matchesService = selectedService.length > 0 ? selectedService.includes(item.service_id) : true;
         const matchesModel = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
-        const matchesStartDate = startDate ? itemDate >= startDate : true;
-        const matchesEndDate = endDate ? itemDate <= endDate : true;
+        const matchesDatesLivraison = datesLivraison ? (datesLivraison[0] <= dateLivraison && nextDayLivraison >= dateLivraison) : true;
+        const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesType && matchesService && matchesModel && matchesStartDate && matchesEndDate && matchesGlobalFilter;
+        return matchesStatus && matchesType && matchesService && matchesDatesLivraison && matchesDatesReception && matchesModel && matchesGlobalFilter;
     });
 
     const handleGlobalDownload = async () => {
@@ -446,7 +480,7 @@ export default function AllDeliveriesList({ filterType }) {
 
                 </div>
                 <div className="flex justify-normal flex-wrap gap-3 mb-3 p-6">
-                    <div className="flex gap-2">
+                    {/* <div className="flex gap-2">
                         <DatePicker
                             id="date-picker-debut"
                             label="Date de début"
@@ -470,6 +504,35 @@ export default function AllDeliveriesList({ filterType }) {
                                 }
                             }}
                             dateFormat="dd/mm/yy" />
+                    </div> */}
+                    <div>
+                        <Label>Dates Livraison</Label>
+                        <Calendar
+                            value={datesLivraison}
+                            onChange={(e) => {
+                                setDatesLivraison(e.value)
+                                console.log(e.value)
+                            }}
+                            selectionMode="range"
+                            readOnlyInput
+                            hideOnRangeSelection
+                            locale="fr"
+                            dateFormat="dd/mm/yy"
+                            placeholder="dd/mm/yyyy"
+                        />
+                    </div>
+                    <div>
+                        <Label>Dates Réception</Label>
+                        <Calendar
+                            value={datesReception}
+                            onChange={(e) => setDatesReception(e.value)}
+                            selectionMode="range"
+                            readOnlyInput
+                            hideOnRangeSelection
+                            locale="fr"
+                            dateFormat="dd/mm/yy"
+                            placeholder="dd/mm/yyyy"
+                        />
                     </div>
                 </div>
                 <div className="flex justify-between p-6 pt-0 items-center">
@@ -548,8 +611,8 @@ export default function AllDeliveriesList({ filterType }) {
 
                         <Column field="id_livraison" header="Formulaire" body={titleTemplate} sortable></Column>
                         <Column field="qte_totale_livraison" header="Nbre produit" sortable></Column>
-                        <Column field="date_livraison" header="Date d'émission" body={deliveryDateTemplate} sortable></Column>
-                        <Column header="Date de cloture" body={receiveDateTemplate}></Column>
+                        <Column field="date_livraison" header="Date Livraison" body={deliveryDateTemplate} sortable></Column>
+                        <Column header="Date Réception" body={receiveDateTemplate}></Column>
                         <Column field="statut_livraison" header="Statut" body={statutTemplate}></Column>
                         <Column header="Actions" body={actionTemplate}></Column>
                     </DataTable>

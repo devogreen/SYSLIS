@@ -141,7 +141,6 @@ export default function DeliveryDetails() {
                         setTypeLivraison('Inconnue')
                     }
 
-
                 } catch (error) {
                     console.log("Error fetchind data ", error)
                 } finally {

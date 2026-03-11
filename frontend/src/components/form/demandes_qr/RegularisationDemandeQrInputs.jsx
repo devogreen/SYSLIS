@@ -696,9 +696,9 @@ export default function RegularisationDemandeQrInputs() {
                                                             <Calendar
                                                                 value={selectedDateImpression}
                                                                 locale="fr"
-                                                                onChange={(e) => setSelectedDateImpression(e.value)}
                                                                 dateFormat="dd/mm/yy"
                                                                 placeholder="dd/mm/yyyy"
+                                                                onChange={(e) => setSelectedDateImpression(e.value)}
                                                                 maxDate={new Date()}
                                                                 minDate={new Date(selectedDateGeneration)}
                                                                 className="w-full"
