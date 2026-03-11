@@ -755,10 +755,16 @@ export default function DemandeQrDetails() {
                                                                         ) : (
                                                                             <>
                                                                                 <div className="space-y-0.5">
-                                                                                    <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                                        <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
-                                                                                        <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
-                                                                                    </Link>
+                                                                                    {isReg ? (
+                                                                                        <></>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                                <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
+                                                                                                <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
+                                                                                            </Link>
+                                                                                        </>
+                                                                                    )}
                                                                                     <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                         onClick={() => {
                                                                                             setIsModalCancelOpen(true)
