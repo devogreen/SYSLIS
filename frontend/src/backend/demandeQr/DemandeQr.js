@@ -189,4 +189,20 @@ export class DemandeQr {
             throw error.response.data;
         }
     }
+
+    async extractMarchandsQr(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/demandeQr/extractMarchandsQr`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
 }

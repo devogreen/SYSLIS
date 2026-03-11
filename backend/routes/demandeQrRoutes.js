@@ -2,12 +2,13 @@ const express = require("express")
 const router = express.Router();
 const upload = require("../middlewares/uploads");
 const uploadAll = require("../middlewares/uploadAll")
+const uploadExcel = require("../middlewares/uploadExcel");
 
 const {
     getAllTypePaiement, faireDemandeQr, getAllDemandesQr, getOneDemandeQr, uploadDemandeQr,
     downloadQrCodes, impressionDemandeQr, livraisonDemandeQr, receptionDemandeQr, getAllFormatsQr,
     regularisationDemandeQrV2, getAllFormFiles, modifyDemandeQr, cancelDemandeQr, regularisationLivraisonDemandeQr,
-    regularisationReceptionDemandeQr,
+    regularisationReceptionDemandeQr, extractMarchandsQr,
 } = require("../controllers/Demande/demandeQrController")
 
 router.get('/getAllTypePaiement', getAllTypePaiement);
@@ -43,5 +44,6 @@ router.put('/regularisationLivraisonDemandeQr/:idDemande', uploadAll.fields([
 router.put('/regularisationReceptionDemandeQr/:idDemande/:idLivraison', uploadAll.fields([
     { name: 'signature' },
 ]), regularisationReceptionDemandeQr);
+router.post('/extractMarchandsQr', uploadExcel.single("file"), extractMarchandsQr);
 
 module.exports = router

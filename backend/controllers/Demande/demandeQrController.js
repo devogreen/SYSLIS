@@ -11,6 +11,7 @@ const { urlToHttpOptions } = require("url");
 const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
+const ExcelJS = require("exceljs");
 
 const formatDate = (isoDate) => {
     const date = new Date(isoDate);
@@ -2099,6 +2100,110 @@ const regularisationReceptionDemandeQr = async (req, res) => {
     }
 }
 
+// Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
+function getCellValue(cell) {
+    if (!cell || cell.value == null) return "";
+    if (typeof cell.value === "object" && cell.value.richText) {
+        return cell.value.richText.map(t => t.text).join("");
+    }
+    return String(cell.value).trim();
+}
+// Fonction d'extraction de fichier excel pour régularisation des demandes QR CODES.
+const extractMarchandsQr = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const requiredHeaders = [
+            "TYPE",
+            "FORMAT",
+            "CHAINE",
+            "POINT MARCHAND",
+            "NBRE TPE",
+            "NBRE COPIE"
+        ];
+
+        for (const header of requiredHeaders) {
+            if (!headers[header]) {
+                console.log(`Colonne requise manquante : ${header}`)
+                return res.status(400).json({
+                    message: `Missing required column: ${header}`
+                });
+            }
+        }
+
+        const marchands = [];
+        const uniqueKeys = new Set();
+        let duplicateError = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const marchand = {
+                typeQr: String(getCellValue(row.getCell(headers["TYPE"]))),
+                format: String(getCellValue(row.getCell(headers["FORMAT"]))),
+                chaine: String(getCellValue(row.getCell(headers["CHAINE"]))),
+                marchand: String(getCellValue(row.getCell(headers["POINT MARCHAND"]))),
+                nbreTpe: Number(getCellValue(row.getCell(headers["NBRE TPE"]))),
+                nbreCopie: Number(getCellValue(row.getCell(headers["NBRE COPIE"]))),
+            }
+
+            const key = `${marchand.typeQr}-${marchand.format}-${marchand.marchand}`;
+            if (uniqueKeys.has(key)) {
+                duplicateError = {
+                    rowNumber,
+                    marchand
+                };
+                return;
+            }
+            uniqueKeys.add(key);
+            marchands.push(marchand);
+
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le type ${duplicateError.marchand.typeQr} et le format ${duplicateError.marchand.format}`,
+            });
+        }
+
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: marchands,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2116,4 +2221,5 @@ module.exports = {
     cancelDemandeQr,
     regularisationLivraisonDemandeQr,
     regularisationReceptionDemandeQr,
+    extractMarchandsQr,
 }
