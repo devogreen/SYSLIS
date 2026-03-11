@@ -20,6 +20,17 @@ import { useDropzone } from "react-dropzone"
 import Swal from "sweetalert2";
 import SignatureCanvas from "react-signature-canvas";
 import { FilesHandler } from "../../backend/filesHandler/FilesHandler";
+import { Calendar } from 'primereact/calendar';
+import { addLocale } from "primereact/api";
+
+addLocale('fr', {
+    firstDayOfWeek: 1,
+    dayNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
+    dayNamesShort: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+    dayNamesMin: ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'],
+    monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+    monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+});
 
 export default function DemandeQrDetails() {
     const demandeData = new DemandeQr()
@@ -101,6 +112,13 @@ export default function DemandeQrDetails() {
 
     const [isModalCancelOpen, setIsModalCancelOpen] = useState(false)
 
+    const [isModalRegLivraisonOpen, setIsModalRegLivraisonOpen] = useState(false)
+    const [isModalRegReceptionOpen, setIsModalRegReceptionOpen] = useState(false)
+
+    const [dateDemandeReg, setDateDemandeReg] = useState()
+    const [dateLivraisonReg, setDateLivraisonReg] = useState()
+    const [dateReceptionReg, setDateReceptionReg] = useState()
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
@@ -116,7 +134,7 @@ export default function DemandeQrDetails() {
 
                 const formDemande = demande.forms
                 // console.log(formDemande)$
-                if(formDemande.is_deleted) {
+                if (formDemande.is_deleted) {
                     Swal.fire({
                         title: "Demande supprimée",
                         text: "Cette demande a été supprimée.",
@@ -156,12 +174,6 @@ export default function DemandeQrDetails() {
                     return role.id_role
                 })
 
-                const regularisation = demande.is_reg
-                if (regularisation) {
-                    setIsReg(true)
-                    setCommentaireRegularisateur(formDemande.commentaire)
-                }
-
                 const indexGeneration = demande.generation_qr.length - 1
                 const generation = demande.generation_qr[indexGeneration]
                 setIdGeneration(generation?.id)
@@ -175,47 +187,79 @@ export default function DemandeQrDetails() {
                 const indexReception = demande.reception_qr.length - 1
                 const reception = demande.reception_qr[indexReception]
 
-                if (statut == 'soumise') {
-                    setStatutDemande('soumise')
-                    setStatutClass(classStatut)
-                    setIsSoumise(true)
-                    if (rolesId.includes(16)) {
-                        setIsGenerateur(true)
+                const regularisation = demande.is_reg
+                if (regularisation) {
+                    setDateDemandeReg(formDemande.last_modified_at)
+                    setIsReg(true)
+                    setCommentaireDemandeur(formDemande.commentaire)
+                    if (statut == 'soumise') {
+                        setStatutDemande('soumise')
+                        setStatutClass(classStatut)
+                        setIsSoumise(true)
+                        if (rolesId.includes(18)) {
+                            setIsLivreur(true)
+                        }
+                        if (rolesId.includes(15)) {
+                            setIsDemandeur(true)
+                        }
                     }
-                    if (rolesId.includes(15)) {
-                        setIsDemandeur(true)
+                    else if (statut == 'livree' && livraison) {
+                        setStatutDemande('livrée')
+                        setStatutClass('text-center text-xs px-1.5 rounded-xl p-0.5 bg-blue-300 text-blue-600')
+                        setIsLivree(true)
+                        setIdLivraison(livraison.id)
+                        setDateLivraisonReg(livraison.forms.last_modified_at)
+                        if (rolesId.includes(19)) {
+                            setIsReceveur(true)
+                        }
+                    } else if (statut == 'recue' && reception) {
+                        setStatutDemande('reçue')
+                        setIsRecue(true)
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
                     }
+                } else {
+                    if (statut == 'soumise') {
+                        setStatutDemande('soumise')
+                        setStatutClass(classStatut)
+                        setIsSoumise(true)
+                        if (rolesId.includes(16)) {
+                            setIsGenerateur(true)
+                        }
+                        if (rolesId.includes(15)) {
+                            setIsDemandeur(true)
+                        }
 
-                } else if (statut == 'generee' && generation) {
-                    setStatutDemande('générée')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-500')
-                    setIsGeneree(true)
-                    if (rolesId.includes(17)) {
-                        setIsImprimeur(true)
+                    } else if (statut == 'generee' && generation) {
+                        setStatutDemande('générée')
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-500')
+                        setIsGeneree(true)
+                        if (rolesId.includes(17)) {
+                            setIsImprimeur(true)
+                        }
+                    } else if (statut == 'imprimee' && impression) {
+                        setStatutDemande('imprimée')
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-200 text-blue-500')
+                        setIsImprimee(true)
+                        if (rolesId.includes(18)) {
+                            setIsLivreur(true)
+                        }
+                    } else if (statut == 'livree' && livraison) {
+                        setStatutDemande('livrée')
+                        setStatutClass('text-center text-xs text-xs px-1.5 rounded-xl p-0.5 bg-blue-300 text-blue-600')
+                        setIsLivree(true)
+                        setIdLivraison(livraison.id)
+                        if (rolesId.includes(19)) {
+                            setIsReceveur(true)
+                        }
+                    } else if (statut == 'recue' && reception) {
+                        setStatutDemande('reçue')
+                        setIsRecue(true)
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
                     }
-                } else if (statut == 'imprimee' && impression) {
-                    setStatutDemande('imprimée')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-200 text-blue-500')
-                    setIsImprimee(true)
-                    if (rolesId.includes(18)) {
-                        setIsLivreur(true)
-                    }
-                } else if (statut == 'livree' && livraison) {
-                    setStatutDemande('livrée')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-300 text-blue-600')
-                    setIsLivree(true)
-                    setIdLivraison(livraison.id)
-                    if (rolesId.includes(19)) {
-                        setIsReceveur(true)
-                    }
-                } else if (statut == 'recue' && reception) {
-                    setStatutDemande('reçue')
-                    setIsRecue(true)
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
-                }
-                if (generation && (statut == 'generee' || statut == 'imprimee' || statut == 'livree' || statut == 'recue')) {
-                    if (rolesId.includes(20)) {
-                        setIsUploaded(true)
+                    if (generation && (statut == 'generee' || statut == 'imprimee' || statut == 'livree' || statut == 'recue')) {
+                        if (rolesId.includes(20)) {
+                            setIsUploaded(true)
+                        }
                     }
                 }
 
@@ -570,6 +614,91 @@ export default function DemandeQrDetails() {
         }
     }
 
+    const handleRegLivraisonQr = async () => {
+        if (signatureLivraison.isEmpty()) {
+            setErrorSignLivraison('Vous devez signer pour valider !')
+            return;
+        }
+        if (!dateLivraisonReg) {
+            setErrorSignLivraison('Vous devez sélectionner une date de livraison !')
+            return;
+        }
+        setIsModalRegLivraisonOpen(false)
+        try {
+            setLoadingLivraison(true)
+            const sign = signatureLivraison.toDataURL('image/png')
+            const fd = new FormData();
+            if (sign) {
+                const blob = await fetch(sign).then(res => res.blob());
+                fd.append('signature', blob, 'signature.png');
+            }
+            fd.append('userId', userId)
+            fd.append('date_livraison', new Date(dateLivraisonReg))
+            fd.append('commentaire', commentaireLivraison)
+
+            await demandeData.regularisationLivraisonDemandeQr(idDemande, fd)
+
+            Swal.fire({
+                title: "Succès",
+                text: "Livraison régularisée avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur de livraison : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la livraison !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingLivraison(false)
+        }
+    }
+
+    const handleRegReceptionQr = async () => {
+        if (signatureReception.isEmpty()) {
+            setErrorSignReception('Vous devez signer pour valider !')
+            return;
+        }
+        if (!dateReceptionReg) {
+            setErrorSignReception('Vous devez sélectionner une date de réception !')
+            return;
+        }
+        setIsModalRegReceptionOpen(false)
+        try {
+            setLoadingReception(true)
+            const sign = signatureReception.toDataURL('image/png')
+            const fd = new FormData();
+            if (sign) {
+                const blob = await fetch(sign).then(res => res.blob());
+                fd.append('signature', blob, 'signature.png');
+            }
+            fd.append('userId', userId)
+            fd.append('commentaire', commentaireReception)
+            fd.append('date_reception', new Date(dateReceptionReg))
+
+            await demandeData.regularisationReceptionDemandeQr(idDemande, idLivraison, fd)
+
+            Swal.fire({
+                title: "Succès",
+                text: "Réception régularisée avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur de la réception : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la réception !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingReception(false)
+        }
+    }
     return (
         <>
             <PageBreadcrumb pageTitle={`Détails demande QRC ${idDemande}`} />
@@ -607,178 +736,279 @@ export default function DemandeQrDetails() {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="grid grid-cols-2">
-                                            <div className='col-start-2 space-y-0.5'>
-                                                {isDemandeur ? (
-                                                    <>
-                                                        <div>
-                                                            {loadingCancel ? (
+                                        <div>
+                                            {isReg ? (
+                                                <>
+                                                    <div className="grid grid-cols-2">
+                                                        <div className='col-start-2 space-y-0.5'>
+                                                            {isDemandeur ? (
                                                                 <>
-                                                                    <div className='text-center'>
-                                                                        <span className=''>
-                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                        </span>
+                                                                    <div>
+                                                                        {loadingCancel ? (
+                                                                            <>
+                                                                                <div className='text-center'>
+                                                                                    <span className=''>
+                                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                    </span>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="space-y-0.5">
+                                                                                    {isReg ? (
+                                                                                        <></>
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                                <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
+                                                                                                <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
+                                                                                            </Link>
+                                                                                        </>
+                                                                                    )}
+                                                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                        onClick={() => {
+                                                                                            setIsModalCancelOpen(true)
+                                                                                        }}
+                                                                                    >
+                                                                                        <span className='mr-4'><i className="pi pi-times-circle"></i></span>
+                                                                                        <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </>
                                                             ) : (
-                                                                <>
-                                                                    <div className="space-y-0.5">
-                                                                        <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                            <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
-                                                                        </Link>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                            onClick={() => {
-                                                                                setIsModalCancelOpen(true)
-                                                                            }}
-                                                                        >
-                                                                            <span className='mr-4'><i className="pi pi-times-circle"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
-                                                                        </button>
-                                                                    </div>
-                                                                </>
+                                                                <></>
                                                             )}
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {isGenerateur ? (
-                                                    <>
-                                                        {loadingGenerate ? (
-                                                            <>
-                                                                <div className='text-center'>
-                                                                    <span className=''>
-                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                    </span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                    onClick={() => {
-                                                                        setIsModalGenerationOpen(true)
-                                                                    }}>
-                                                                    <span className='mr-4'><i className="pi pi-upload"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Upload QR Codes</span>
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {isUploaded ? (
-                                                    <>
-                                                        {loadingDownload ? (
-                                                            <>
-                                                                <div className='text-center'>
-                                                                    <span className=''>
-                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                    </span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                    onClick={handleDownloadFiles}>
-                                                                    <span className='mr-4'><i className="pi pi-download"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Télécharger QR Codes</span>
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                    </>
-                                                )}
-                                                {isImprimeur ? (
-                                                    <>
-                                                        <div>
-                                                            {loadingImpression ? (
+                                                            {isLivreur ? (
                                                                 <>
-                                                                    <div className='text-center'>
-                                                                        <span className=''>
-                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                        </span>
-                                                                    </div>
+                                                                    {loadingLivraison ? (
+                                                                        <>
+                                                                            <div className='text-center'>
+                                                                                <span className=''>
+                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                onClick={() => {
+                                                                                    setIsModalRegLivraisonOpen(true)
+                                                                                }}>
+                                                                                <span className='mr-4'><i className="pi pi-send"></i></span>
+                                                                                <span className='text-sm text-gray-700 font-medium'>Reg Livraison QR Codes</span>
+                                                                            </button>
+                                                                        </>
+                                                                    )}
                                                                 </>
                                                             ) : (
+                                                                <></>
+                                                            )}
+                                                            {isReceveur ? (
                                                                 <>
-                                                                    <div className="space-y-0.5">
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                            onClick={() => {
-                                                                                setIsModalImpressionOpen(true)
-                                                                            }}>
-                                                                            <span className='mr-4'><i className="pi pi-print"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Confirmer Impression</span>
-                                                                        </button>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                            onClick={() => {
-                                                                                setIsModalReturnFilesOpen(true)
-                                                                            }}>
-                                                                            <span className='mr-4'><i className="pi pi-exclamation-triangle"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Retourner QR Codes</span>
-                                                                        </button>
-                                                                    </div>
+                                                                    {loadingReception ? (
+                                                                        <>
+                                                                            <div className='text-center'>
+                                                                                <span className=''>
+                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                onClick={() => {
+                                                                                    setIsModalRegReceptionOpen(true)
+                                                                                }}>
+                                                                                <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                                <span className='text-sm text-gray-700 font-medium'>Reg Réception QR Codes</span>
+                                                                            </button>
+                                                                        </>
+                                                                    )}
                                                                 </>
+                                                            ) : (
+                                                                <></>
                                                             )}
                                                         </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {isLivreur ? (
-                                                    <>
-                                                        {loadingLivraison ? (
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="grid grid-cols-2">
+                                                    <div className='col-start-2 space-y-0.5'>
+                                                        {isDemandeur ? (
                                                             <>
-                                                                <div className='text-center'>
-                                                                    <span className=''>
-                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                    </span>
+                                                                <div>
+                                                                    {loadingCancel ? (
+                                                                        <>
+                                                                            <div className='text-center'>
+                                                                                <span className=''>
+                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="space-y-0.5">
+                                                                                <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                    <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Modifier la demande</span>
+                                                                                </Link>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalCancelOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-times-circle"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </>
                                                         ) : (
-                                                            <>
-                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                    onClick={() => {
-                                                                        setIsModalLivraisonOpen(true)
-                                                                    }}>
-                                                                    <span className='mr-4'><i className="pi pi-send"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Livraison QR Codes</span>
-                                                                </button>
-                                                            </>
+                                                            <></>
                                                         )}
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {isReceveur ? (
-                                                    <>
-                                                        {loadingReception ? (
+                                                        {isGenerateur ? (
                                                             <>
-                                                                <div className='text-center'>
-                                                                    <span className=''>
-                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                    </span>
-                                                                </div>
+                                                                {loadingGenerate ? (
+                                                                    <>
+                                                                        <div className='text-center'>
+                                                                            <span className=''>
+                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                            onClick={() => {
+                                                                                setIsModalGenerationOpen(true)
+                                                                            }}>
+                                                                            <span className='mr-4'><i className="pi pi-upload"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Upload QR Codes</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                        {isUploaded ? (
+                                                            <>
+                                                                {loadingDownload ? (
+                                                                    <>
+                                                                        <div className='text-center'>
+                                                                            <span className=''>
+                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                            onClick={handleDownloadFiles}>
+                                                                            <span className='mr-4'><i className="pi pi-download"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Télécharger QR Codes</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                    onClick={() => {
-                                                                        setIsModalReceptionOpen(true)
-                                                                    }}>
-                                                                    <span className='mr-4'><i className="pi pi-inbox"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Réception QR Codes</span>
-                                                                </button>
                                                             </>
                                                         )}
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                            </div>
+                                                        {isImprimeur ? (
+                                                            <>
+                                                                <div>
+                                                                    {loadingImpression ? (
+                                                                        <>
+                                                                            <div className='text-center'>
+                                                                                <span className=''>
+                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="space-y-0.5">
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                    onClick={() => {
+                                                                                        setIsModalImpressionOpen(true)
+                                                                                    }}>
+                                                                                    <span className='mr-4'><i className="pi pi-print"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Confirmer Impression</span>
+                                                                                </button>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                    onClick={() => {
+                                                                                        setIsModalReturnFilesOpen(true)
+                                                                                    }}>
+                                                                                    <span className='mr-4'><i className="pi pi-exclamation-triangle"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Retourner QR Codes</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                        {isLivreur ? (
+                                                            <>
+                                                                {loadingLivraison ? (
+                                                                    <>
+                                                                        <div className='text-center'>
+                                                                            <span className=''>
+                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                            onClick={() => {
+                                                                                setIsModalLivraisonOpen(true)
+                                                                            }}>
+                                                                            <span className='mr-4'><i className="pi pi-send"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Livraison QR Codes</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                        {isReceveur ? (
+                                                            <>
+                                                                {loadingReception ? (
+                                                                    <>
+                                                                        <div className='text-center'>
+                                                                            <span className=''>
+                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                            onClick={() => {
+                                                                                setIsModalReceptionOpen(true)
+                                                                            }}>
+                                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Réception QR Codes</span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -852,7 +1082,7 @@ export default function DemandeQrDetails() {
                                         ) : (
                                             <></>
                                         )}
-                                        {commentaireDemandeur && !isReg ? (
+                                        {commentaireDemandeur ? (
                                             <>
                                                 <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
                                                     <div className='mb-6 pb-2 w-full border-b text-left'>
@@ -1179,7 +1409,7 @@ export default function DemandeQrDetails() {
             <Modal isOpen={isModalLivraisonOpen} onClose={() => setIsModalLivraisonOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
                     <div className="w-full text-center mb-3">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Validation</span>
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Livraison</span>
                     </div>
                     <div className='text-center mb-3 text-xs'>
                         <span>Signez manuellement pour valider la livraison</span>
@@ -1285,6 +1515,122 @@ export default function DemandeQrDetails() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalRegLivraisonOpen} onClose={() => setIsModalRegLivraisonOpen(false)} className="p-4 max-w-md">
+                <div className='p-1'>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Livraison</span>
+                    </div>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la livraison</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
+                        <SignatureCanvas
+                            ref={data => setSignatureLivraison(data)}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
+                        />
+                        <div className='w-full'>
+                            <Label>Date Livraison <span className="text-red-700">*</span></Label>
+                            <Calendar
+                                value={dateLivraisonReg}
+                                locale="fr"
+                                onChange={(e) => setDateLivraisonReg(e.value)}
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                                maxDate={new Date()}
+                                minDate={new Date(dateDemandeReg)}
+                                className="w-full"
+                                style={{fontSize:'2px'}}
+                            />
+                        </div>
+                        <div className='w-full'>
+                            <Label>Commentaire</Label>
+                            <TextArea
+                                value={commentaireLivraison}
+                                onChange={(value) => setCommentaireLivraison(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+
+                        <div className='w-full flex justify-center items-center'>
+                            <button
+                                onClick={handleClearLivraison}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleRegLivraisonQr}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorSignLivraison}
+                        </span>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalRegReceptionOpen} onClose={() => setIsModalRegReceptionOpen(false)} className="p-4 max-w-md">
+                <div className='p-1'>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Réception</span>
+                    </div>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la réception</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
+                        <SignatureCanvas
+                            ref={data => setSignatureReception(data)}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
+                        />
+                        <div className='w-full'>
+                            <Label>Date Réception <span className="text-red-700">*</span></Label>
+                            <Calendar
+                                value={dateReceptionReg}
+                                locale="fr"
+                                onChange={(e) => setDateReceptionReg(e.value)}
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                                maxDate={new Date()}
+                                minDate={new Date(dateLivraisonReg)}
+                                className="w-full"
+                                style={{fontSize:'2px'}}
+                            />
+                        </div>
+                        <div className='w-full'>
+                            <Label>Commentaire</Label>
+                            <TextArea
+                                value={commentaireReception}
+                                onChange={(value) => setCommentaireReception(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+
+                        <div className='w-full flex justify-center items-center'>
+                            <button
+                                onClick={handleClearReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleRegReceptionQr}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorSignLivraison}
+                        </span>
                     </div>
                 </div>
             </Modal>

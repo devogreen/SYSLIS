@@ -14,6 +14,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Dropdown } from 'primereact/dropdown';
 import { MultiSelect } from "primereact/multiselect";
+import Checkbox from "../form/input/Checkbox";
 
 import Swal from "sweetalert2";
 
@@ -70,6 +71,8 @@ export default function AllDemandesQrList() {
 
     const [loadingExtract, setLoadingExtract] = useState(false)
 
+    const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
+
     useEffect(() => {
         saveFilters({
             globalFilter,
@@ -79,8 +82,9 @@ export default function AllDemandesQrList() {
             endDate,
             selectedService,
             selectedModels,
+            isReg,
         });
-    }, [globalFilter, selectedStatus, selectedType, startDate, endDate, selectedService, selectedModels]);
+    }, [globalFilter, selectedStatus, selectedType, startDate, endDate, selectedService, selectedModels, isReg]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -223,7 +227,7 @@ export default function AllDemandesQrList() {
                     <span>
                         <Link to={linkSee}>
                             <button className="mx-1">
-                                <i className="pi pi-eye" style={{fontSize: '13px'}}></i>
+                                <i className="pi pi-eye" style={{ fontSize: '13px' }}></i>
                             </button>
                         </Link>
                     </span>
@@ -252,6 +256,7 @@ export default function AllDemandesQrList() {
         setSelectedStatus([]);
         setStartDate(null);
         setEndDate(null);
+        setIsReg(false)
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -262,10 +267,11 @@ export default function AllDemandesQrList() {
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesStartDate = startDate ? itemDate >= startDate : true;
         const matchesEndDate = endDate ? itemDate <= endDate : true;
+        const matchesReg = isReg ? item.is_reg : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesStartDate && matchesEndDate && matchesGlobalFilter;
+        return matchesStatus && matchesStartDate && matchesEndDate && matchesReg && matchesGlobalFilter;
     });
 
     const totalQr = filteredDemandes.reduce((sum, item) => sum + Number(item.quantite_qr || 0), 0);
@@ -348,59 +354,75 @@ export default function AllDemandesQrList() {
     return (
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                <div className="px-6 pt-6 flex items-center">
-                    <div className="relative w-full">
-                        <Input
-                            className="pl-10"
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                            placeholder="Rechercher une demande..."
-                        />
-                        <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
+                <div className="p-6 space-y-7">
+                    <div className="flex items-center">
+                        <div className="relative w-full">
+                            <Input
+                                className="pl-10"
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                                placeholder="Rechercher une demande..."
+                            />
+                            <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
+                        </div>
+                        <span className="pl-4">
+                            <button onClick={handleClearFilters}>
+                                <i className="pi pi-refresh"></i>
+                            </button>
+                        </span>
                     </div>
-                    <span className="pl-4">
-                        <button onClick={handleClearFilters}>
-                            <i className="pi pi-refresh"></i>
-                        </button>
-                    </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 p-6 pb-0">
-                    <MultiSelect
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.value)}
-                        options={statusOptions}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        placeholder="Filtrer par statut demande"
-                        className=""
-                    />
-                </div>
-                <div className="flex justify-normal flex-wrap gap-3 mb-3 p-6">
-                    <div className="flex gap-2">
-                        <DatePicker
-                            id="date-picker-debut"
-                            label="Date de début"
-                            placeholder={startDate ? formatDate(startDate) : 'Date de début'}
-                            value={startDate}
-                            onChange={(dates) => {
-                                setStartDate(dates[0])
-                            }}
-                            dateFormat="dd/mm/yy" />
-                        <DatePicker
-                            id="date-picker-fin"
-                            label="Date de fin"
-                            placeholder={endDate ? formatDate(endDate) : 'Date de fin'}
-                            value={endDate}
-                            onChange={(dates) => {
-                                if (dates && dates[0]) {
-                                    let selectedDate = new Date(dates[0]);
-                                    let nextDay = new Date(selectedDate);
-                                    nextDay.setDate(selectedDate.getDate() + 1);
-                                    setEndDate(nextDay);
-                                }
-                            }}
-                            dateFormat="dd/mm/yy" />
+                    <div className="grid grid-cols-3 gap-3 pb-0">
+                        <MultiSelect
+                            value={selectedStatus}
+                            onChange={(e) => setSelectedStatus(e.value)}
+                            options={statusOptions}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par statut demande"
+                            className=""
+                        />
+                    </div>
+                    <div className="flex justify-normal flex-wrap gap-3">
+                        <div className="flex gap-2">
+                            <DatePicker
+                                id="date-picker-debut"
+                                label="Date de début"
+                                placeholder={startDate ? formatDate(startDate) : 'Date de début'}
+                                value={startDate}
+                                onChange={(dates) => {
+                                    setStartDate(dates[0])
+                                }}
+                                dateFormat="dd/mm/yy" />
+                            <DatePicker
+                                id="date-picker-fin"
+                                label="Date de fin"
+                                placeholder={endDate ? formatDate(endDate) : 'Date de fin'}
+                                value={endDate}
+                                onChange={(dates) => {
+                                    if (dates && dates[0]) {
+                                        let selectedDate = new Date(dates[0]);
+                                        let nextDay = new Date(selectedDate);
+                                        nextDay.setDate(selectedDate.getDate() + 1);
+                                        setEndDate(nextDay);
+                                    }
+                                }}
+                                dateFormat="dd/mm/yy" />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isReg}
+                                onChange={(e) => {
+                                    if (isReg) {
+                                        setIsReg(false)
+                                    } else {
+                                        setIsReg(true)
+                                    }
+                                }}
+                                label="Régularisations" />
+                        </div>
                     </div>
                 </div>
                 <div className="p-6 pt-0 flex justify-between">

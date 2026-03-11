@@ -112,18 +112,26 @@ export class DemandeQr {
         }
     }
 
-    async regularisationDemandeQr(formData) {
+    async regularisationDemandeQr(payload) {
         try {
-            const response = await axios.post(`${urlBase}/api/demandeQr/regularisationDemandeQr`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            })
+            const response = await axios.post(`${urlBase}/api/demandeQr/regularisationDemandeQr`, payload)
             return response.data;
         } catch (error) {
             throw error.response.data;
         }
     }
+    // async regularisationDemandeQr(formData) {
+    //     try {
+    //         const response = await axios.post(`${urlBase}/api/demandeQr/regularisationDemandeQr`, formData, {
+    //             headers: {
+    //                 'Content-Type': 'multipart/form-data'
+    //             }
+    //         })
+    //         return response.data;
+    //     } catch (error) {
+    //         throw error.response.data;
+    //     }
+    // }
 
     async getAllFormFiles(id) {
         try {
@@ -151,6 +159,48 @@ export class DemandeQr {
         try {
             const response = await axios.put(`${urlBase}/api/demandeQr/cancelDemandeQr/${id}`, payload)
             return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async regularisationLivraisonDemandeQr(idDemande, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/regularisationLivraisonDemandeQr/${idDemande}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async regularisationReceptionDemandeQr(idDemande, idLivraison, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/regularisationReceptionDemandeQr/${idDemande}/${idLivraison}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async extractMarchandsQr(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/demandeQr/extractMarchandsQr`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
         } catch (error) {
             throw error.response.data;
         }
