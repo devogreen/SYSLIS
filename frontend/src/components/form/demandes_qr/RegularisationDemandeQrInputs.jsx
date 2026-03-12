@@ -697,41 +697,41 @@ export default function RegularisationDemandeQrInputs() {
             ]
             // console.log(listeMarchand)
             // const sign = signature.toDataURL('image/png')
-            // const fd = new FormData();
+            const fd = new FormData();
             // if (sign) {
             //     const blob = await fetch(sign).then(res => res.blob());
             //     fd.append('signature', blob, 'signature.png');
             // }
-            // selectedFiles.forEach((file) => {
-            //     fd.append("files", file);
-            // });
-            // fd.append("commentaire", commentaire)
-            // fd.append("liste_demande", JSON.stringify(listeLivraison))
-            // fd.append("quantite_marchand", listeMarchand.length)
-            // fd.append("quantite_qr", Number(totalQr))
-            // fd.append("userId", Number(userId))
-            // fd.append("date_demande", new Date(selectedDateDemande))
+            selectedFiles.forEach((file) => {
+                fd.append("files", file);
+            });
+            fd.append("commentaire", commentaire)
+            fd.append("liste_demande", JSON.stringify(listeLivraison))
+            fd.append("quantite_marchand", listeMarchand.length)
+            fd.append("quantite_qr", Number(totalQr))
+            fd.append("userId", Number(userId))
+            fd.append("date_demande", new Date(selectedDateDemande))
             // fd.append("date_generation", new Date(selectedDateGeneration))
             // fd.append("date_impression", new Date(selectedDateImpression))
             // fd.append("date_livraison", new Date(selectedDateLivraison))
             // fd.append("date_reception", new Date(selectedDateReception))
 
-            console.log("Sending data : ")
+            // console.log("Sending data : ")
             // for (let pair of fd.entries()) {
             //     console.log(pair[0] + ' = ' + pair[1]);
             // }
 
-            const payload = {
-                commentaire,
-                liste_demande: JSON.stringify(listeLivraison),
-                quantite_marchand: listeMarchand.length,
-                quantite_qr: Number(totalQr),
-                userId: Number(userId),
-                date_demande: new Date(selectedDateDemande),
-            }
-            console.log(payload)
+            // const payload = {
+            //     commentaire,
+            //     liste_demande: JSON.stringify(listeLivraison),
+            //     quantite_marchand: listeMarchand.length,
+            //     quantite_qr: Number(totalQr),
+            //     userId: Number(userId),
+            //     date_demande: new Date(selectedDateDemande),
+            // }
+            // console.log(payload)
 
-            await demandeData.regularisationDemandeQr(payload)
+            await demandeData.regularisationDemandeQr(fd)
 
             Swal.fire({
                 title: "Succès",

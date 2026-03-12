@@ -112,9 +112,13 @@ export class DemandeQr {
         }
     }
 
-    async regularisationDemandeQr(payload) {
+    async regularisationDemandeQr(formData) {
         try {
-            const response = await axios.post(`${urlBase}/api/demandeQr/regularisationDemandeQr`, payload)
+            const response = await axios.post(`${urlBase}/api/demandeQr/regularisationDemandeQr`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                },
+            })
             return response.data;
         } catch (error) {
             throw error.response.data;
