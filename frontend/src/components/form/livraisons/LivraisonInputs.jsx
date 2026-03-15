@@ -114,6 +114,7 @@ export default function LivraisonInputs() {
       try {
         let data;
         data = await merchants.findMerchant();
+        console.log(data)
         setTerminals(data)
 
         let type_delivery_data = await productDeliveries.getAllTypeLivraisonCommerciale()
@@ -275,6 +276,7 @@ export default function LivraisonInputs() {
       return terminal.SERIAL_NUMBER == value
     })
     if (pointMarchand) {
+      console.log('Point marchand trouvé : ', pointMarchand)
       setTerminalName(pointMarchand.POINT_MARCHAND)
       setTerminalBanque(pointMarchand.BANQUE)
       setTerminalCaisse(pointMarchand.TPE)

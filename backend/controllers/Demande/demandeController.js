@@ -3907,6 +3907,201 @@ const getDemandesValideesNonLivrees = async (req, res) => {
   }
 };
 
+// Fonction de régularisation des demandes de stock: faire une demande de stock en précisant la date.
+const regularisationDemande = async (req, res) => {
+  try {
+    const {
+      detailsDemande,
+      userId,
+      quantite,
+      serviceUser,
+      selectedUser,
+      nomUser,
+      motif,
+      commentaire,
+      otherFields,
+      date_demande,
+    } = req.body;
+
+    const details = typeof detailsDemande === "string"
+      ? JSON.parse(detailsDemande)
+      : detailsDemande;
+
+    const autres = typeof otherFields === "string"
+      ? JSON.parse(otherFields)
+      : otherFields
+
+    const piece = await prisma.items.findUnique({
+      where: {
+        id_piece: parseInt(details.selectedPiece)
+      }
+    })
+
+    if (!piece) {
+      console.log("Erreur serveur 404: pièce introuvable ! ")
+      return res.status(404).json({ message: "Pièce introuvable !" })
+    }
+
+    let utilisateur = null;
+    utilisateur = await prisma.users.findUnique({
+      where: {
+        id_user: parseInt(userId)
+      }
+    });
+
+    if (!utilisateur) {
+      console.log("Erreur serveur 404: utilisateur introuvable ! ")
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    const files = req.files?.files || [];
+    
+    const files_content = files.length
+      ? files.map(file => ({
+        name: file.originalname,
+        path: file.path,
+        type: file.mimetype,
+        size: file.size
+      }))
+      : [];
+
+    const nouvelleDemande = await prisma.demandes.create({
+      data: {
+        nom_demandeur: nomUser,
+        date_demande: new Date(date_demande),
+        commentaire,
+        qte_total_demande: parseInt(quantite),
+        details_demande: JSON.stringify(details),
+        statut_demande: 'en_cours',
+        user_id: parseInt(userId),
+        item_id: parseInt(details.selectedPiece),
+        id_demandeur: parseInt(selectedUser),
+        motif_demande: motif,
+        service_demandeur: parseInt(serviceUser),
+        champs_autre: JSON.stringify(autres),
+      }
+    });
+
+    if (files_content.length > 0) {
+      await prisma.fichiers.createMany({
+        data: files_content.map(fichier => ({
+          path: fichier.path,
+          filename: fichier.name,
+          originalName: fichier.name,
+          mimeType: fichier.type,
+          size: fichier.size,
+          uploaded_by: +userId,
+          demande_id: nouvelleDemande.id,
+          type_formulaire: 'demande',
+          role: 'demandeur',
+          created_at: new Date(),
+        }))
+      })
+    }
+
+
+    /************************** GESTION DES MAILS ********************************/
+    const service = await prisma.services.findUnique({
+      where: {
+        id: parseInt(serviceUser)
+      }
+    })
+
+    const nomService = service.nom_service.toUpperCase()
+
+    const userService = await prisma.user_services.findMany({
+      where: {
+        service_id: parseInt(serviceUser)
+      },
+      include: {
+        users: true
+      }
+    })
+
+    const userRole = await prisma.user_roles.findMany({
+      where: {
+        role_id: 4,
+      },
+      include: {
+        users: true
+      }
+    })
+    // const mouvement = await prisma.type_mouvement_stock.findUnique({
+    //   where: {
+    //     id: details.typeMouvement
+    //   }
+    // })
+
+    const service_users = userService.map(us => us.users)
+    const validateurs = userRole.map(us => us.users)
+
+    let nomPiece = piece.nom_piece.toUpperCase()
+
+    let quantiteDemande = quantite;
+
+    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+    const url = GENERAL_URL
+    let demandeLink = `${url}/demande-details/${nouvelleDemande.id}`;
+
+    const sendMail = require("../../utils/emailSender");
+
+    if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
+      const subject = `REGULARISATION MOUVEMENT DE STOCK DE ${nomPiece}`;
+      let html = `
+        <p>Bonjour,</p>
+        <p>Une nouvelle demande a été enregistrée.</p>
+        <ul>
+          <li><strong>Demande de :</strong> ${nomPiece}</li>
+          <li><strong>${details.typeDemande}</strong></li>
+          <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
+        </ul>
+        <ul>
+          <li><strong>Service demandeur:</strong> ${nomService}</li>
+          <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+        </ul>
+        <br>
+        <p>Commentaire : ${commentaire_mail}<p>
+        <br>
+        <p>Retrouvez la demande à ce lien : 
+          <span>
+          <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+            Cliquez ici !
+          </a>
+          </span>
+        </p>
+        <br><br>
+        <p>Green - Pay vous remercie.</p>
+        `;
+      for (const service_user of service_users) {
+        await sendMail({
+          to: service_user.email,
+          subject,
+          html,
+        });
+      }
+      for (const validateur of validateurs) {
+        await sendMail({
+          to: validateur.email,
+          subject,
+          html,
+        });
+      }
+    }
+
+    console.log("Succès ! ")
+    res.status(201).json({
+      message: "Demande enregistrée avec succès",
+      demandes: nouvelleDemande
+    });
+
+  } catch (error) {
+    console.log("Erreur serveur: ", error)
+    console.error("Erreur lors de la demande :", error);
+    res.status(500).json({ message: "Erreur interne", error });
+  }
+};
+
 module.exports = {
   faireDemande,
   getAllDemandes,
