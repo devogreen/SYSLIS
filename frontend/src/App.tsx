@@ -17,7 +17,7 @@ import FormElements from "./pages/Forms/FormElements";
 import Blank from "./pages/Blank";
 // import AppLayout from "./layouts/deliveryAdminLayout/AppLayoutDelivery";
 import { ScrollToTop } from "./components/common/ScrollToTop";
-// import DeliveryDashboard from "./pages/Dashboards/DeliveryDashboard";
+//  import DeliveryDashboard from "./pages/Dashboards/DeliveryDashboard";
 
 // @ts-ignore
 import DashboardRedirector from "./DashboardRedirector";
@@ -187,6 +187,8 @@ import AllDemandesQr from "./pages/DemandesQrPages/AllDemandesQr"
 import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
 // @ts-ignore
 import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
+// @ts-ignore
+import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
 
 export default function App() {
   return (
@@ -216,6 +218,7 @@ export default function App() {
               <Route path="/demande-livraison/:id" element={<DemandeDeliveryDetails />} />
               <Route path="/livraison-pieces/:id" element={<LivraisonPiecesForm />} />
               <Route path="/modifier-livraison-pieces/:id" element={<ModifyLivraisonPiecesForm />} />
+              <Route path="/regularisation-livraison" element={<RegularisationLivraisonForm />} />
 
               {/* Demandes QR CODE */}
               <Route path="/regularisation-demande-qr" element={<RegularisationDemandeQrForm />} />

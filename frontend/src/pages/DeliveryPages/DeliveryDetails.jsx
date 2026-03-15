@@ -11,7 +11,7 @@ import {
 } from "../../components/ui/table"
 
 import 'primeicons/primeicons.css';
-
+import { Calendar } from 'primereact/calendar';
 import { ProductDeliveries } from '../../backend/livraisons/ProductDeliveries';
 import { Users } from '../../backend/users/Users';
 import { Reception } from '../../backend/receptions/Reception';
@@ -22,6 +22,7 @@ import Swal from 'sweetalert2'
 import SignatureCanvas from 'react-signature-canvas'
 import Label from "../../components/form/Label";
 import TextArea from "../../components/form/input/TextArea";
+import { addLocale } from "primereact/api";
 
 
 
@@ -53,6 +54,7 @@ export default function DeliveryDetails() {
 
     const [loadingReception, setLoadingReception] = useState(false);
     const [isModalReceptionOpen, setIsModalReceptionOpen] = useState(false);
+    const [isModalRegularisationReceptionOpen, setIsModalRegularisationReceptionOpen] = useState(false);
     const [isModalReturnLivraisonOpen, setIsModalReturnLivraisonOpen] = useState(false)
     const [messageReception, setMessageReception] = useState('')
     const [messageReturnLivraison, setMessageReturnLivraison] = useState('')
@@ -65,13 +67,24 @@ export default function DeliveryDetails() {
     const [isCompleted, setIsCompleted] = useState(false)
 
     const [quantiteLivraison, setQuantiteLivraison] = useState()
+    const [selectedDateReception, setselectedDateReception] = useState(null);
 
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
     };
 
-
+ addLocale('fr', {
+    firstDayOfWeek: 1,
+    showMonthAfterYear: false,
+    dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+    dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+    dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+    monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+    monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+    today: 'Aujourd\'hui',
+    clear: 'Effacer'
+  });
     useEffect(() => {
         if (id) {
             const fetchDeliveryDetails = async () => {
@@ -350,6 +363,13 @@ export default function DeliveryDetails() {
                                                         </button>
                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                             onClick={() => {
+                                                                setIsModalRegularisationReceptionOpen(true)
+                                                            }}>
+                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                            <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
+                                                        </button>
+                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                            onClick={() => {
                                                                 setIsModalReturnLivraisonOpen(true)
                                                             }}>
                                                             <span className='mr-4'><i className="pi pi-arrow-left"></i></span>
@@ -490,6 +510,8 @@ export default function DeliveryDetails() {
                     </div>
                 </>)
             }
+            {/* Formulaire de reception */}
+            
             <Modal isOpen={isModalReceptionOpen} onClose={() => setIsModalReceptionOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
                     <div className='text-center mb-3 text-sm'>
@@ -509,6 +531,60 @@ export default function DeliveryDetails() {
                                 placeholder="Ajoutez un commentaire"
                             />
                         </div>
+                        <div className='w-full mt-6 flex justify-center items-center'>
+                            <button
+                                onClick={handleClearReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorSignReception}
+                        </span>
+                    </div>
+                </div>
+            </Modal>
+            
+        {/* Ajout du modal de reception d'une livraison de regularisation */}
+            <Modal isOpen={isModalRegularisationReceptionOpen} onClose={() => setIsModalRegularisationReceptionOpen(false)} className="p-4 max-w-md">
+                <div className='p-1'>
+                    <div className='text-center mb-3 text-sm'>
+                        <span>Signez manuellement pour valider la livraison</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center'>
+                        <SignatureCanvas
+                            ref={data => setSignatureReception(data)}
+                            canvasProps={{ width: 300, height: 250, className: 'sigCanvas border border-gray-300 rounded' }}
+                        />
+                         <div>
+                            <Label>Date Reception <span className="text-red-700">*</span></Label>
+                            <Calendar
+                                value={selectedDateReception}
+                                locale="fr"
+                                onChange={(e) => setselectedDateReception(e.value)}
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                                maxDate={new Date()}
+                                className="w-full"
+                            />
+                        </div>
+                        <div className='w-full mt-3'>
+                            <Label>Commentaire</Label>
+                            <TextArea
+                                value={messageReception}
+                                onChange={(value) => setMessageReception(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+                       
                         <div className='w-full mt-6 flex justify-center items-center'>
                             <button
                                 onClick={handleClearReception}
