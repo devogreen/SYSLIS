@@ -7,6 +7,7 @@ const uploadAll = require("../middlewares/uploadAll")
 const { faireDemande, getAllDemandes, getOneDemande, validateDemande, returnDemande,
     cancelDemande, updateDemande, generateDemandePDF, receivePiece, preValidateDemande,
     getAllDemandeFiles, downloadFile, getDemandesEnAttente, getDemandesValideesNonLivrees,
+    regularisationDemande, regValidateDemande,
 } = require("../controllers/Demande/demandeController")
 
 router.post('/faireDemande', uploadAll.fields([
@@ -27,5 +28,11 @@ router.get('/getAllDemandeFiles/:idDemande', getAllDemandeFiles);
 router.get("/downloadFile/:id", downloadFile);
 router.get('/getDemandesEnAttente', getDemandesEnAttente);
 router.get('/getDemandesValidees', getDemandesValideesNonLivrees);
+router.post('/regularisationDemande', uploadAll.fields([
+    { name: 'files', maxCount: 10 },
+]), regularisationDemande);
+router.post('/regValidateDemande',  uploadAll.fields([
+    { name: 'signature'},
+]), regValidateDemande);
 
 module.exports = router

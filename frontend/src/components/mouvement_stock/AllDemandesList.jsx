@@ -7,6 +7,7 @@ import { Users } from "../../backend/users/Users";
 import { ProductDeliveries } from "../../backend/livraisons/ProductDeliveries";
 
 import Input from "../form/input/InputField";
+import Checkbox from "../form/input/Checkbox";
 import { Calendar } from 'primereact/calendar';
 import DatePicker from "../form/date-picker";
 import { MultiSelect } from "primereact/multiselect";
@@ -85,6 +86,8 @@ export default function AllDemandesList() {
 
     const [stocks, setStocks] = useState([])
 
+    const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
+
     useEffect(() => {
         saveFilters({
             globalFilter,
@@ -94,9 +97,10 @@ export default function AllDemandesList() {
             endDate,
             serviceDemandeurs,
             selectedModels,
-            servicesPieces
+            servicesPieces,
+            isReg,
         });
-    }, [globalFilter, selectedStatus, selectedItems, startDate, endDate, serviceDemandeurs, selectedModels, servicesPieces]);
+    }, [globalFilter, selectedStatus, selectedItems, startDate, endDate, serviceDemandeurs, selectedModels, servicesPieces, isReg]);
 
     useEffect(() => {
         const fetchDemandeData = async () => {
@@ -361,6 +365,7 @@ export default function AllDemandesList() {
         setServicesPieces([])
         setStartDate(null);
         setEndDate(null);
+        setIsReg(false)
         sessionStorage.removeItem(FILTERS_KEY);
     }
     const filteredDemandeForms = demandeForms.filter((item) => {
@@ -371,8 +376,8 @@ export default function AllDemandesList() {
             let index = item.validation_demande.length - 1
             validation = item.validation_demande[index]
             itemDate = new Date(item.validation_demande[index].date_validation_demande)
-            if(validation.statut_validation_demande == 'valide'){
-                if (item.demande_livree){
+            if (validation.statut_validation_demande == 'valide') {
+                if (item.demande_livree) {
                     statutReception = 'réceptionnée'
                 } else {
                     statutReception = 'en_cours'
@@ -380,7 +385,7 @@ export default function AllDemandesList() {
             }
         }
         const detailsDemande = JSON.parse(item.details_demande)
-
+        const form = item.forms
 
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_demande) : true;
         const matchesItems = selectedItems.length > 0 ? selectedItems.includes(item.item_id) : true;
@@ -389,120 +394,138 @@ export default function AllDemandesList() {
         const matchesServiceDemandeur = serviceDemandeurs.length > 0 ? serviceDemandeurs.includes(item.service_demandeur) : true;
         const matchesModel = selectedModels.length > 0 ? selectedModels.includes(detailsDemande.model) : true;
         const matchesServicesPieces = servicesPieces.length > 0 ? servicesPieces.includes(detailsDemande.service) : true;
-        const  matchesStatusReception = selectedStatusReception.length > 0 ? selectedStatusReception.includes(statutReception) : true
+        const matchesStatusReception = selectedStatusReception.length > 0 ? selectedStatusReception.includes(statutReception) : true
+        const matchesReg = isReg ? form?.is_reg == true : true
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesItems && matchesStartDate && matchesEndDate && matchesServiceDemandeur && matchesModel && matchesServicesPieces && matchesStatusReception && matchesGlobalFilter;
+        return matchesStatus && matchesItems && matchesStartDate && matchesEndDate && matchesServiceDemandeur && matchesModel && matchesServicesPieces && matchesStatusReception && matchesReg && matchesGlobalFilter;
     });
 
     return (
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                <div className="px-6 pt-6 flex items-center">
-                    <div className="relative w-full">
-                        <Input
-                            className="pl-10"
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                            placeholder="Rechercher une demande..."
+                <div className="p-6 space-y-7">
+                    <div className="flex items-center">
+                        <div className="relative w-full">
+                            <Input
+                                className="pl-10"
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                                placeholder="Rechercher une demande..."
                             />
-                        <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
+                            <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
+                        </div>
+                        <span className="pl-4">
+                            <button onClick={handleClearFilters}>
+                                <i className="pi pi-refresh"></i>
+                            </button>
+                        </span>
                     </div>
-                    <span className="pl-4">
-                        <button onClick={handleClearFilters}>
-                            <i className="pi pi-refresh"></i>
-                        </button>
-                    </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 p-6 pb-0">
-                    <MultiSelect
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.value)}
-                        options={statusOptions}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        placeholder="Filtrer par statut demande"
-                        className=""
-                    />                  
-                    <MultiSelect
-                        label="Filtrer par pièces"
-                        options={optionsPieces}
-                        display="chip"
-                        value={selectedItems}
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        placeholder="Filtrer par pièce"
-                        className=""
-                        onChange={(e) => setSelectedItems(e.value)}
-                    />
-                    <MultiSelect
-                        label="Model"
-                        options={optionsModels}
-                        display="chip"
-                        value={selectedModels}
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        placeholder="Filtrer par modèle"
-                        className=""
-                        onChange={(e) => setSelectedModels(e.value)}
-                    />
-                    <MultiSelect
-                        value={servicesPieces}
-                        options={optionsServicesPiece}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setServicesPieces(e.value)}
-                        placeholder="Filtrer par service pièce"
-                        className=""
-                    />
-                    <MultiSelect
-                        value={serviceDemandeurs}
-                        options={optionsServicesDemandeur}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setServiceDemandeurs(e.value)}
-                        placeholder="Filtrer par service demandeur"
-                        className=""
-                    />
-                    <MultiSelect
-                        value={selectedStatusReception}
-                        onChange={(e) => setSelectedStatusReception(e.value)}
-                        options={statusReception}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        placeholder="Filtrer par statut réception"
-                        className=""
-                    />
-                </div>
-                <div className="flex justify-normal flex-wrap gap-3 mb-3 p-6">
-                    <div className="flex gap-2">
-                        <DatePicker
-                            id="date-picker-debut"
-                            label="Date de début"
-                            placeholder={startDate ? formatDate(startDate) : 'Date de début' }
-                            value={startDate}
-                            onChange={(dates, currentDateString) => {
-                                setStartDate(dates[0])
-                            }}
-                            dateFormat="dd/mm/yy"/>
-                        <DatePicker
-                            id="date-picker-fin"
-                            label="Date de fin"
-                            placeholder={endDate ? formatDate(endDate) : 'Date de fin' }
-                            value={endDate}
-                            onChange={(dates, currentDateString) => {
-                                if (dates && dates[0]) {
-                                let selectedDate = new Date(dates[0]);
-                                let nextDay = new Date(selectedDate);
-                                nextDay.setDate(selectedDate.getDate() + 1);
-                                setEndDate(nextDay);
-                            }}}
-                            dateFormat="dd/mm/yy"/>
+                    <div className="grid grid-cols-3 gap-3">
+                        <MultiSelect
+                            value={selectedStatus}
+                            onChange={(e) => setSelectedStatus(e.value)}
+                            options={statusOptions}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par statut demande"
+                            className=""
+                        />
+                        <MultiSelect
+                            label="Filtrer par pièces"
+                            options={optionsPieces}
+                            display="chip"
+                            value={selectedItems}
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par pièce"
+                            className=""
+                            onChange={(e) => setSelectedItems(e.value)}
+                        />
+                        <MultiSelect
+                            label="Model"
+                            options={optionsModels}
+                            display="chip"
+                            value={selectedModels}
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par modèle"
+                            className=""
+                            onChange={(e) => setSelectedModels(e.value)}
+                        />
+                        <MultiSelect
+                            value={servicesPieces}
+                            options={optionsServicesPiece}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setServicesPieces(e.value)}
+                            placeholder="Filtrer par service pièce"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={serviceDemandeurs}
+                            options={optionsServicesDemandeur}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setServiceDemandeurs(e.value)}
+                            placeholder="Filtrer par service demandeur"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedStatusReception}
+                            onChange={(e) => setSelectedStatusReception(e.value)}
+                            options={statusReception}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par statut réception"
+                            className=""
+                        />
+                    </div>
+                    <div className="flex justify-normal flex-wrap gap-3">
+                        <div className="flex gap-2">
+                            <DatePicker
+                                id="date-picker-debut"
+                                label="Date de début"
+                                placeholder={startDate ? formatDate(startDate) : 'Date de début'}
+                                value={startDate}
+                                onChange={(dates, currentDateString) => {
+                                    setStartDate(dates[0])
+                                }}
+                                dateFormat="dd/mm/yy" />
+                            <DatePicker
+                                id="date-picker-fin"
+                                label="Date de fin"
+                                placeholder={endDate ? formatDate(endDate) : 'Date de fin'}
+                                value={endDate}
+                                onChange={(dates, currentDateString) => {
+                                    if (dates && dates[0]) {
+                                        let selectedDate = new Date(dates[0]);
+                                        let nextDay = new Date(selectedDate);
+                                        nextDay.setDate(selectedDate.getDate() + 1);
+                                        setEndDate(nextDay);
+                                    }
+                                }}
+                                dateFormat="dd/mm/yy" />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isReg}
+                                onChange={(e) => {
+                                    if (isReg) {
+                                        setIsReg(false)
+                                    } else {
+                                        setIsReg(true)
+                                    }
+                                }}
+                                label="Régularisations" />
+                        </div>
                     </div>
                 </div>
                 <div className="p-6 pt-0">

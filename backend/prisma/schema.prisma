@@ -55,6 +55,7 @@ model demandes {
   service_demandeur                  Int?
   champs_autre                       String?                 @db.LongText
   files                              String?                 @db.LongText
+  form_id                            Int?
   is_deleted                         Boolean                 @default(false)
   users_demandes_user_idTousers      users?                  @relation("demandes_user_idTousers", fields: [user_id], references: [id_user], onDelete: Restrict, map: "demandes_ibfk_2")
   stocks                             stocks?                 @relation(fields: [stock_id], references: [id], onDelete: Cascade, map: "demandes_ibfk_9")
@@ -63,6 +64,7 @@ model demandes {
   roles                              roles?                  @relation(fields: [role_id_recepteur], references: [id_role], map: "demandes_ibfk_3")
   users_demandes_id_demandeurTousers users?                  @relation("demandes_id_demandeurTousers", fields: [id_demandeur], references: [id_user], map: "demandes_ibfk_7")
   services                           services?               @relation(fields: [service_demandeur], references: [id], map: "demandes_ibfk_8")
+  forms                              forms?                  @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "demandes_ibfk_4")
   fichiers                           fichiers[]
   mouvement_stock                    mouvement_stock[]
   reception_piece                    reception_piece[]
@@ -75,6 +77,7 @@ model demandes {
   @@index([stock_id], map: "stock_id")
   @@index([type_demande], map: "type_demande")
   @@index([item_id], map: "item_id")
+  @@index([form_id], map: "form_id")
 }
 
 model items {
@@ -137,6 +140,7 @@ model livraison {
   role_id                    Int?
   model_id                   Int?
   stock_id                   Int?
+  form_id                    Int?
   fichiers                   fichiers[]
   users                      users?                      @relation(fields: [user_id], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "livraison_ibfk_1")
   type_livraison_commerciale type_livraison_commerciale? @relation(fields: [type_livraison_id], references: [id_type_livraison], onDelete: Restrict, onUpdate: Restrict, map: "livraison_ibfk_2")
@@ -144,6 +148,7 @@ model livraison {
   roles                      roles?                      @relation(fields: [role_id], references: [id_role], onDelete: Restrict, map: "livraison_ibfk_4")
   model_piece                model_piece?                @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "livraison_ibfk_5")
   stocks                     stocks?                     @relation(fields: [stock_id], references: [id], map: "livraison_ibfk_6")
+  forms                      forms?                      @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "livraison_ibfk_7")
   mouvement_stock            mouvement_stock[]
   validations                validations[]
 
@@ -153,6 +158,7 @@ model livraison {
   @@index([type_livraison_id], map: "type_livraison_id")
   @@index([user_id], map: "user_id")
   @@index([stock_id], map: "stock_id")
+  @@index([form_id], map: "form_id")
 }
 
 model livraison_piece {
@@ -252,6 +258,7 @@ model remplacements {
   nom_livreur                                         String?                   @db.VarChar(255)
   signature_expediteur                                String?                   @db.VarChar(255)
   details_parametrage                                 String?                   @db.LongText
+  form_id                                             Int?
   statut                                              remplacements_statut
   fichiers                                            fichiers[]
   users                                               users                     @relation(fields: [user_id], references: [id_user], map: "remplacements_ibfk_1")
@@ -259,6 +266,7 @@ model remplacements {
   model_piece_remplacements_new_model_idTomodel_piece model_piece               @relation("remplacements_new_model_idTomodel_piece", fields: [new_model_id], references: [id_model], map: "remplacements_ibfk_3")
   services                                            services                  @relation(fields: [service_id], references: [id], map: "remplacements_ibfk_4")
   roles                                               roles                     @relation(fields: [role_id], references: [id_role], map: "remplacements_ibfk_5")
+  forms                                               forms?                    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "remplacements_ibfk_6")
   validation_remplacement                             validation_remplacement[]
 
   @@index([new_model_id], map: "new_model_id")
@@ -266,6 +274,7 @@ model remplacements {
   @@index([role_id], map: "role_id")
   @@index([service_id], map: "service_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model roles {
@@ -459,13 +468,16 @@ model validation_demande {
   id_demande                Int
   quantite_validee          Int?
   stock_id                  Int?
+  form_id                   Int?
   users                     users?                                       @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "validation_demande_ibfk_2")
   demandes                  demandes                                     @relation(fields: [id_demande], references: [id], onDelete: Cascade, map: "validation_demande_ibfk_1")
   stocks                    stocks?                                      @relation(fields: [stock_id], references: [id], map: "validation_demande_ibfk_3")
+  forms                     forms?                                       @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validation_demande_ibfk_4")
 
   @@index([id_demande], map: "id_demande")
   @@index([id_user], map: "id_user")
   @@index([stock_id], map: "stock_id")
+  @@index([form_id], map: "form_id")
 }
 
 model validation_remplacement {
@@ -476,11 +488,14 @@ model validation_remplacement {
   commentaire     String?       @db.LongText
   nom_recepteur   String?       @db.VarChar(255)
   signature       String?       @db.VarChar(255)
+  form_id         Int?
   remplacements   remplacements @relation(fields: [remplacement_id], references: [id], map: "validation_remplacement_ibfk_4")
   users           users         @relation(fields: [user_id], references: [id_user], map: "validation_remplacement_ibfk_3")
+  forms           forms?        @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validation_remplacement_ibfk_2")
 
   @@index([remplacement_id], map: "remplacement_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model validations {
@@ -492,11 +507,14 @@ model validations {
   user_id         Int?
   nom_recepteur   String?                     @db.VarChar(255)
   signature       String?                     @db.VarChar(255)
+  form_id         Int?
   livraison       livraison                   @relation(fields: [livraison_id], references: [id_livraison], onUpdate: Restrict, map: "validations_ibfk_1")
   users           users?                      @relation(fields: [user_id], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "validations_ibfk_2")
+  forms           forms?                      @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validations_ibfk_3")
 
   @@index([livraison_id], map: "livraison_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model stocks {
@@ -542,13 +560,16 @@ model reception_piece {
   signature_recepteur String?   @db.VarChar(255)
   nom_recepteur       String?   @db.VarChar(255)
   commentaire         String?   @db.LongText
+  form_id             Int?
   demandes            demandes? @relation(fields: [demande_id], references: [id], onDelete: Cascade, map: "reception_piece_ibfk_3")
   items               items     @relation(fields: [item_id], references: [id_piece], onDelete: Cascade, map: "reception_piece_ibfk_1")
   users               users     @relation(fields: [user_id], references: [id_user], onDelete: Cascade, map: "reception_piece_ibfk_2")
+  forms               forms?    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_piece_ibfk_4")
 
   @@index([demande_id], map: "demande_id")
   @@index([item_id], map: "item_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model serial_numbers {
@@ -763,6 +784,7 @@ model forms {
   last_modified_at              DateTime          @default(now()) @db.DateTime(0)
   nom_user                      String?           @db.VarChar(255)
   commentaire                   String?           @db.LongText
+  is_reg                        Boolean           @default(false)
   is_deleted                    Boolean           @default(false)
   demande_qr                    demande_qr[]
   form_signatures               form_signatures[]
@@ -772,6 +794,13 @@ model forms {
   impression_qr                 impression_qr[]
   livraison_qr                  livraison_qr[]
   reception_qr                  reception_qr[]
+  demandes                      demandes[]
+  livraison                     livraison[]
+  remplacements                 remplacements[]
+  validation_demande            validation_demande[]
+  validation_remplacement       validation_remplacement[]
+  validations                   validations[]
+  reception_piece               reception_piece[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -863,21 +892,6 @@ enum demande_qr_statut {
   recue
 }
 
-enum forms_type {
-  livraison_sn
-  reception_sn
-  remplacement_sn
-  reception_remplacement
-  demande_stock
-  validation_stock
-  reception_stock
-  demande_qr
-  generation_qr
-  impression_qr
-  livraison_qr
-  reception_qr
-}
-
 enum form_signatures_role {
   livreur
   receveur
@@ -900,4 +914,20 @@ enum fichiers_role {
   validateur
   regularisateur
   generateur
+}
+
+enum forms_type {
+  livraison_sn
+  reception_sn
+  remplacement_sn
+  reception_remplacement
+  demande_stock
+  validation_stock
+  reception_stock
+  demande_qr
+  generation_qr
+  impression_qr
+  livraison_qr
+  reception_qr
+  reception_piece
 }

@@ -19,6 +19,18 @@ import { Dropdown } from "primereact/dropdown";
 
 import SignatureCanvas from 'react-signature-canvas'
 
+import { Calendar } from 'primereact/calendar';
+import { addLocale } from "primereact/api";
+
+addLocale('fr', {
+    firstDayOfWeek: 1,
+    dayNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
+    dayNamesShort: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+    dayNamesMin: ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'],
+    monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+    monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+});
+
 export default function ValidateDemandeInputs() {
 
     const stockData = new Stock()
@@ -151,6 +163,9 @@ export default function ValidateDemandeInputs() {
     const [stockOwners, setStockOwners] = useState([])
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
 
+    const [isReg, setIsReg] = useState(false)
+    const [selectedDateValidation, setSelectedDateValidation] = useState(null)
+    const [dateDemande, setDateDemande] = useState(null)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -159,6 +174,13 @@ export default function ValidateDemandeInputs() {
 
                 const demande_data = await demandeData.getOneDemande(idDemande)
                 const detailsDemande = JSON.parse(demande_data.details_demande)
+
+                const demandeForm = demande_data.forms
+                if (demandeForm) {
+                    setIsReg(demandeForm.is_reg)
+                    const dateDemande = new Date(demandeForm.last_modified_at)
+                    setDateDemande(dateDemande)
+                }
 
                 const ownersData = await stockData.getAllUserTypeStocks(demande_data.item_id, detailsDemande.selectedModel, detailsDemande.selectedServicePiece)
                 const ownersId = ownersData.map((item) => {
@@ -180,7 +202,6 @@ export default function ValidateDemandeInputs() {
                 if (pieceDemande) {
                     setNomPiece(pieceDemande.nom_piece)
                 }
-
 
                 const services_data = await userData.getAllServices()
                 setServicesUsers(services_data)
@@ -266,677 +287,20 @@ export default function ValidateDemandeInputs() {
         fetchData()
     }, [])
 
-    const handleSelectServiceUser = (value) => {
-        console.log("Selected value:", value);
-        setServiceUser(value)
-        const service = servicesUsers.find(
-            (item) => {
-                return item.id == parseInt(value)
-            }
-        )
-        const nom = service ? service.nom_service.toUpperCase() : ''
-        setNomServiceUser(nom)
-    };
-
-    const handleSelectUser = (value) => {
-        console.log("Selected value:", value);
-        setSelectedUser(value)
-        const user = userList.find(
-            (item) => {
-                return item.id_user == parseInt(value)
-            }
-        )
-        const nom = user ? user.fullname : ''
-        setNomUser(nom)
-    }
-
-    const handleSelectPiece = async (value) => {
-        setSelectedPiece(value)
-        const piece = items.find((item) => {
-            return item.id_piece == value
-        })
-
-        const nom = piece ? piece.nom_piece.toUpperCase() : ''
-        setNomPiece(nom)
-
-        const itemModels_data = await stockData.getItemModels(value)
-        const options_models = itemModels_data.model_piece.map((item) => ({
-            value: item.id_model,
-            label: item.nom_model.toUpperCase()
-        }))
-        setOptionsModels(options_models)
-        setModels(itemModels_data.model_piece)
-
-        const itemService_data = await stockData.getItemServices(value)
-        const options_services = itemService_data.services.map((item) => ({
-            value: item.id,
-            label: item.nom_service.toUpperCase()
-        }))
-        setOptionsServicesPieces(options_services)
-        setServicesPiece(itemService_data.services)
-    }
-
-    const handleSelectModel = (value) => {
-        console.log('Selected model value: ', value)
-        const model = models.find((item) => {
-            return item.id_model == value
-        })
-        const nomModel = model ? model.nom_model : ''
-        setNomModel(nomModel)
-        setSelectedModel(value)
-    }
-
-    const handleSelectServicePiece = (value) => {
-        console.log('Selected service value: ', value)
-        const service = servicesPiece.find((item) => {
-            return item.id == value
-        })
-        const nomService = service ? service.nom_service : ''
-        setNomServicePiece(nomService)
-        setSelectedServicePiece(value)
-    }
-
-    const stocksTemplate = (stock) => {
-        return (
-            <>
-                <span className="text-sm font-semibold">{stock.label}</span>
-            </>
-        )
-    }
-
-    const selectedStockTemplate = (option, props) => {
-        if (option) {
-            return (
-                <>
-                    <span className="text-sm font-semibold">{option.label}</span>
-                </>
-            )
-        }
-        return <span>{props.placeholder}</span>;
-    }
-
-    const handleSelectStock = async (e) => {
-        const value = e.value
-        console.log(value)
-        console.log(typeof (value))
-        setSelectedStock(value)
-        const stock = stocks.find((item) => {
-            return item.id == value
-        })
-        if (stock) {
-            setNomStock(stock.code_stock)
-            setQuantitePiece(stock.quantite_piece)
-            setStockOwner(stock.created_by)
-            // setQuantiteCarton(stock.quantite_carton)
-            // setQuantiteLot(stock.quantite_lot)
-
-            const stock_carton_all = await stockData.getCartonStock(value)
-            const stock_carton = stock_carton_all.filter((item) => {
-                return item.is_deleted == false
-            })
-            setQuantiteCarton(stock_carton.length)
-            if (stock_carton.length > 0) {
-                setHasCarton(true)
-            } else {
-                setHasCarton(false)
-            }
-            const carton_simple = stock_carton.filter((item) => {
-                return item.lot_id == null
-            })
-            const options_carton = carton_simple.map((item) => ({
-                value: item.id,
-                label: `Carton ${item.numero_carton} - ${item.quantite_totale_piece} pièces`
-            }))
-            setOptionsCartons(options_carton)
-            setListeCartons(stock_carton)
-
-            const stock_lot_all = await stockData.getLotStock(value)
-            const stock_lot = stock_lot_all.filter((item) => {
-                return item.is_deleted == false
-            })
-            setQuantiteLot(stock_lot.length)
-            setListeLots(stock_lot)
-            const options_lot = stock_lot.map((item) => ({
-                value: item.id,
-                label: `Lot ${item.numero_lot} - ${item.quantite_carton} cartons - ${item.quantite_piece} pièces`
-            }))
-            setOptionsLot(options_lot)
-            if (stock_lot.length > 0) {
-                setHasLot(true)
-            } else {
-                setHasLot(false)
-            }
-
-            if (stock && stock.piece_id == 1 && stock.service_id == 5) {
-                const stock_demandeur = stocks.find((item) => {
-                    return item.service_id == 3 && item.piece_id == 1 && item.code_stock == stock.code_stock
-                })
-                if (stock_demandeur) {
-                    setQuantitePieceDemandeur(stock_demandeur.quantite_piece)
-
-                    const stock_carton_all = await stockData.getCartonStock(stock_demandeur.id)
-                    const stock_carton = stock_carton_all.filter((item) => {
-                        return item.is_deleted == false
-                    })
-                    setQuantiteCartonDemandeur(stock_carton.length)
-
-                    const stock_lot_all = await stockData.getLotStock(stock_demandeur.id)
-                    const stock_lot = stock_lot_all.filter((item) => {
-                        return item.is_deleted == false
-                    })
-                    setQuantiteLotDemandeur(stock_lot.length)
-                }
-            }
-        }
-
-        const pieceId = stock ? stock.piece_id : null
-        setSelectedPiece(pieceId)
-        const piece = items.find((item) => {
-            return item.id_piece == pieceId
-        })
-        const nomPiece = piece ? piece.nom_piece : 'N/A'
-        setNomPiece(nomPiece)
-
-        const modelId = stock ? stock.model_id : null
-        setSelectedModel(modelId)
-        const model = models.find((item) => {
-            return item.id_model == modelId
-        })
-        const nomModel = model ? model.nom_model : 'N/A'
-        setNomModel(nomModel)
-
-        const serviceId = stock ? stock.service_id : null
-        setSelectedServicePiece(serviceId)
-        const service = servicesPiece.find((item) => {
-            return item.id == serviceId
-        })
-        const nomService = service ? service.nom_service : 'N/A'
-        setNomServicePiece(nomService)
-    }
-
-    // useEffect(() => {
-    //   const fetchQuantite = async () => {
-    //     if (!selectedModel || !selectedServicePiece) return // wait until both are chosen
-    //     try {
-    //       const quantite_piece = await stockData.getStockPiece(selectedPiece, selectedModel, selectedServicePiece)
-    //       setQuantitePiece(quantite_piece)
-
-    //       const stock_carton_all = await stockData.getCartonPiece(selectedPiece, selectedModel, selectedServicePiece)
-    //       const stock_carton = stock_carton_all.filter((item) => {
-    //         return item.is_deleted == false
-    //       })
-    //       setQuantiteCarton(stock_carton.length)
-    //       const carton_simple = stock_carton.filter((item) => {
-    //         return item.lot_id == null
-    //       })
-    //       const options_carton = carton_simple.map((item) => ({
-    //         value: item.id,
-    //         label: `Carton ${item.numero_carton} - ${item.quantite_totale_piece} pièces`
-    //       }))
-    //       setOptionsCartons(options_carton)
-    //       setListeCartons(stock_carton)
-
-    //       const stock_lot_all = await stockData.getLotPiece(selectedPiece, selectedModel, selectedServicePiece)
-    //       const stock_lot = stock_lot_all.filter((item) => {
-    //         return item.is_deleted == false
-    //       })
-    //       setQuantiteLot(stock_lot.length)
-    //       setListeLots(stock_lot)
-    //       const options_lot = stock_lot.map((item) => ({
-    //         value: item.id,
-    //         label: `Lot ${item.numero_lot} - ${item.quantite_carton} cartons - ${item.quantite_piece} pièces`
-    //       }))
-    //       setOptionsLot(options_lot)
-    //     } catch (error) {
-    //       console.log("Error fetching quantity", error)
-    //     }
-    //   }
-
-    //   fetchQuantite()
-    // }, [selectedPiece, selectedModel, selectedServicePiece])
-
-    // useEffect(() => {
-    //   const fetchQuantite = async () => {
-    //     if (!selectedModel || !serviceUser) return // wait until both are chosen
-    //     try {
-    //       const quantite_piece_demandeur = await stockData.getStockPiece(selectedPiece, selectedModel, serviceUser)
-    //       setQuantitePieceDemandeur(quantite_piece_demandeur)
-
-    //       const stock_carton_all_demandeur = await stockData.getCartonPiece(selectedPiece, selectedModel, serviceUser)
-    //       const stock_carton_demandeur = stock_carton_all_demandeur.filter((item) => {
-    //         return item.is_deleted == false
-    //       })
-    //       setQuantiteCartonDemandeur(stock_carton_demandeur.length)
-
-    //       const stock_lot_demandeur_all = await stockData.getLotPiece(selectedPiece, selectedModel, serviceUser)
-    //       const stock_lot_demandeur = stock_lot_demandeur_all.filter((item) => {
-    //         return item.is_deleted == false
-    //       })
-    //       setQuantiteLotDemandeur(stock_lot_demandeur.length)
-
-    //     } catch (error) {
-    //       console.log("Error fetching quantity", error)
-    //     }
-    //   }
-
-    //   fetchQuantite()
-    // }, [selectedPiece, selectedModel, serviceUser])
-
-    const handleSelectLotCarton = async (id) => {
-        setSelectedLot(id)
-        const cartons_data_all = await stockData.getCartonLot(id)
-        const cartons_data = cartons_data_all.filter((item) => {
-            return item.is_deleted == false
-        })
-        const options_cartons = cartons_data.map((item) => ({
-            value: item.id,
-            label: `Carton ${item.numero_carton} - ${item.quantite_totale_piece} pièces`
-        }))
-        setOptionsCartons(options_cartons)
-
-        const lot = listeLots.find((item) => {
-            return item.id == id
-        })
-        const nom = lot ? `Lot ${lot.numero_lot}` : ''
-        setNomLot(nom)
-        const totalCarton = lot ? lot.quantite_carton_lot : 0
-        setQuantiteCartonLot(totalCarton)
-        const stockCarton = lot ? lot.quantite_carton : 0
-        setStockCartonLot(stockCarton)
-        const stockPiece = lot ? lot.quantite_piece : 0
-        setStockPieceLot(stockPiece)
-    }
-
-    const handleSelectCarton = (value) => {
-        setSelectedCarton(value)
-        const carton = listeCartons.find((item) => {
-            return item.id == value
-        })
-        const nom = carton ? (carton.lot_id ? `Lot ${carton.numero_lot} - Carton ${carton.numero_carton}` : `Carton ${carton.numero_carton}`) : ('')
-        setNomCarton(nom)
-        const totalPiece = carton ? carton.quantite_piece_carton : 0
-        setQuantitePieceCarton(totalPiece)
-        const stock = carton ? carton.quantite_totale_piece : 0
-        setStockPieceCarton(stock)
-    }
-
-    const handleAddField = () => {
-        setFields((prev) => [
-            ...prev,
-            { id: Date.now(), titre: "", information: "" }
-        ]);
-    };
-
-    const handleFieldChange = (id, fieldName, value) => {
-        setFields((prev) =>
-            prev.map((f) =>
-                f.id === id ? { ...f, [fieldName]: value } : f
-            )
-        );
-    };
-
-    const handleRemoveField = (id) => {
-        setFields((prev) => prev.filter((f) => f.id !== id));
-    };
-
     const checkValidate = () => {
+        if (isReg) {
+            if (!selectedDateValidation){
+                setError("Vous devez choisir une date !")
+                return false
+            }
+        }
         if (quantite == 0) {
             setError("Quantité validée invalide !")
             return false
         }
-        // if (quantite > quantitePiece) {
-        //     setError("Quantité validée insuffisante pour stock !")
-        //     return false
-        // }
 
         setError('')
         return true
-        // if (selectedStock.length == 0) {
-        //     setError("Vous devez choisir le stock !")
-        //     return false
-        // }
-        // if (!serviceUser) {
-        //     setError("Vous devez choisir le service demandeur")
-        //     return false
-        // }
-        // if (!selectedUser) {
-        //     setError("Vous devez choisir le demandeur")
-        //     return false
-        // }
-        // if (!motif) {
-        //     setError("Vous devez précisier le motif !")
-        //     return false
-        // }
-        // if (!selectedServicePiece) {
-        //     setError("Vous devez choisir le service !")
-        //     return false
-        // }
-        // if (!selectedModel) {
-        //     setError("Vous devez choisir le modèle !")
-        //     return false
-        // }
-    }
-
-    // FONCTIONS POUR MOUVEMENT PAR LOT
-    const handleSortieParLot = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (selectedLots.length == 0) {
-            setError("Vous devez selectionner des lots !")
-            return
-        }
-
-        let destockPiece = 0
-        let destockCarton = 0
-
-        for (let id of selectedLots) {
-            const cartons = listeCartons.filter((item) => {
-                return item.lot_id == id
-            })
-            destockCarton += cartons.length
-            for (let carton of cartons) {
-                destockPiece += carton.quantite_totale_piece
-            }
-        }
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(destockCarton)
-        setFinalStockCarton(quantiteCarton - destockCarton)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setNewStockLot(selectedLots.length)
-        setFinalStockLot(quantiteLot - selectedLots.length)
-        setSortieParLotModalOpen(true)
-        setError('')
-
-        const finalStockLotDemandeur = quantiteLotDemandeur + selectedLots.length
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + destockCarton
-
-        const listeLots = selectedLots ? selectedLots : []
-        setQuantite(selectedLots.length)
-        const details = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 1,
-            stockInitialLot: quantiteLot ? quantiteLot : 0,
-            quantiteMouvementLot: selectedLots.length,
-            stockFinalLot: quantiteLot - selectedLots.length,
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: quantitePiece - destockPiece,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: destockCarton,
-            stockFinalCarton: quantiteCarton - destockCarton,
-            quantiteCartonLot: quantiteCartonLot ? quantiteCartonLot : 0,
-            listeLots,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialLotDemandeur: quantiteLotDemandeur ? quantiteLotDemandeur : 0,
-            stockFinalLotDemandeur: finalStockLotDemandeur,
-        }
-        setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 1,
-            stockInitialLot: quantiteLotDemandeur ? quantiteLotDemandeur : 0,
-            quantiteMouvementLot: selectedLots.length,
-            stockFinalLot: finalStockLotDemandeur,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: destockCarton,
-            stockFinalCarton: finalStockCartonDemandeur,
-            quantiteCartonLot: quantiteCartonLot ? quantiteCartonLot : 0,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            listeLots,
-        }
-        setDetailsDemandeur(details_demandeur)
-    }
-
-    // FONCTIONS POUR MOUVEMENT PAR CARTONS LOT
-    const handleSortieParCartonLot = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedLot) {
-            setError('Vous devez choisir le lot !')
-            return
-        }
-        if (selectedCartons.length == 0) {
-            setError("Vous devez selectionner des cartons !")
-            return
-        }
-
-        let destockPiece = 0
-
-        for (let id of selectedCartons) {
-            const carton = listeCartons.find((item) => {
-                return item.id == id
-            })
-            destockPiece += carton ? carton.quantite_totale_piece : 0
-        }
-
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(selectedCartons.length)
-        setFinalStockCarton(quantiteCarton - selectedCartons.length)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setFinalStockCartonLot(stockCartonLot - selectedCartons.length)
-        setFinalStockPieceLot(stockPieceLot - destockPiece)
-        setSortieParCartonLotModalOpen(true)
-        setError('')
-
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + selectedCartons.length
-
-        const cartons = selectedCartons ? selectedCartons : []
-        setQuantite(selectedCartons.length)
-        const details = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 2,
-            stockInitialCartonLot: stockCartonLot ? stockCartonLot : 0,
-            quantiteMouvementCartonLot: selectedCartons.length,
-            stockFinalCartonLot: stockCartonLot - selectedCartons.length,
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: quantitePiece - destockPiece,
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: quantiteCarton - selectedCartons.length,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            stockInitialPieceLot: stockPieceLot,
-            stockFinalPieceLot: stockPieceLot - destockPiece,
-            cartons,
-            selectedLot,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialCartonDemandeur: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            stockFinalCartonDemandeur: finalStockCartonDemandeur,
-        }
-        setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 4,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: finalStockCartonDemandeur,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            cartons,
-        }
-        setDetailsDemandeur(details_demandeur)
-    }
-
-    // FONCTIONS POUR MOUVEMENT PAR PIECES CARTON
-    const handleSortieParPieceCarton = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedCarton) {
-            setError('Vous devez choisir le carton !')
-            return
-        }
-        if (newStockPiece == 0) {
-            setError('Quantité invalide !')
-            return
-        }
-        if (newStockPiece > stockPieceCarton) {
-            setError('Stock insuffisant !')
-            return
-        }
-
-        setFinalStockPieceCarton(stockPieceCarton - newStockPiece)
-        setFinaleStockPiece(quantitePiece - newStockPiece)
-        if (selectedLot) { setFinalStockPieceLot(stockPieceLot - newStockPiece) }
-        setSortieParPieceCartonModalOpen(true)
-        setError('')
-
-        const finalPieceLot = stockPieceLot - newStockPiece
-
-        const finalStockPieceDemandeur = quantitePieceDemandeur + newStockPiece
-
-        setQuantite(newStockPiece)
-        const details = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 3,
-            stockInitialPieceCarton: stockPieceCarton,
-            quantiteMouvementPieceCarton: newStockPiece,
-            stockFinalPieceCarton: stockPieceCarton - newStockPiece,
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: newStockPiece,
-            stockFinalPiece: quantitePiece - newStockPiece,
-            quantitePieceCarton,
-            selectedCarton,
-            stockInitialPieceLot: stockPieceLot ? stockPieceLot : null,
-            stockFinalPieceLot: finalPieceLot ? finalPieceLot : null,
-            selectedLot: selectedLot ? selectedLot : null,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-        }
-        setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 5,
-            stockInitial: quantitePiece ? quantitePiece : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinal: final,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-        }
-        setDetailsDemandeur(details_demandeur)
-    }
-
-    // FONCTIONS POUR MOUVEMENT PAR CARTON
-    const handleSortieParCarton = () => {
-
-        if (!checkValidate()) {
-            return
-        }
-        if (selectedCartons.length == 0) {
-            setError("Vous devez selectionner des cartons !")
-            return
-        }
-
-        let destockPiece = 0
-
-        for (let id of selectedCartons) {
-            const carton = listeCartons.find((item) => {
-                return item.id == id
-            })
-            destockPiece += carton ? carton.quantite_totale_piece : 0
-        }
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(selectedCartons.length)
-        setFinalStockCarton(quantiteCarton - selectedCartons.length)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setSortieParCartonModalOpen(true)
-        setError('')
-
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + selectedCartons.length
-
-        const cartons = selectedCartons ? selectedCartons : []
-        setQuantite(selectedCartons.length)
-        const details = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 4,
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: quantiteCarton - selectedCartons.length,
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: quantitePiece - destockPiece,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            cartons,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialCartonDemandeur: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            stockFinalCartonDemandeur: finalStockCartonDemandeur,
-        }
-        setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 4,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: finalStockCartonDemandeur,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            cartons,
-        }
-        setDetailsDemandeur(details_demandeur)
-    }
-
-    // FONCTIONS POUR MOUVEMENT STOCK PAR PIECE
-    const handleSortieParPiece = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (newStockPiece == 0) {
-            setError("Quantité invalide !")
-            return
-        }
-        if (newStockPiece > quantitePiece) {
-            setError("Stock insuffisant !")
-            return
-        }
-        setSortieParPieceModalOpen(true)
-        const final = quantitePiece - newStockPiece
-        setFinaleStockPiece(final)
-        setError('')
-
-        const finalStockPieceDemandeur = quantitePieceDemandeur + newStockPiece
-
-        setQuantite(newStockPiece)
-        const details = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 5,
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinalPiece: final,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-        }
-        setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 5,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
 
     const handleClear = () => {
@@ -962,80 +326,6 @@ export default function ValidateDemandeInputs() {
         setIsSignModalOpen(true)
     }
 
-    // const handleValidate = async () => {
-
-    //     setIsSignModalOpen(false)
-
-    //     if (signature.isEmpty()) {
-    //         setErrorSign('Vous devez signer pour valider !')
-    //         return;
-    //     }
-
-    //     const sign = signature.toDataURL('image/png')
-    //     const fd = new FormData();
-
-    //     if (sign) {
-    //         const blob = await fetch(sign).then(res => res.blob());
-    //         fd.append('signature', blob, 'signature.png');
-    //     }
-    //     fd.append('demande_id', idDemande)
-    //     fd.append('user_id', userId)
-    //     fd.append('commentaire', message)
-    //     fd.append('stock_id', selectedStock)
-    //     fd.append('nomDemandeur', nomUser)
-    //     fd.append('quantite_demande', quantite)
-    //     fd.append('nomenclature', nomenclature)
-    //     fd.append('detailsDemande', JSON.stringify(detailsDemande))
-    //     fd.append('detailsDemandeur', JSON.stringify(detailsDemandeur))
-    //     fd.append('itemId', selectedPiece)
-    //     fd.append('idDemandeur', selectedUser)
-    //     fd.append('motif', motif)
-    //     fd.append('serviceDemandeur', serviceUser)
-    //     fd.append('champsAutre', otherFields)
-    //     const payload = {
-    //         idDemande,
-    //         nomDemandeur: nomUser,
-    //         commentaire: message,
-    //         selectedStock,
-    //         quantite_demande: quantite,
-    //         nomenclature,
-    //         detailsDemande,
-    //         detailsDemandeur,
-    //         userId,
-    //         itemId: selectedPiece,
-    //         idDemandeur: selectedUser,
-    //         motif,
-    //         serviceDemandeur: serviceUser,
-    //         champsAutre: otherFields,
-    //     }
-
-    //     try {
-    //         setLoadingValidation(true)
-    //         console.log('Sendind payload...')
-
-    //         // const response = await demandeData.faireDemande(payload)
-    //         const response = await demandeData.validateDemande(fd)
-
-    //         console.log(response)
-    //         Swal.fire({
-    //             title: "Succès",
-    //             text: "Demande validée avec succès !",
-    //             icon: "success"
-    //         })
-    //         navigate('/toutes-les-demandes')
-
-    //     } catch (error) {
-    //         Swal.fire({
-    //             title: "Attention",
-    //             text: "Une erreur est survenue lors de la validation !",
-    //             icon: "warning"
-    //         })
-    //         navigate('/toutes-les-demandes')
-    //     } finally {
-    //         setLoadingValidation(false)
-    //     }
-    // }
-
     const handleValidate = async () => {
         if (signature.isEmpty()) {
             setErrorSign('Vous devez signer pour valider !')
@@ -1043,29 +333,29 @@ export default function ValidateDemandeInputs() {
         }
         setIsConfirmModalOpen(false)
         setLoadingValidation(true)
-        // const fromSuccess = stockOwner == parseInt(userId) ?
-        //     `/livraison-demande/${idDemande}` :
-        //     `/demande-details/${idDemande}`
 
-        const successPath = stockOwners.includes(+userId) ?
-            `/livraison-demande/${idDemande}` :
-            `/toutes-les-demandes`
-        const sign = signature.toDataURL('image/png')
-        const fd = new FormData();
-
-        if (sign) {
-            const blob = await fetch(sign).then(res => res.blob());
-            fd.append('signature', blob, 'signature.png');
-        }
-        fd.append('demande_id', idDemande)
-        fd.append('user_id', userId)
-        fd.append('commentaire', commentaire)
-        // fd.append('stockId', selectedStock)
-        fd.append('quantiteValidee', quantite)
-        fd.append('owners', stockOwners)
         try {
-            const response = await demandeData.preValidateDemande(fd)
-            console.log(response)
+            const successPath = stockOwners.includes(+userId) ?
+                `/livraison-demande/${idDemande}` :
+                `/toutes-les-demandes`
+            const sign = signature.toDataURL('image/png')
+            const fd = new FormData();
+    
+            if (sign) {
+                const blob = await fetch(sign).then(res => res.blob());
+                fd.append('signature', blob, 'signature.png');
+            }
+            fd.append('demande_id', idDemande)
+            fd.append('user_id', userId)
+            fd.append('commentaire', commentaire)
+            fd.append('quantiteValidee', quantite)
+            fd.append('owners', stockOwners)
+            fd.append('date_validation', new Date(selectedDateValidation))
+            if(isReg) {
+                await demandeData.regValidateDemande(fd)
+            } else {
+                await demandeData.preValidateDemande(fd)
+            }
 
             Swal.fire({
                 title: "Succès",
@@ -1083,6 +373,10 @@ export default function ValidateDemandeInputs() {
         } finally {
             setLoadingValidation(false)
         }
+    }
+
+    const handleRegValidate = async () => {
+
     }
 
     return (
@@ -1147,33 +441,25 @@ export default function ValidateDemandeInputs() {
                                             <div className="text-center">
                                                 <span className="text-sm font-semibold">Validation</span>
                                             </div>
-                                            {/* <div>
-                                                <Label>Stock <span className="text-red-700">*</span></Label>
-                                                <Dropdown
-                                                    options={optionsStocks}
-                                                    optionLabel="Label"
-                                                    placeholder="Choisir Stock"
-                                                    filter
-                                                    filterBy="label"
-                                                    itemTemplate={stocksTemplate}
-                                                    className="w-full"
-                                                    onChange={handleSelectStock}
-                                                    value={selectedStock}
-                                                    valueTemplate={selectedStockTemplate}
-                                                />
-                                            </div> */}
-                                            {/* <div className="flex justify-between items-center">
-                                                <div className="flex flex-col  border-b pb-2 border-black">
-                                                    <span className="text-xs text-gray-700 font-normal">{nomPiece} {nomModel}</span>
-                                                    <span className="font-medium">QUANTITE ACTUELLE</span>
-                                                    <span className="text-title-md font-bold">{quantitePiece ? quantitePiece : '0'}</span>
-                                                    <span className="text-sm">Stock carton - {quantiteCarton ? quantiteCarton : 'N/A'}</span>
-                                                    <span className="text-sm">Stock lot - {quantiteLot ? quantiteLot : 'N/A'}</span>
-                                                </div>
-                                                <div>
-                                                    <span><i className="pi pi-box" style={{ fontSize: '3rem' }}></i></span>
-                                                </div>
-                                            </div> */}
+                                            {isReg ? (
+                                                <>
+                                                    <div>
+                                                        <Label>Date Validation <span className="text-red-700">*</span></Label>
+                                                        <Calendar
+                                                            value={selectedDateValidation}
+                                                            locale="fr"
+                                                            onChange={(e) => setSelectedDateValidation(e.value)}
+                                                            dateFormat="dd/mm/yy"
+                                                            placeholder="jj/mm/aaaa"
+                                                            minDate={new Date(dateDemande)}
+                                                            maxDate={new Date()}
+                                                            className="w-full"
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <></>
+                                            )}
                                             <div>
                                                 <Label>Quantitée <span className="text-red-700">*</span></Label>
                                                 <Input type="number"
@@ -1232,278 +518,6 @@ export default function ValidateDemandeInputs() {
                     </>
                 )}
             </div>
-            {/* DEMANDE PAR LOT */}
-            <Modal isOpen={sortieParLotModalOpen} onClose={() => setSortieParLotModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center flex flex-col">
-                        <span className="font-bold text-sm">
-                            {nomStock}
-                        </span>
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomServicePiece}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité lot initiale : {quantiteLot ? quantiteLot : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{selectedLots.length}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final lot : {finalStockLot}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockCarton}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleConfirmSign}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Confirmer
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            {/* DEMANDE PAR CARTON LOT */}
-            <Modal isOpen={sortieParCartonLotModalOpen} onClose={() => setSortieParCartonLotModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center flex flex-col">
-                        <span className="font-bold text-sm">
-                            {nomStock}
-                        </span>
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomServicePiece}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Lot sélectionné : {nomLot}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockCartonLot}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockCarton}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockCartonLot}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleConfirmSign}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Confirmer
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            {/* DEMANDE PAR PIECE CARTON */}
-            <Modal isOpen={sortieParPieceCartonModalOpen} onClose={() => setSortieParPieceCartonModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center flex flex-col">
-                        <span className="font-bold text-sm">
-                            {nomStock}
-                        </span>
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomServicePiece}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Carton sélectionné : {nomCarton}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockPieceCarton}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockPieceCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleConfirmSign}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Confirmer
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            {/* DEMANDE PAR CARTON */}
-            <Modal isOpen={sortieParCartonModalOpen} onClose={() => setSortieParCartonModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center flex flex-col">
-                        <span className="font-bold text-sm">
-                            {nomStock}
-                        </span>
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomServicePiece}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{selectedCartons.length}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleConfirmSign}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Confirmer
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            {/* DEMANDE PAR PIECE */}
-            <Modal isOpen={sortieParPieceModalOpen} onClose={() => setSortieParPieceModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Demande</span>
-                    </div>
-                    <div className="text-center flex flex-col">
-                        <span className="font-bold text-sm">
-                            {nomStock}
-                        </span>
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomServicePiece}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-1 ms-5">
-                        <div>
-                            <span>Quantité initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                        </div>
-                        <div>
-                            <span>Demande : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                        </div>
-                        <div>
-                            <span>Stock final : {finalStockPiece}</span>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleConfirmSign}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Confirmer
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-
             <Modal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-5">
                     <div className="w-full text-center">

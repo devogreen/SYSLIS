@@ -506,10 +506,10 @@ export default function RegularisationDemandeInputs() {
 
         try {
             setLoadingValidation(true)
-            const response = await demandeData.faireDemande(fd)
+            const response = await demandeData.regularisationDemande(fd)
             Swal.fire({
                 title: "Succès",
-                text: "Demande effectuée avec succès !",
+                text: "Régularisation de demande de stock enregistrée avec succès !",
                 icon: "success"
             })
             navigate('/toutes-les-demandes')

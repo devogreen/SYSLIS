@@ -455,7 +455,7 @@ const faireDemande = async (req, res) => {
     }
 
     const files = req.files?.files || [];
-    
+
     const files_content = files.length
       ? files.map(file => ({
         name: file.originalname,
@@ -607,8 +607,17 @@ const getAllDemandes = async (req, res) => {
     const demandes = await prisma.demandes.findMany({
       orderBy: { date_demande: 'desc' },
       include: {
-        validation_demande: true,
-        reception_piece: true,
+        forms: true,
+        validation_demande: {
+          include: {
+            forms: true,
+          },
+        },
+        reception_piece: {
+          include: {
+            forms: true
+          },
+        },
       }
     });
 
@@ -627,12 +636,22 @@ const getOneDemande = async (req, res) => {
     const demandes = await prisma.demandes.findUnique({
       where: { id: parseInt(id) },
       include: {
-        validation_demande: true,
-        reception_piece: true,
+        forms: true,
+        validation_demande: {
+          include: {
+            forms: true,
+          },
+        },
+        reception_piece: {
+          include: {
+            forms: true
+          },
+        },
       }
     });
 
     if (!demandes) {
+      console.log("Demande introuvable pour l'id : ", id)
       return res.status(404).json({ message: "demande introuvable" });
     }
 
@@ -646,15 +665,14 @@ const getOneDemande = async (req, res) => {
 }
 
 const preValidateDemande = async (req, res) => {
-  const {
-    demande_id,
-    user_id,
-    commentaire,
-    quantiteValidee,
-    owners,
-  } = req.body;
-
   try {
+    const {
+      demande_id,
+      user_id,
+      commentaire,
+      quantiteValidee,
+      owners,
+    } = req.body;
     const demande = await prisma.demandes.findUnique({
       where: { id: parseInt(demande_id) },
     });
@@ -665,14 +683,16 @@ const preValidateDemande = async (req, res) => {
       return res.status(400).json({ message: "Demande déjà validée." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Signature du validateur requise." });
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
     }
 
     const uploadResult = await cloudinary.uploader.upload(req.file.path, {
       folder: "greenpay/signatures",
     });
-    const signature = uploadResult.secure_url;
+    const signatureCloud = uploadResult.secure_url;
 
     if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
 
@@ -684,26 +704,53 @@ const preValidateDemande = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    await prisma.demandes.update({
-      where: { id: parseInt(demande_id) },
-      data: {
-        statut_demande: "valide",
-      },
-    });
+    const validation = await prisma.$transaction(async (tx) => {
+      await tx.demandes.update({
+        where: { id: parseInt(demande_id) },
+        data: {
+          statut_demande: "valide",
+        },
+      });
 
-    const newValidation = await prisma.validation_demande.create({
-      data: {
-        id_demande: parseInt(demande_id),
-        commentaire,
-        id_user: user_id ? parseInt(user_id) : null,
-        nom_validateur: user.fullname,
-        date_validation_demande: new Date(),
-        signature,
-        statut_validation_demande: "valide",
-        quantite_validee: +quantiteValidee,
-      },
-    });
+      const validationForm = await tx.forms.create({
+        data: {
+          type: 'validation_stock',
+          created_by: user.id_user,
+          created_at: new Date(),
+          last_modified_at: new Date(),
+          nom_user: user.fullname,
+          commentaire,
+        },
+      })
+      await tx.form_signatures.create({
+        data: {
+          form_id: validationForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: new Date(),
+          role: 'validateur',
+        },
+      })
 
+      const newValidation = await tx.validation_demande.create({
+        data: {
+          id_demande: parseInt(demande_id),
+          commentaire,
+          id_user: user_id ? parseInt(user_id) : null,
+          nom_validateur: user.fullname,
+          date_validation_demande: new Date(),
+          signatureCloud,
+          statut_validation_demande: "valide",
+          quantite_validee: +quantiteValidee,
+          form_id: validationForm.id
+        },
+      });
+
+      return {
+        validationForm,
+        newValidation,
+      }
+    })
 
     /************************************     GESTION MAILS     **************************************/
 
@@ -797,12 +844,14 @@ const preValidateDemande = async (req, res) => {
         });
       }
     }
-    return res.status(201).json(newValidation);
+    return res.status(201).json({
+      message: "Demande validée avec succès !",
+      data: validation,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
   }
-
 }
 
 const validateDemande = async (req, res) => {
@@ -3682,7 +3731,7 @@ const generateDemandePDF = async (req, res) => {
     let typeMouvement = ''
     let stock_depart = 0
     let stock_final = 0
-    if(demande.demande_livree){
+    if (demande.demande_livree) {
       type_demande = details.typeMouvement
       mouvement = await prisma.type_mouvement_stock.findUnique({
         where: {
@@ -3695,7 +3744,7 @@ const generateDemandePDF = async (req, res) => {
           details.stockInitialPieceCarton : type_demande == 4 ?
             details.stockInitialCarton : type_demande == 5 ?
               details.stockInitialPiece : 0
-  
+
       stock_final = type_demande == 1 ? details.stockFinalLot : type_demande == 2 ?
         details.stockFinalCartonLot : type_demande == 3 ?
           details.stockFinalPieceCarton : type_demande == 4 ?
@@ -3804,9 +3853,9 @@ const getAllDemandeFiles = async (req, res) => {
       return res.status(400).json({ message: "Invalid demande ID" });
     }
     const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demandeId)}
+      where: { id: parseInt(demandeId) }
     })
-    if(!demande){
+    if (!demande) {
       console.log('Demande introuvable')
       return res.status(404).json({ message: "Demande introuvable" });
     }
@@ -3955,7 +4004,7 @@ const regularisationDemande = async (req, res) => {
     }
 
     const files = req.files?.files || [];
-    
+
     const files_content = files.length
       ? files.map(file => ({
         name: file.originalname,
@@ -3965,40 +4014,60 @@ const regularisationDemande = async (req, res) => {
       }))
       : [];
 
-    const nouvelleDemande = await prisma.demandes.create({
-      data: {
-        nom_demandeur: nomUser,
-        date_demande: new Date(date_demande),
-        commentaire,
-        qte_total_demande: parseInt(quantite),
-        details_demande: JSON.stringify(details),
-        statut_demande: 'en_cours',
-        user_id: parseInt(userId),
-        item_id: parseInt(details.selectedPiece),
-        id_demandeur: parseInt(selectedUser),
-        motif_demande: motif,
-        service_demandeur: parseInt(serviceUser),
-        champs_autre: JSON.stringify(autres),
+
+    // Nouvelle transaction pour créer la régularisation de demande de stock, le formulaire associé et les fichiers liés
+    const newRegularisation = await prisma.$transaction(async (tx) => {
+      const demandeForm = await tx.forms.create({
+        data: {
+          type: 'demande_stock',
+          created_by: utilisateur.id_user,
+          created_at: new Date(date_demande),
+          last_modified_at: new Date(date_demande),
+          nom_user: nomUser,
+          commentaire,
+          is_reg: true,
+        }
+      })
+      const nouvelleDemande = await tx.demandes.create({
+        data: {
+          nom_demandeur: nomUser,
+          date_demande: new Date(date_demande),
+          commentaire,
+          qte_total_demande: parseInt(quantite),
+          details_demande: JSON.stringify(details),
+          statut_demande: 'en_cours',
+          user_id: parseInt(userId),
+          item_id: parseInt(details.selectedPiece),
+          id_demandeur: parseInt(selectedUser),
+          motif_demande: motif,
+          service_demandeur: parseInt(serviceUser),
+          champs_autre: JSON.stringify(autres),
+          form_id: demandeForm.id,
+        }
+      });
+
+      if (files_content.length > 0) {
+        await tx.fichiers.createMany({
+          data: files_content.map(fichier => ({
+            path: fichier.path,
+            filename: fichier.name,
+            originalName: fichier.name,
+            mimeType: fichier.type,
+            size: fichier.size,
+            uploaded_by: +userId,
+            form_id: demandeForm.id,
+            demande_id: nouvelleDemande.id,
+            type_formulaire: 'demande',
+            role: 'demandeur',
+            created_at: new Date(),
+          }))
+        })
+      }
+      return {
+        demandeForm,
+        nouvelleDemande,
       }
     });
-
-    if (files_content.length > 0) {
-      await prisma.fichiers.createMany({
-        data: files_content.map(fichier => ({
-          path: fichier.path,
-          filename: fichier.name,
-          originalName: fichier.name,
-          mimeType: fichier.type,
-          size: fichier.size,
-          uploaded_by: +userId,
-          demande_id: nouvelleDemande.id,
-          type_formulaire: 'demande',
-          role: 'demandeur',
-          created_at: new Date(),
-        }))
-      })
-    }
-
 
     /************************** GESTION DES MAILS ********************************/
     const service = await prisma.services.findUnique({
@@ -4042,7 +4111,7 @@ const regularisationDemande = async (req, res) => {
     let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
     const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${nouvelleDemande.id}`;
+    let demandeLink = `${url}/demande-details/${newRegularisation.nouvelleDemande.id}`;
 
     const sendMail = require("../../utils/emailSender");
 
@@ -4089,10 +4158,10 @@ const regularisationDemande = async (req, res) => {
       }
     }
 
-    console.log("Succès ! ")
+    console.log("Régularisation de demande de stock enregistrée avec succès")
     res.status(201).json({
-      message: "Demande enregistrée avec succès",
-      demandes: nouvelleDemande
+      message: "Régularisation de demande de stock enregistrée avec succès",
+      data: newRegularisation
     });
 
   } catch (error) {
@@ -4101,6 +4170,200 @@ const regularisationDemande = async (req, res) => {
     res.status(500).json({ message: "Erreur interne", error });
   }
 };
+
+const regValidateDemande = async (req, res) => {
+  try {
+    const {
+      demande_id,
+      user_id,
+      commentaire,
+      quantiteValidee,
+      owners,
+      date_validation,
+    } = req.body;
+    const demande = await prisma.demandes.findUnique({
+      where: { id: parseInt(demande_id) },
+    });
+
+    if (!demande) return res.status(404).json({ message: "Demande introuvable." });
+
+    if (demande.statut_demande === "valide") {
+      return res.status(400).json({ message: "Demande déjà validée." });
+    }
+
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+
+    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+
+    const user = await prisma.users.findUnique({
+      where: { id_user: parseInt(user_id) },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    const validation = await prisma.$transaction(async (tx) => {
+
+      const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
+        folder: "greenpay/signatures",
+      });
+
+      const signatureCloud = uploadResult.secure_url;
+      await tx.demandes.update({
+        where: { id: parseInt(demande_id) },
+        data: {
+          statut_demande: "valide",
+        },
+      });
+
+      const validationForm = await tx.forms.create({
+        data: {
+          type: 'validation_stock',
+          created_by: user.id_user,
+          created_at: new Date(date_validation),
+          last_modified_at: new Date(date_validation),
+          nom_user: user.fullname,
+          commentaire,
+          is_reg: true,
+        },
+      })
+      await tx.form_signatures.create({
+        data: {
+          form_id: validationForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: new Date(),
+          role: 'validateur',
+        },
+      })
+
+      const newValidation = await tx.validation_demande.create({
+        data: {
+          id_demande: parseInt(demande_id),
+          commentaire,
+          id_user: user_id ? parseInt(user_id) : null,
+          nom_validateur: user.fullname,
+          date_validation_demande: new Date(date_validation),
+          signature: signatureCloud,
+          statut_validation_demande: "valide",
+          quantite_validee: +quantiteValidee,
+          form_id: validationForm.id
+        },
+      });
+
+      return {
+        validationForm,
+        newValidation,
+      }
+    })
+
+    /************************************     GESTION MAILS     **************************************/
+
+    const piece = await prisma.items.findUnique({
+      where: {
+        id_piece: parseInt(demande.item_id)
+      }
+    });
+
+    const service = await prisma.services.findUnique({
+      where: {
+        id: parseInt(demande.service_demandeur)
+      }
+    })
+
+    const userService = await prisma.user_services.findMany({
+      where: {
+        service_id: parseInt(demande.service_demandeur)
+      },
+      include: {
+        users: true
+      }
+    })
+
+    let stockOwners = []
+    if (owners && Array.isArray(owners)) {
+      stockOwners = await prisma.users.findMany({
+        where: {
+          id_user: {
+            in: owners,
+          }
+        }
+      })
+    }
+
+    const service_users = userService.map(us => us.users)
+    const demandeur = await prisma.users.findUnique({
+      where: {
+        id_user: demande.user_id
+      }
+    })
+
+    let motif = demande.motif_demande
+    let nomPiece = piece.nom_piece.toUpperCase()
+
+    let nomServiceDemandeur = service.nom_service.toUpperCase();
+
+    let quantite = quantiteValidee;
+    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+    const url = GENERAL_URL
+    let demandeLink = `${url}/demande-details/${demande.id}`;
+    const sendMail = require("../../utils/emailSender");
+    if ((service_users && service_users.length > 0) || demandeur) {
+      const subject = `REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
+      const html = `
+        <p>Bonjour,</p>
+        <p>La régularisation de la validation de la demande ${demande.id} a été éffectuée.</p>
+        <ul>
+          <li><strong>Motif :</strong> ${motif}</li>
+          <li><strong>Quantité validée :</strong> ${quantite}</li>
+        </ul>
+        <ul>
+          <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
+          <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        </ul>
+        <br>
+        <p>Commentaire : ${commentaire_mail}<p>
+        <br>
+        <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+        </p>
+        <br><br>
+        <p>Green - Pay vous remercie.</p>
+        `;
+      for (const stockOwner of stockOwners) {
+        await sendMail({
+          to: stockOwner.email,
+          subject,
+          html,
+        });
+      }
+      for (const service_user of service_users) {
+        await sendMail({
+          to: service_user.email,
+          subject,
+          html,
+        });
+      }
+    }
+    console.log("Validation régularisée avec succès !")
+    return res.status(201).json({
+      message: "Validation régularisée avec succès !",
+      data: validation,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur serveur." });
+  }
+}
 
 module.exports = {
   faireDemande,
@@ -4117,4 +4380,6 @@ module.exports = {
   downloadFile,
   getDemandesEnAttente,
   getDemandesValideesNonLivrees,
+  regularisationDemande,
+  regValidateDemande,
 }

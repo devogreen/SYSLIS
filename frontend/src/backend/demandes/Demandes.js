@@ -143,5 +143,31 @@ export class Demandes {
       throw error.response.data
     }
   };
+
+  async regularisationDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regularisationDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  async regValidateDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regValidateDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
 }
 

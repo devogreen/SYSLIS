@@ -13,6 +13,7 @@ import SignatureCanvas from 'react-signature-canvas'
 import Label from "../../components/form/Label";
 import TextArea from "../../components/form/input/TextArea";
 import { FilesHandler } from '../../backend/filesHandler/FilesHandler';
+import Input from '../../components/form/input/InputField';
 
 export default function DemandeDetails() {
 
@@ -42,8 +43,8 @@ export default function DemandeDetails() {
 
     const [dateDemande, setDateDemande] = useState('')
     const [actionButtons, setActionButtons] = useState(false);
-    const [commentaire, setCommentaire] = useState('');
-    const [commentaireValidation, setCommentaireValidation] = useState('');
+    const [commentaireDemandeur, setCommentaireDemandeur] = useState('');
+    const [commentaireValidateur, setCommentaireValidateur] = useState('');
     const [statutDemande, setStatutDemande] = useState('en attente');
     const [statutClass, setStatutClass] = useState('text-sm rounded-xl p-1 bg-orange-100 text-orange-500 font-bold')
 
@@ -68,8 +69,8 @@ export default function DemandeDetails() {
     const [isLivreur, setIsLivreur] = useState(false)
     const [isReception, setIsReception] = useState(false)
 
-    const [signature, setSignature] = useState();
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [signatureValidation, setSignatureValidation] = useState();
+    const [isModalValidateOpen, setIsModalValidateOpen] = useState(false);
     const [isModalReturnOpen, setIsModalReturnOpen] = useState(false);
     const [errorReturn, setErrorReturn] = useState('');
     const [errorSign, setErrorSign] = useState('');
@@ -137,6 +138,10 @@ export default function DemandeDetails() {
 
     const [fileId, setFileId] = useState(null);
 
+    const [isReg, setIsReg] = useState(false)
+
+    const [commentaireValidation, setCommentaireValidation] = useState('')
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
@@ -157,12 +162,17 @@ export default function DemandeDetails() {
                         setIsModificateur(true)
                     }
 
-                    let demandeData = await demandes.getOneDemande(id);
-                    console.log(demandeData)
+                    const demandeData = await demandes.getOneDemande(id);
+                    const demandeForm = demandeData.forms
+                    if (demandeForm) {
+                        if (demandeForm.is_reg) {
+                            setIsReg(true)
+                        }
+                    }
                     let index;
                     setDemandeDetails(demandeData);
                     setMotifDemande(demandeData.motif_demande)
-                    setCommentaire(demandeData.commentaire)
+                    setCommentaireDemandeur(demandeData.commentaire)
                     const details = JSON.parse(demandeData.details_demande)
 
                     const modelId = details.selectedModel ? details.selectedModel : details.model
@@ -186,6 +196,17 @@ export default function DemandeDetails() {
                     const selectedStock = stock_data.find((item) => {
                         return item.id == demandeData.stock_id
                     })
+                    const stocks = stock_data.filter((item) => {
+                        return item.piece_id == demandeData.item_id &&
+                            item.is_deleted == false &&
+                            item.model_id == details.selectedModel &&
+                            item.service_id == details.selectedServicePiece &&
+                            item.quantite_piece > 0
+                    })
+                    setStocksPiece(stocks)
+                    if (roles_id.includes(7) && stocks.length == 0) {
+                        setIsGestionStock(true)
+                    }
 
                     if (demandeData.statut_demande == 'en_cours') {
                         if (roles_id.includes(4)) {
@@ -193,9 +214,6 @@ export default function DemandeDetails() {
                         }
                         if (roles_id.includes(3)) {
                             setIsDemandeur(true)
-                        }
-                        if (roles_id.includes(7)) {
-                            setIsGestionStock(true)
                         }
                         setAttente(true)
                     } else if (demandeData.statut_demande == 'valide') {
@@ -206,7 +224,7 @@ export default function DemandeDetails() {
                         setStatutClass('text-sm rounded-xl p-1 bg-green-100 text-green-500 font-bold')
                         setRecu(true)
                         index = demandeData.validation_demande.length - 1
-                        setCommentaireValidation(demandeData.validation_demande[index].commentaire)
+                        setCommentaireValidateur(demandeData.validation_demande[index].commentaire)
                         setIsCompleted(true)
                         const validation = demandeData.validation_demande[index]
                         setQuantiteValidee(validation.quantite_validee)
@@ -244,7 +262,7 @@ export default function DemandeDetails() {
                         setStatutDemande('Retournée')
                         setStatutClass('text-sm rounded-xl p-1 bg-red-100 text-red-500 font-bold')
                         index = demandeData.validation_demande.length - 1
-                        setCommentaireValidation(demandeData.validation_demande[index].commentaire)
+                        setCommentaireValidateur(demandeData.validation_demande[index].commentaire)
                     }
                     else if (demandeData.statut_demande == 'refuse') {
                         setActionButtons(false)
@@ -254,9 +272,9 @@ export default function DemandeDetails() {
                         setRefuse(true)
                         setStatutClass('text-sm rounded-xl p-1 bg-gray-dark text-white font-bold')
                         index = demandeData.validation_demande.length - 1
-                        setCommentaireValidation(demandeData.validation_demande[index].commentaire)
+                        setCommentaireValidateur(demandeData.validation_demande[index].commentaire)
 
-                        // setCommentaireValidation(demandeData.validations[0].commentaire)
+                        // setCommentaireValidateur(demandeData.validations[0].commentaire)
                     }
 
                     const nom_stock = selectedStock ? selectedStock.code_stock : ''
@@ -339,15 +357,6 @@ export default function DemandeDetails() {
                         setServicePiece(serviceItem.nom_service)
                     }
 
-                    const stocks = stock_data.filter((item) => {
-                        return item.piece_id == demandeData.item_id &&
-                            item.is_deleted == false &&
-                            item.model_id == details.selectedModel &&
-                            item.service_id == details.selectedServicePiece &&
-                            item.quantite_piece > 0
-                    })
-                    setStocksPiece(stocks)
-
                     const allFiles = await demandes.getAllDemandeFiles(id)
                     const dFiles = allFiles.filter((item) => {
                         return item.role == 'demandeur'
@@ -429,7 +438,7 @@ export default function DemandeDetails() {
         }
     };
 
-    const handleClear = () => {
+    const handleClearValidation = () => {
         signature.clear()
     }
 
@@ -447,7 +456,7 @@ export default function DemandeDetails() {
         let commentaire = message
         try {
             setLoadingDemande(true);
-            setIsModalOpen(false)
+            setIsModalValidateOpen(false)
             const fd = new FormData();
             fd.append('demande_id', id);
             fd.append('user_id', user_id);
@@ -650,11 +659,22 @@ export default function DemandeDetails() {
                     <PageBreadcrumb pageTitle="Mouvement de stock" />
                     <div>
                         <div className='grid grid-cols-2 justify-between items-center mb-6'>
-                            <div>
+                            <div className='space-y-2'>
+                                {isReg ? (
+                                    <>
+                                        <div>
+                                            <div className="">
+                                                <span className="border p-1.5 border-red-800 text-red-800 text-xs font-light">Régularisation</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <></>
+                                )}
                                 <div>
                                     <span>{`Demande du ${dateDemande}`}</span>
                                 </div>
-                                <div className='mt-3'>
+                                <div className=''>
                                     <span className={statutClass}>
                                         {statutDemande}
                                     </span>
@@ -706,110 +726,26 @@ export default function DemandeDetails() {
                                         ) : (
                                             <></>
                                         )}
-                                        {loadingDemande ? (
+                                        {isGestionStock ? (
                                             <>
-                                                <div className='text-center'>
-                                                    <span className=''>
-                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                    </span>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                {stocksPiece.length == 0 ? (
-                                                    <>
-                                                        {isValidateur && !isGestionStock ? (
-                                                            <>
-                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                    onClick={() => {
-                                                                        Swal.fire({
-                                                                            title: "Attention",
-                                                                            text: "Aucun stock n'existe pour cette pièce",
-                                                                            icon: "warning"
-                                                                        });
-                                                                    }}>
-                                                                    <span className='mr-4'><i className="pi pi-check"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Valider demande</span>
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                {isGestionStock ? (
-                                                                    <>
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                navigate(`/creer-stock`, {
-                                                                                    state: {
-                                                                                        from: 'demande-details',
-                                                                                        idDemande: id
-                                                                                    }
-                                                                                })
-                                                                            }}
-                                                                            className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
-                                                                            <span className='mr-4'><i className="pi pi-plus"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
-                                                                        </button>
-                                                                    </>
-                                                                ) : (
-                                                                    <></>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        {isValidateur ? (
-                                                            <>
-                                                                {loadingDemande ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <Link to={`/valider-demande/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                            <span className='mr-4'><i className="pi pi-check"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Valider demande</span>
-                                                                        </Link>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                            onClick={() => {
-                                                                                setIsModalReturnOpen(true)
-                                                                            }}>
-                                                                            <span className='mr-4'><i className="pi pi-arrow-left"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Retourner demande</span>
-                                                                        </button>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                            onClick={() => {
-                                                                                setIsModalCancelOpen(true)
-                                                                            }}>
-                                                                            <span className='mr-4'><i className="pi pi-times"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Refuser demande</span>
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
-                                                    </>
-                                                )
-                                                }
-                                            </>
-                                        )}
-                                        {isLivreur ? (
-                                            <>
-                                                <Link to={`/livraison-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                    <span className='mr-4'><i className="pi pi-truck"></i></span>
-                                                    <span className='text-sm text-gray-700 font-medium'>Livraison Stock</span>
-                                                </Link>
+                                                <button
+                                                    onClick={() => {
+                                                        navigate(`/creer-stock`, {
+                                                            state: {
+                                                                from: 'demande-details',
+                                                                idDemande: id
+                                                            }
+                                                        })
+                                                    }}
+                                                    className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
+                                                    <span className='mr-4'><i className="pi pi-plus"></i></span>
+                                                    <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
+                                                </button>
                                             </>
                                         ) : (
                                             <></>
                                         )}
-                                        {/* {isValidateur ? (
+                                        {isValidateur ? (
                                             <>
                                                 {loadingDemande ? (
                                                     <>
@@ -821,30 +757,12 @@ export default function DemandeDetails() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {stocksPiece.length == 0 ? (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        navigate(`/creer-stock`, {
-                                                                            state: {
-                                                                                from: 'demande-details',
-                                                                                idDemande: id
-                                                                            }
-                                                                        })
-                                                                    }}
-                                                                    className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
-                                                                    <span className='mr-4'><i className="pi pi-plus"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Link to={`/valider-demande/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                    <span className='mr-4'><i className="pi pi-check"></i></span>
-                                                                    <span className='text-sm text-gray-700 font-medium'>Valider demande</span>
-                                                                </Link>
-                                                            </>
-                                                        )}
+                                                        <Link to={`/valider-demande/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                            <span className='mr-4'><i className="pi pi-check"></i></span>
+                                                            <span className='text-sm text-gray-700 font-medium'>
+                                                                {isReg ? 'REG validation' : 'Valider demande'}
+                                                            </span>
+                                                        </Link>
                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                             onClick={() => {
                                                                 setIsModalReturnOpen(true)
@@ -864,7 +782,17 @@ export default function DemandeDetails() {
                                             </>
                                         ) : (
                                             <></>
-                                        )} */}
+                                        )}
+                                        {isLivreur ? (
+                                            <>
+                                                <Link to={`/livraison-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                    <span className='mr-4'><i className="pi pi-truck"></i></span>
+                                                    <span className='text-sm text-gray-700 font-medium'>Livraison Stock</span>
+                                                </Link>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
                                         {isReception ? (
                                             <>
                                                 {loadingReception ? (
@@ -894,86 +822,79 @@ export default function DemandeDetails() {
                                 </div>
                             </div>
                         </div>
-                        <div className='overflow-hidden mb-6 pt-2 px-6 space-y-3 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                            <div className='mb-6 pb-2 w-full border-b'>
-                                <span className='text-sm mr-2'>Commentaire demandeur</span>
-                                <span className='text-sm'><i className="pi pi-comment"></i></span>
-                            </div>
-                            <div className='pb-3'>
-                                {commentaire ? (
-                                    <p className='text-sm text-cyan-700'>{commentaire}</p>
-                                ) : (
-                                    <p className='text-xs opacity-20'>Sans commentaire</p>
-                                )}
-                            </div>
-                            {demandeurFiles.length > 0 ? (
+                        <div className='space-y-3'>
+                            {commentaireDemandeur ? (
                                 <>
-                                    <div className='grid grid-cols-6 text-xs gap-1'>
-                                        {demandeurFiles.map((file) => {
-                                            let icon = 'pi pi-file'
-                                            let fileClass = 'flex items-center justify-between bg-gray-300 rounded p-0.5'
-                                            if (file.path.endsWith('.pdf')) {
-                                                icon = 'pi pi-file-pdf'
-                                                fileClass = 'flex items-center justify-between bg-red-100 text-red-500 rounded p-0.5'
-                                            } else if (file.path.endsWith('.docx')) {
-                                                icon = 'pi pi-file-word'
-                                                fileClass = 'flex items-center justify-between bg-blue-100 text-blue-600 rounded p-0.5'
-                                            } else if (file.path.endsWith('.xlsx')) {
-                                                icon = 'pi pi-file-excel'
-                                                fileClass = 'flex items-center justify-between bg-green-100 text-green-600 rounded p-0.5'
-                                            }
-                                            return (
-                                                <>
-                                                    {fileId == file.id ? (
-                                                        <>
-                                                            <div className='text-center'>
-                                                                <span className='mx-1'>
-                                                                    <ProgressSpinner style={{ width: '15px', height: '15px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                </span>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <button key={file.id} className={fileClass} style={{ fontSize: '8px' }} onClick={() => handleSingleFile(file.id)}>
-                                                            <i className={icon}></i>
-                                                            <span className=''>{file.filename}</span>
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )
-                                        })}
+                                    <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                        <div className='mb-6 pb-2 w-full border-b text-left'>
+                                            <span className='text-sm mr-2'>Commentaire demandeur</span>
+                                            <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                        </div>
+                                        <p className='text-sm text-blue-500 text-left'>{commentaireDemandeur}</p>
                                     </div>
                                 </>
                             ) : (
                                 <></>
                             )}
-                            {/* {demandeurFiles.length > 0 ? (
+                            <div>
+                                {demandeurFiles.length > 0 ? (
+                                    <>
+                                        <div>
+                                            <span className="text-xs text-gray-500">Pièce(s) jointe(s) demandeur</span>
+                                        </div>
+                                        <div className='grid grid-cols-6 text-xs gap-1'>
+                                            {demandeurFiles.map((file) => {
+                                                let icon = 'pi pi-file'
+                                                let fileClass = 'flex items-center justify-between bg-gray-300 rounded p-0.5'
+                                                if (file.path.endsWith('.pdf')) {
+                                                    icon = 'pi pi-file-pdf'
+                                                    fileClass = 'flex items-center justify-between bg-red-100 text-red-500 rounded p-0.5'
+                                                } else if (file.path.endsWith('.docx')) {
+                                                    icon = 'pi pi-file-word'
+                                                    fileClass = 'flex items-center justify-between bg-blue-100 text-blue-600 rounded p-0.5'
+                                                } else if (file.path.endsWith('.xlsx')) {
+                                                    icon = 'pi pi-file-excel'
+                                                    fileClass = 'flex items-center justify-between bg-green-100 text-green-600 rounded p-0.5'
+                                                }
+                                                return (
+                                                    <>
+                                                        {fileId == file.id ? (
+                                                            <>
+                                                                <div className='text-center'>
+                                                                    <span className='mx-1'>
+                                                                        <ProgressSpinner style={{ width: '15px', height: '15px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                    </span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <button key={file.id} className={fileClass} style={{ fontSize: '8px' }} onClick={() => handleSingleFile(file.id)}>
+                                                                <i className={icon}></i>
+                                                                <span className=''>{file.filename}</span>
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )
+                                            })}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <></>
+                                )}
+                            </div>
+                            {commentaireValidateur ? (
                                 <>
-                                    <div className='text-xs mb-2'>
-                                        <button onClick={handleDemandeurFiles}>Pièce(s) jointe(s) disponible(s)</button>
+                                    <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                        <div className='mb-6 pb-2 w-full border-b text-left'>
+                                            <span className='text-sm mr-2'>Commentaire validateur</span>
+                                            <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                        </div>
+                                        <p className='text-sm text-blue-500 text-left'>{commentaireValidateur}</p>
                                     </div>
                                 </>
                             ) : (
                                 <></>
-                            )} */}
-
+                            )}
                         </div>
-                        {recu ? (
-                            <>
-                                <div className='overflow-hidden mb-6 pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                    <div className='mb-6 pb-2 w-full border-b text-right'>
-                                        <span className='text-sm mr-2'>Commentaire validateur</span>
-                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
-                                    </div>
-                                    {commentaireValidation ? (
-                                        <p className='text-sm text-orange-500 text-right'>{commentaireValidation}</p>
-                                    ) : (
-                                        <p className='text-xs opacity-20 text-right'>Sans commentaire</p>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <></>
-                        )}
                         {
                             isDelivered ? (
                                 <>
@@ -1134,28 +1055,31 @@ export default function DemandeDetails() {
                 </>)
             }
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} className="p-4 max-w-md">
+            <Modal isOpen={isModalValidateOpen} onClose={() => setIsModalValidateOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
-                    <div className='text-center mb-3 text-sm'>
-                        <span>Signez manuellement pour valider la demande</span>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Validation</span>
                     </div>
-                    <div className='flex flex-col justify-center items-center'>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la réception</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
                         <SignatureCanvas
-                            ref={data => setSignature(data)}
-                            canvasProps={{ width: 300, height: 250, className: 'sigCanvas border border-gray-300 rounded' }}
+                            ref={data => setSignatureValidation(data)}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
                         />
-                        <div className='w-full mt-3'>
+                        <div className='w-full'>
                             <Label>Commentaire</Label>
                             <TextArea
-                                value={message}
-                                onChange={(value) => setMessage(value)}
+                                value={commentaireValidation}
+                                onChange={(value) => setCommentaireValidation(value)}
                                 rows={4}
                                 placeholder="Ajoutez un commentaire"
                             />
                         </div>
-                        <div className='w-full mt-6 flex justify-center items-center'>
+                        <div className='w-full flex justify-center items-center'>
                             <button
-                                onClick={handleClear}
+                                onClick={handleClearValidation}
                                 className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
                                 Clear
                             </button>
@@ -1168,7 +1092,7 @@ export default function DemandeDetails() {
                     </div>
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
-                            {errorSign}
+                            {errorSignReception}
                         </span>
                     </div>
                 </div>

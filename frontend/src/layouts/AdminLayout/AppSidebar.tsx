@@ -79,15 +79,15 @@ const navItems: NavItem[] = [
   {
     icon: <StockBox />,
     name: "Gestion Stock",
-    roles:[7],
+    roles:[],
     subItems: [
       // { name: "Ajouter Element Stock", path: "/ajouter-stock", pro: false },
       { name: "Nouvelle Demande Stock", path:"/nouvelle-demande", roles:[3], pro: false},
       { name: "Toutes les demandes Stock", path: "/toutes-les-demandes",roles:[3,11], pro: false },
-      { name: "Voir Elements Stock", path: "/voir-items", pro: false },
-      { name: "Créer Nouveau Stock", path: "/creer-stock", pro: false} ,
-      { name: "Voir tous les Stocks", path: "/voir-stocks", pro: false} ,
-      { name: "Entrées Sorties", path: "/entree-sortie-stock", pro: false },
+      { name: "Voir Elements Stock", path: "/voir-items", roles:[7], pro: false },
+      { name: "Créer Nouveau Stock", path: "/creer-stock", roles:[7], pro: false} ,
+      { name: "Voir tous les Stocks", path: "/voir-stocks", roles:[7], pro: false} ,
+      { name: "Entrées Sorties", path: "/entree-sortie-stock", roles:[7], pro: false },
     ],
   },
   {
