@@ -167,6 +167,8 @@ export default function ValidateDemandeInputs() {
     const [selectedDateValidation, setSelectedDateValidation] = useState(null)
     const [dateDemande, setDateDemande] = useState(null)
 
+    const [isGestionStock, setIsGestionStock] = useState(false)
+
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true)
@@ -181,11 +183,29 @@ export default function ValidateDemandeInputs() {
                     const dateDemande = new Date(demandeForm.last_modified_at)
                     setDateDemande(dateDemande)
                 }
+                const stock_data = await stockData.getAllStocks()
+                const stocks = stock_data.filter((item) => {
+                    return item.piece_id == demande_data.item_id &&
+                        item.is_deleted == false &&
+                        item.model_id == detailsDemande.selectedModel &&
+                        item.service_id == detailsDemande.selectedServicePiece &&
+                        item.quantite_piece > 0
+                })
+                console.log(stock_data)
+
+                let userRoles_data = await userData.getUserRoles(parseInt(userId))
+                const roles_id = userRoles_data.roles.map((role) => {
+                    return role.id_role
+                })
+                if (roles_id.includes(7) && stocks.length == 0) {
+                    setIsGestionStock(true)
+                }
 
                 const ownersData = await stockData.getAllUserTypeStocks(demande_data.item_id, detailsDemande.selectedModel, detailsDemande.selectedServicePiece)
                 const ownersId = ownersData.map((item) => {
                     return item.id_user
                 })
+                console.log(ownersId)
                 setStockOwners(ownersId)
 
                 const items_data = await stockData.getAllItems()
@@ -289,7 +309,7 @@ export default function ValidateDemandeInputs() {
 
     const checkValidate = () => {
         if (isReg) {
-            if (!selectedDateValidation){
+            if (!selectedDateValidation) {
                 setError("Vous devez choisir une date !")
                 return false
             }
@@ -340,7 +360,7 @@ export default function ValidateDemandeInputs() {
                 `/toutes-les-demandes`
             const sign = signature.toDataURL('image/png')
             const fd = new FormData();
-    
+
             if (sign) {
                 const blob = await fetch(sign).then(res => res.blob());
                 fd.append('signature', blob, 'signature.png');
@@ -351,10 +371,10 @@ export default function ValidateDemandeInputs() {
             fd.append('quantiteValidee', quantite)
             fd.append('owners', stockOwners)
             fd.append('date_validation', new Date(selectedDateValidation))
-            if(isReg) {
+            if (isReg) {
                 await demandeData.regValidateDemande(fd)
             } else {
-                await demandeData.preValidateDemande(fd)
+                await demandeData.validateDemande(fd)
             }
 
             Swal.fire({
@@ -362,8 +382,18 @@ export default function ValidateDemandeInputs() {
                 text: "Demande validée avec succès !",
                 icon: "success"
             })
-            navigate(successPath)
+            if (isGestionStock) {
+                navigate(`/creer-stock`, {
+                    state: {
+                        from: 'demande-details',
+                        idDemande
+                    }
+                })
+            } else {
+                navigate(successPath)
+            }
         } catch (error) {
+            console.error(error)
             Swal.fire({
                 title: "Attention",
                 text: "Une erreur est survenue lors de la validation !",
@@ -373,10 +403,6 @@ export default function ValidateDemandeInputs() {
         } finally {
             setLoadingValidation(false)
         }
-    }
-
-    const handleRegValidate = async () => {
-
     }
 
     return (

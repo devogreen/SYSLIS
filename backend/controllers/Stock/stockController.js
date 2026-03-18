@@ -143,154 +143,162 @@ const createStock = async (req, res) => {
     let quantite_carton = 0
     let quantite_piece = 0
 
-    const nouveauStock = await prisma.stocks.create({
-      data: {
-        code_stock: codeStock,
-        piece_id: item,
-        model_id: itemModel,
-        service_id: itemService,
-        quantite_lot,
-        quantite_carton,
-        quantite_piece,
-        created_at: new Date(),
-        created_by: utilisateur.id_user,
-        last_update: new Date(),
-        updated_by: utilisateur.id_user,
-      }
-    })
-
-    let nouveauMouvement = null
-
-    const typeMouvement = details.typeMouvement
-    if (typeMouvement == 5) {
-      quantite_piece = details.stockFinalPiece
-
-      nouveauMouvement = await prisma.mouvement_stock.create({
+    const creationStock = await prisma.$transaction(async (tx) => {
+      const nouveauStock = await tx.stocks.create({
         data: {
-          type: 'entree',
-          mouvement: 5,
-          stock_id: nouveauStock.id,
+          code_stock: codeStock,
           piece_id: item,
-          service_origine: null,
-          service_destination: itemService,
-          origine,
           model_id: itemModel,
-          stock_initial: 0,
-          quantite: details.quantiteMouvement,
-          stock_final: details.stockFinalPiece,
-          quantite_totale_piece: details.stockFinalPiece,
-          motif,
-          commentaire,
-          details_mouvement: JSON.stringify(details),
+          service_id: itemService,
+          quantite_lot,
+          quantite_carton,
+          quantite_piece,
+          created_at: new Date(),
+          created_by: utilisateur.id_user,
+          last_update: new Date(),
+          updated_by: utilisateur.id_user,
+          owner: utilisateur.id_user,
         }
       })
-    } else if (typeMouvement == 4) {
-      quantite_carton = details.stockFinalCarton
-      quantite_piece = details.stockFinalPiece
-
-      nouveauMouvement = await prisma.mouvement_stock.create({
-        data: {
-          type: 'entree',
-          mouvement: 4,
-          stock_id: nouveauStock.id,
-          piece_id: item,
-          service_origine: null,
-          service_destination: itemService,
-          origine,
-          model_id: itemModel,
-          stock_initial: 0,
-          quantite: details.quantiteMouvementCarton,
-          stock_final: details.stockFinalCarton,
-          quantite_totale_piece: details.stockFinalPiece,
-          motif,
-          commentaire,
-          details_mouvement: JSON.stringify(details),
-        }
-      })
-
-      for (let i = 0; i < quantite_carton; i++) {
-        await prisma.stock_carton.create({
+  
+      let nouveauMouvement = null
+  
+      const typeMouvement = details.typeMouvement
+      if (typeMouvement == 5) {
+        quantite_piece = details.stockFinalPiece
+  
+        nouveauMouvement = await tx.mouvement_stock.create({
           data: {
-            numero_carton: i + 1,
+            type: 'entree',
+            mouvement: 5,
             stock_id: nouveauStock.id,
             piece_id: item,
+            service_origine: null,
+            service_destination: itemService,
+            origine,
             model_id: itemModel,
-            service_id: itemService,
-            quantite_piece_carton: details.quantitePieceCarton,
-            quantite_totale_piece: details.quantitePieceCarton,
-          },
-        });
-      }
-    } else if (typeMouvement == 1) {
-      quantite_lot = details.stockFinalLot
-      quantite_carton = details.stockFinalCarton
-      quantite_piece = details.stockFinalPiece
-
-      nouveauMouvement = await prisma.mouvement_stock.create({
-        data: {
-          type: 'entree',
-          mouvement: 1,
-          stock_id: nouveauStock.id,
-          piece_id: item,
-          service_origine: null,
-          service_destination: itemService,
-          origine,
-          model_id: itemModel,
-          stock_initial: 0,
-          quantite: details.quantiteMouvementLot,
-          stock_final: details.stockFinalLot,
-          quantite_totale_piece: details.stockFinalPiece,
-          motif,
-          commentaire,
-          details_mouvement: JSON.stringify(details),
-        }
-      })
-
-      for (let i = 0; i < quantite_lot; i++) {
-        const newLot = await prisma.stock_lot.create({
+            stock_initial: 0,
+            quantite: details.quantiteMouvement,
+            stock_final: details.stockFinalPiece,
+            quantite_totale_piece: details.stockFinalPiece,
+            motif,
+            commentaire,
+            details_mouvement: JSON.stringify(details),
+          }
+        })
+      } else if (typeMouvement == 4) {
+        quantite_carton = details.stockFinalCarton
+        quantite_piece = details.stockFinalPiece
+  
+        nouveauMouvement = await tx.mouvement_stock.create({
           data: {
-            numero_lot: i + 1,
+            type: 'entree',
+            mouvement: 4,
             stock_id: nouveauStock.id,
-            quantite_carton_lot: details.quantiteCartonLot,
-            quantite_carton: details.quantiteCartonLot,
-            quantite_piece: details.quantitePieceLot,
             piece_id: item,
+            service_origine: null,
+            service_destination: itemService,
+            origine,
             model_id: itemModel,
-            service_id: itemService,
-          },
-        });
-        for (let i = 0; i < details.quantiteCartonLot; i++) {
-          await prisma.stock_carton.create({
+            stock_initial: 0,
+            quantite: details.quantiteMouvementCarton,
+            stock_final: details.stockFinalCarton,
+            quantite_totale_piece: details.stockFinalPiece,
+            motif,
+            commentaire,
+            details_mouvement: JSON.stringify(details),
+          }
+        })
+  
+        for (let i = 0; i < quantite_carton; i++) {
+          await tx.stock_carton.create({
             data: {
               numero_carton: i + 1,
               stock_id: nouveauStock.id,
-              lot_id: newLot.id,
-              numero_lot: newLot.numero_lot,
               piece_id: item,
-              service_id: itemService,
               model_id: itemModel,
+              service_id: itemService,
               quantite_piece_carton: details.quantitePieceCarton,
               quantite_totale_piece: details.quantitePieceCarton,
-            }
-          })
+            },
+          });
+        }
+      } else if (typeMouvement == 1) {
+        quantite_lot = details.stockFinalLot
+        quantite_carton = details.stockFinalCarton
+        quantite_piece = details.stockFinalPiece
+  
+        nouveauMouvement = await tx.mouvement_stock.create({
+          data: {
+            type: 'entree',
+            mouvement: 1,
+            stock_id: nouveauStock.id,
+            piece_id: item,
+            service_origine: null,
+            service_destination: itemService,
+            origine,
+            model_id: itemModel,
+            stock_initial: 0,
+            quantite: details.quantiteMouvementLot,
+            stock_final: details.stockFinalLot,
+            quantite_totale_piece: details.stockFinalPiece,
+            motif,
+            commentaire,
+            details_mouvement: JSON.stringify(details),
+          }
+        })
+  
+        for (let i = 0; i < quantite_lot; i++) {
+          const newLot = await tx.stock_lot.create({
+            data: {
+              numero_lot: i + 1,
+              stock_id: nouveauStock.id,
+              quantite_carton_lot: details.quantiteCartonLot,
+              quantite_carton: details.quantiteCartonLot,
+              quantite_piece: details.quantitePieceLot,
+              piece_id: item,
+              model_id: itemModel,
+              service_id: itemService,
+            },
+          });
+          for (let i = 0; i < details.quantiteCartonLot; i++) {
+            await tx.stock_carton.create({
+              data: {
+                numero_carton: i + 1,
+                stock_id: nouveauStock.id,
+                lot_id: newLot.id,
+                numero_lot: newLot.numero_lot,
+                piece_id: item,
+                service_id: itemService,
+                model_id: itemModel,
+                quantite_piece_carton: details.quantitePieceCarton,
+                quantite_totale_piece: details.quantitePieceCarton,
+              }
+            })
+          }
         }
       }
-    }
+  
+      await tx.stocks.update({
+        where: {
+          id: nouveauStock.id,
+        },
+        data: {
+          quantite_lot,
+          quantite_carton,
+          quantite_piece,
+        }
+      })
 
-    await prisma.stocks.update({
-      where: {
-        id: nouveauStock.id,
-      },
-      data: {
-        quantite_lot,
-        quantite_carton,
-        quantite_piece,
+      return{
+        nouveauStock,
+        nouveauMouvement,
       }
     })
 
     res.status(201).json({
       message: "Nouveau stock enregistré avec succès",
-      nouveauMouvement
+      data: creationStock,
     });
   } catch (error) {
     console.log("Erreur lors de la création :", error);
@@ -1557,115 +1565,121 @@ const setStockSn = async (req, res) => {
       });
     }
 
-    /* =========================
-       6️⃣ CREATE STOCK
-    ========================== */
-    const stock = await prisma.stocks.create({
-      data: {
-        code_stock: codeStock,
-        piece_id: parseInt(item_id),
-        model_id: parseInt(model_id),
-        service_id: parseInt(service_id),
-        quantite_lot: Object.keys(hierarchy).filter(k => k !== "NO_LOT").length,
-        quantite_carton: Object.values(hierarchy)
-          .reduce((acc, l) => acc + Object.keys(l).length, 0),
-        quantite_piece: serialSet.size,
-        created_at: new Date(),
-        created_by: parseInt(userId),
-        last_update: new Date(),
-        updated_by: parseInt(userId),
-      },
-    });
-
-
-    const mouvementDetails = {
-      lots: Object.entries(hierarchy).map(([lotKey, cartons]) => ({
-        lot: lotKey === "NO_LOT" ? null : Number(lotKey),
-        cartons: Object.entries(cartons).map(([cartonKey, sns]) => ({
-          carton: cartonKey === "NO_CARTON" ? null : Number(cartonKey),
-          serial_numbers: sns
-        }))
-      })),
-      stockFinalLot: Object.keys(hierarchy).length,
-      stockFinalCarton: Object.values(hierarchy)
-        .reduce((a, l) => a + Object.keys(l).length, 0),
-      stockFinalPiece: serialSet.size,
-    };
-
-    /* =========================
-       7️⃣ MOUVEMENT STOCK
-    ========================== */
-    await prisma.mouvement_stock.create({
-      data: {
-        type: "entree",
-        mouvement: 6,
-        stock_id: stock.id,
-        piece_id: parseInt(item_id),
-        origine,
-        service_destination: parseInt(service_id),
-        model_id: parseInt(model_id),
-        stock_initial: 0,
-        quantite: serialSet.size,
-        stock_final: serialSet.size,
-        quantite_totale_piece: serialSet.size,
-        motif,
-        commentaire,
-        details_mouvement: JSON.stringify(mouvementDetails),
-      },
-    });
-
-    /* =========================
-       8️⃣ CREATE LOTS + CARTONS
-    ========================== */
-    for (const [lotKey, cartons] of Object.entries(hierarchy)) {
-      const lot = await prisma.stock_lot.create({
+    const creationStock = await prisma.$transaction(async (tx) => {
+      /* =========================
+         6️⃣ CREATE STOCK
+      ========================== */
+      const stock = await tx.stocks.create({
         data: {
-          numero_lot: lotKey === "NO_LOT" ? null : parseInt(lotKey),
-          stock_id: stock.id,
+          code_stock: codeStock,
           piece_id: parseInt(item_id),
-          service_id: parseInt(service_id),
           model_id: parseInt(model_id),
-          quantite_carton: Object.keys(cartons).length,
-          quantite_piece: Object.values(cartons)
-            .reduce((a, sns) => a + sns.length, 0),
+          service_id: parseInt(service_id),
+          quantite_lot: Object.keys(hierarchy).filter(k => k !== "NO_LOT").length,
+          quantite_carton: Object.values(hierarchy)
+            .reduce((acc, l) => acc + Object.keys(l).length, 0),
+          quantite_piece: serialSet.size,
+          created_at: new Date(),
+          created_by: parseInt(userId),
+          last_update: new Date(),
+          updated_by: parseInt(userId),
+          owner: parseInt(userId),
         },
       });
-
-      for (const [cartonKey, sns] of Object.entries(cartons)) {
-        const carton = await prisma.stock_carton.create({
+  
+  
+      const mouvementDetails = {
+        lots: Object.entries(hierarchy).map(([lotKey, cartons]) => ({
+          lot: lotKey === "NO_LOT" ? null : Number(lotKey),
+          cartons: Object.entries(cartons).map(([cartonKey, sns]) => ({
+            carton: cartonKey === "NO_CARTON" ? null : Number(cartonKey),
+            serial_numbers: sns
+          }))
+        })),
+        stockFinalLot: Object.keys(hierarchy).length,
+        stockFinalCarton: Object.values(hierarchy)
+          .reduce((a, l) => a + Object.keys(l).length, 0),
+        stockFinalPiece: serialSet.size,
+      };
+  
+      /* =========================
+         7️⃣ MOUVEMENT STOCK
+      ========================== */
+      await tx.mouvement_stock.create({
+        data: {
+          type: "entree",
+          mouvement: 6,
+          stock_id: stock.id,
+          piece_id: parseInt(item_id),
+          origine,
+          service_destination: parseInt(service_id),
+          model_id: parseInt(model_id),
+          stock_initial: 0,
+          quantite: serialSet.size,
+          stock_final: serialSet.size,
+          quantite_totale_piece: serialSet.size,
+          motif,
+          commentaire,
+          details_mouvement: JSON.stringify(mouvementDetails),
+        },
+      });
+  
+      /* =========================
+         8️⃣ CREATE LOTS + CARTONS
+      ========================== */
+      for (const [lotKey, cartons] of Object.entries(hierarchy)) {
+        const lot = await tx.stock_lot.create({
           data: {
-            numero_carton: cartonKey === "NO_CARTON" ? null : parseInt(cartonKey),
-            lot_id: lot.id,
+            numero_lot: lotKey === "NO_LOT" ? null : parseInt(lotKey),
             stock_id: stock.id,
             piece_id: parseInt(item_id),
             service_id: parseInt(service_id),
             model_id: parseInt(model_id),
-            quantite_piece_carton: sns.length,
-            quantite_totale_piece: sns.length,
+            quantite_carton: Object.keys(cartons).length,
+            quantite_piece: Object.values(cartons)
+              .reduce((a, sns) => a + sns.length, 0),
           },
         });
-
-        const CHUNK = 1000;
-        for (let i = 0; i < sns.length; i += CHUNK) {
-          await prisma.serial_numbers.createMany({
-            data: sns.slice(i, i + CHUNK).map(sn => ({
-              serial_number: sn,
-              stock_id: stock.id,
+  
+        for (const [cartonKey, sns] of Object.entries(cartons)) {
+          const carton = await tx.stock_carton.create({
+            data: {
+              numero_carton: cartonKey === "NO_CARTON" ? null : parseInt(cartonKey),
               lot_id: lot.id,
-              carton_id: carton.id,
-              item_id: parseInt(item_id),
+              stock_id: stock.id,
+              piece_id: parseInt(item_id),
               service_id: parseInt(service_id),
               model_id: parseInt(model_id),
-              created_at: new Date(),
-            })),
+              quantite_piece_carton: sns.length,
+              quantite_totale_piece: sns.length,
+            },
           });
+  
+          const CHUNK = 1000;
+          for (let i = 0; i < sns.length; i += CHUNK) {
+            await tx.serial_numbers.createMany({
+              data: sns.slice(i, i + CHUNK).map(sn => ({
+                serial_number: sn,
+                stock_id: stock.id,
+                lot_id: lot.id,
+                carton_id: carton.id,
+                item_id: parseInt(item_id),
+                service_id: parseInt(service_id),
+                model_id: parseInt(model_id),
+                created_at: new Date(),
+              })),
+            });
+          }
         }
       }
-    }
 
+    })
+
+    console.log('Stock SN created successfully')
     return res.status(200).json({
       message: "Stock SN created successfully",
       inserted: serialSet.size,
+      data: creationStock,
     });
 
   } catch (error) {

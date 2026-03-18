@@ -41,8 +41,6 @@ export default function ModifyProfilInputs() {
 
     const [mailChecked, setMailCheck] = useState(true)
 
-
-
     useEffect( ()=>{
         const fetchUserInfos = async () => {
             try{

@@ -15,6 +15,18 @@ import TextArea from "../../components/form/input/TextArea";
 import { FilesHandler } from '../../backend/filesHandler/FilesHandler';
 import Input from '../../components/form/input/InputField';
 
+import { Calendar } from 'primereact/calendar';
+import { addLocale } from "primereact/api";
+
+addLocale('fr', {
+    firstDayOfWeek: 1,
+    dayNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
+    dayNamesShort: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+    dayNamesMin: ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'],
+    monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+    monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+});
+
 export default function DemandeDetails() {
 
     const demandes = new Demandes()
@@ -87,7 +99,6 @@ export default function DemandeDetails() {
     const [livraisonID, setLivraisonID] = useState(null)
     const [statutLivraison, setStatutLivraison] = useState('en attente')
     const [statutClassLivraison, setStatutClassLivraison] = useState('text-sm rounded-xl p-1 bg-orange-100 text-orange-500 font-bold')
-    const [dateLivraison, setDateLivraison] = useState('')
     const [commentaireLivraison, setCommentaireLivraison] = useState('')
     const [quantiteLivraison, setQuantiteLivraison] = useState('')
     const [nomLivreur, setNomLivreur] = useState('')
@@ -141,6 +152,12 @@ export default function DemandeDetails() {
     const [isReg, setIsReg] = useState(false)
 
     const [commentaireValidation, setCommentaireValidation] = useState('')
+
+    const [isModalRegReceptionOpen, setIsModalRegReceptionOpen] = useState(false)
+
+    const [dateReceptionReg, setDateReceptionReg] = useState()
+
+    const [dateLivraison, setDateLivraison] = useState(null)
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -199,14 +216,21 @@ export default function DemandeDetails() {
                     const stocks = stock_data.filter((item) => {
                         return item.piece_id == demandeData.item_id &&
                             item.is_deleted == false &&
-                            item.model_id == details.selectedModel &&
-                            item.service_id == details.selectedServicePiece &&
+                            (item.model_id == details.selectedModel || item.model_id == details.model) &&
+                            (item.service_id == details.selectedServicePiece || item.service_id == details.service) &&
                             item.quantite_piece > 0
                     })
                     setStocksPiece(stocks)
                     if (roles_id.includes(7) && stocks.length == 0) {
                         setIsGestionStock(true)
                     }
+
+
+                    const indexLivraison = demandeData.livraison_piece.length - 1
+                    const livraison = demandeData.livraison_piece[indexLivraison]
+
+                    const indexReception = demandeData.reception_piece.length - 1
+                    const reception = demandeData.reception_piece[indexReception]
 
                     if (demandeData.statut_demande == 'en_cours') {
                         if (roles_id.includes(4)) {
@@ -233,6 +257,10 @@ export default function DemandeDetails() {
                                 setIsLivreur(true)
                             }
                         } else {
+                            const livraisonForm = livraison.forms
+                            if (livraisonForm) {
+                                setDateLivraison(livraisonForm.last_modified_at)
+                            }
                             setIsDelivered(true);
                             if (demandeData.demande_recue) {
                                 let index_reception
@@ -242,6 +270,7 @@ export default function DemandeDetails() {
                                 setNomRecepteur(demandeData.reception_piece[index_reception].nom_recepteur)
                                 setStatutLivraison('Reçu')
                                 setStatutClassLivraison('text-sm rounded-xl p-1 bg-green-100 text-green-500 font-bold')
+                                const receptionForm = reception.forms
                             } else {
                                 if (roles_id.includes(12)) {
                                     setIsReception(true)
@@ -651,410 +680,480 @@ export default function DemandeDetails() {
         }
     }
 
+    const handleRegReception = async (e) => {
+        e.preventDefault();
+        if (signatureReception.isEmpty()) {
+            setErrorSignReception('Vous devez signer pour valider !')
+            return;
+        }
+        if (!dateReceptionReg) {
+            setErrorSignReception('Vous devez sélectionner une date de réception !')
+            return;
+        }
+        try {
+            setLoadingReception(true);
+            setIsModalRegReceptionOpen(false)
+            const sign = signatureReception.toDataURL('image/png')
+            const fd = new FormData();
+
+            fd.append('itemId', pieceId);
+            fd.append('demandeId', id);
+            fd.append('commentaire', messageReception);
+            fd.append('user_id', user_id);
+            fd.append('date_reception', new Date(dateReceptionReg))
+            if (sign) {
+                const blob = await fetch(sign).then(res => res.blob());
+                fd.append('signature', blob, 'signature.png');
+            }
+            for (let [key, value] of fd.entries()) {
+                console.log(`${key}:`, value);
+            }
+            await demandes.regReceptionDemande(fd);
+
+            Swal.fire({
+                title: "Succès",
+                text: "Formulaire réceptionné avec succès",
+                icon: "success"
+            });
+            console.log(response)
+            navigate('/toutes-les-demandes');
+        } catch (error) {
+            setLoadingReception(false)
+            console.log(error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors de la réception",
+                icon: "warning"
+            });
+            navigate('/toutes-les-demandes');
+        } finally {
+            setLoadingReception(false)
+        }
+    }
+
     return (
         <>
-            {loading ?
-                (<>Loading...</>) :
-                (<>
-                    <PageBreadcrumb pageTitle="Mouvement de stock" />
-                    <div>
-                        <div className='grid grid-cols-2 justify-between items-center mb-6'>
-                            <div className='space-y-2'>
-                                {isReg ? (
-                                    <>
-                                        <div>
-                                            <div className="">
-                                                <span className="border p-1.5 border-red-800 text-red-800 text-xs font-light">Régularisation</span>
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <></>
-                                )}
-                                <div>
-                                    <span>{`Demande du ${dateDemande}`}</span>
-                                </div>
-                                <div className=''>
-                                    <span className={statutClass}>
-                                        {statutDemande}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className='text-right'>
-                                <div className='grid grid-cols-2'>
-                                    <div className='col-start-2 space-y-0.5'>
-                                        {isCompleted ? (
-                                            <>
-                                                {loadingPrint ? (
-                                                    <>
-                                                        <div className='text-center'>
-                                                            <span className=''>
-                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                            </span>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={handleGeneratePdf}>
-                                                            <span className='mr-4'><i className="pi pi-print"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Voir formulaire PDF</span>
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isModificateur ? (
-                                            <>
-                                                <Link to={`/modification-admin-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                    <span className='mr-4'><i className="pi pi-cog"></i></span>
-                                                    <span className='text-sm text-gray-700 font-medium'>Modification Admin</span>
-                                                </Link>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isDemandeur ? (
-                                            <>
-                                                <Link to={`/modifier-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                    <span className='mr-4'><i className="pi pi-pencil"></i></span>
-                                                    <span className='text-sm text-gray-700 font-medium'>Modifier demande</span>
-                                                </Link>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isGestionStock ? (
-                                            <>
-                                                <button
-                                                    onClick={() => {
-                                                        navigate(`/creer-stock`, {
-                                                            state: {
-                                                                from: 'demande-details',
-                                                                idDemande: id
-                                                            }
-                                                        })
-                                                    }}
-                                                    className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
-                                                    <span className='mr-4'><i className="pi pi-plus"></i></span>
-                                                    <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isValidateur ? (
-                                            <>
-                                                {loadingDemande ? (
-                                                    <>
-                                                        <div className='text-center'>
-                                                            <span className=''>
-                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                            </span>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Link to={`/valider-demande/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                            <span className='mr-4'><i className="pi pi-check"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>
-                                                                {isReg ? 'REG validation' : 'Valider demande'}
-                                                            </span>
-                                                        </Link>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalReturnOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-arrow-left"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Retourner demande</span>
-                                                        </button>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalCancelOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-times"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Refuser demande</span>
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isLivreur ? (
-                                            <>
-                                                <Link to={`/livraison-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                    <span className='mr-4'><i className="pi pi-truck"></i></span>
-                                                    <span className='text-sm text-gray-700 font-medium'>Livraison Stock</span>
-                                                </Link>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isReception ? (
-                                            <>
-                                                {loadingReception ? (
-                                                    <>
-                                                        <div className='text-center'>
-                                                            <span className=''>
-                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                            </span>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalReceptionOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Réceptionner Pièces</span>
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className='space-y-3'>
-                            {commentaireDemandeur ? (
-                                <>
-                                    <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                        <div className='mb-6 pb-2 w-full border-b text-left'>
-                                            <span className='text-sm mr-2'>Commentaire demandeur</span>
-                                            <span className='text-sm'><i className="pi pi-comment"></i></span>
-                                        </div>
-                                        <p className='text-sm text-blue-500 text-left'>{commentaireDemandeur}</p>
-                                    </div>
-                                </>
-                            ) : (
-                                <></>
-                            )}
+            <PageBreadcrumb pageTitle="Mouvement de stock" />
+            <div>
+                {loading ?
+                    (
+                        <>
+                            Loading...
+                        </>
+                    ) : (
+                        <>
                             <div>
-                                {demandeurFiles.length > 0 ? (
-                                    <>
-                                        <div>
-                                            <span className="text-xs text-gray-500">Pièce(s) jointe(s) demandeur</span>
-                                        </div>
-                                        <div className='grid grid-cols-6 text-xs gap-1'>
-                                            {demandeurFiles.map((file) => {
-                                                let icon = 'pi pi-file'
-                                                let fileClass = 'flex items-center justify-between bg-gray-300 rounded p-0.5'
-                                                if (file.path.endsWith('.pdf')) {
-                                                    icon = 'pi pi-file-pdf'
-                                                    fileClass = 'flex items-center justify-between bg-red-100 text-red-500 rounded p-0.5'
-                                                } else if (file.path.endsWith('.docx')) {
-                                                    icon = 'pi pi-file-word'
-                                                    fileClass = 'flex items-center justify-between bg-blue-100 text-blue-600 rounded p-0.5'
-                                                } else if (file.path.endsWith('.xlsx')) {
-                                                    icon = 'pi pi-file-excel'
-                                                    fileClass = 'flex items-center justify-between bg-green-100 text-green-600 rounded p-0.5'
-                                                }
-                                                return (
-                                                    <>
-                                                        {fileId == file.id ? (
-                                                            <>
-                                                                <div className='text-center'>
-                                                                    <span className='mx-1'>
-                                                                        <ProgressSpinner style={{ width: '15px', height: '15px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                    </span>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <button key={file.id} className={fileClass} style={{ fontSize: '8px' }} onClick={() => handleSingleFile(file.id)}>
-                                                                <i className={icon}></i>
-                                                                <span className=''>{file.filename}</span>
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                )
-                                            })}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <></>
-                                )}
-                            </div>
-                            {commentaireValidateur ? (
-                                <>
-                                    <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                        <div className='mb-6 pb-2 w-full border-b text-left'>
-                                            <span className='text-sm mr-2'>Commentaire validateur</span>
-                                            <span className='text-sm'><i className="pi pi-comment"></i></span>
-                                        </div>
-                                        <p className='text-sm text-blue-500 text-left'>{commentaireValidateur}</p>
-                                    </div>
-                                </>
-                            ) : (
-                                <></>
-                            )}
-                        </div>
-                        {
-                            isDelivered ? (
-                                <>
+                                <div className='space-y-5'>
                                     <div className='grid grid-cols-2 justify-between items-center mb-6'>
-                                        <div>
+                                        <div className='space-y-2'>
+                                            {isReg ? (
+                                                <>
+                                                    <div>
+                                                        <div className="">
+                                                            <span className="border p-1.5 border-red-800 text-red-800 text-xs font-light">Régularisation</span>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <></>
+                                            )}
                                             <div>
-                                                <span>Statut réception</span>
+                                                <span>{`Demande du ${dateDemande}`}</span>
                                             </div>
-                                            <div className='mt-3'>
-                                                <span className={statutClassLivraison}>
-                                                    {statutLivraison}
+                                            <div className=''>
+                                                <span className={statutClass}>
+                                                    {statutDemande}
                                                 </span>
                                             </div>
                                         </div>
-                                    </div>
-                                    {isReceived ? (
-                                        <div>
-                                            <div className='overflow-hidden mb-6 pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                                <div className='mb-6 pb-2 w-full border-b text-right'>
-                                                    <span className='text-sm mr-2'>Commentaire réception</span>
-                                                    <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                        <div className='text-right'>
+                                            <div className='grid grid-cols-2'>
+                                                <div className='col-start-2 space-y-0.5'>
+                                                    {isCompleted ? (
+                                                        <>
+                                                            {loadingPrint ? (
+                                                                <>
+                                                                    <div className='text-center'>
+                                                                        <span className=''>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                        onClick={handleGeneratePdf}>
+                                                                        <span className='mr-4'><i className="pi pi-print"></i></span>
+                                                                        <span className='text-sm text-gray-700 font-medium'>Voir formulaire PDF</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isModificateur ? (
+                                                        <>
+                                                            <Link to={`/modification-admin-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                <span className='mr-4'><i className="pi pi-cog"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Modification Admin</span>
+                                                            </Link>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isDemandeur ? (
+                                                        <>
+                                                            <Link to={`/modifier-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                <span className='mr-4'><i className="pi pi-pencil"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Modifier demande</span>
+                                                            </Link>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isGestionStock ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigate(`/creer-stock`, {
+                                                                        state: {
+                                                                            from: 'demande-details',
+                                                                            idDemande: id
+                                                                        }
+                                                                    })
+                                                                }}
+                                                                className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
+                                                                <span className='mr-4'><i className="pi pi-plus"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isValidateur ? (
+                                                        <>
+                                                            {loadingDemande ? (
+                                                                <>
+                                                                    <div className='text-center'>
+                                                                        <span className=''>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Link to={`/valider-demande/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                        <span className='mr-4'><i className="pi pi-check"></i></span>
+                                                                        <span className='text-sm text-gray-700 font-medium'>
+                                                                            {isReg ? 'REG validation' : 'Valider demande'}
+                                                                        </span>
+                                                                    </Link>
+                                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                        onClick={() => {
+                                                                            setIsModalReturnOpen(true)
+                                                                        }}>
+                                                                        <span className='mr-4'><i className="pi pi-arrow-left"></i></span>
+                                                                        <span className='text-sm text-gray-700 font-medium'>Retourner demande</span>
+                                                                    </button>
+                                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                        onClick={() => {
+                                                                            setIsModalCancelOpen(true)
+                                                                        }}>
+                                                                        <span className='mr-4'><i className="pi pi-times"></i></span>
+                                                                        <span className='text-sm text-gray-700 font-medium'>Refuser demande</span>
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isLivreur ? (
+                                                        <>
+                                                            <Link to={`/livraison-demande/${demandeDetails.id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                <span className='mr-4'><i className="pi pi-truck"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>{isReg ? 'Reg Livraison' : 'Livraison Stock'}</span>
+                                                            </Link>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isReception ? (
+                                                        <>
+                                                            {loadingReception ? (
+                                                                <>
+                                                                    <div className='text-center'>
+                                                                        <span className=''>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {isReg ? (
+                                                                        <>
+                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                onClick={() => {
+                                                                                    setIsModalRegReceptionOpen(true)
+                                                                                }}>
+                                                                                <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                                <span className='text-sm text-gray-700 font-medium'>Reg Réception</span>
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                onClick={() => {
+                                                                                    setIsModalReceptionOpen(true)
+                                                                                }}>
+                                                                                <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                                <span className='text-sm text-gray-700 font-medium'>Réceptionner Pièces</span>
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
                                                 </div>
-                                                {commentaireReception ? (
-                                                    <p className='text-sm text-orange-500 text-right'>{commentaireReception}</p>
-                                                ) : (
-                                                    <p className='text-xs opacity-20 text-right'>Sans commentaire</p>
-                                                )}
                                             </div>
                                         </div>
+                                    </div>
+                                    <div className='space-y-3'>
+                                        {commentaireDemandeur ? (
+                                            <>
+                                                <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                    <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                        <span className='text-sm mr-2'>Commentaire demandeur</span>
+                                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                    </div>
+                                                    <p className='text-sm text-blue-500 text-left'>{commentaireDemandeur}</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                        <div>
+                                            {demandeurFiles.length > 0 ? (
+                                                <>
+                                                    <div>
+                                                        <span className="text-xs text-gray-500">Pièce(s) jointe(s) demandeur</span>
+                                                    </div>
+                                                    <div className='grid grid-cols-6 text-xs gap-1'>
+                                                        {demandeurFiles.map((file) => {
+                                                            let icon = 'pi pi-file'
+                                                            let fileClass = 'flex items-center justify-between bg-gray-300 rounded p-0.5'
+                                                            if (file.path.endsWith('.pdf')) {
+                                                                icon = 'pi pi-file-pdf'
+                                                                fileClass = 'flex items-center justify-between bg-red-100 text-red-500 rounded p-0.5'
+                                                            } else if (file.path.endsWith('.docx')) {
+                                                                icon = 'pi pi-file-word'
+                                                                fileClass = 'flex items-center justify-between bg-blue-100 text-blue-600 rounded p-0.5'
+                                                            } else if (file.path.endsWith('.xlsx')) {
+                                                                icon = 'pi pi-file-excel'
+                                                                fileClass = 'flex items-center justify-between bg-green-100 text-green-600 rounded p-0.5'
+                                                            }
+                                                            return (
+                                                                <>
+                                                                    {fileId == file.id ? (
+                                                                        <>
+                                                                            <div className='text-center'>
+                                                                                <span className='mx-1'>
+                                                                                    <ProgressSpinner style={{ width: '15px', height: '15px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <button key={file.id} className={fileClass} style={{ fontSize: '8px' }} onClick={() => handleSingleFile(file.id)}>
+                                                                            <i className={icon}></i>
+                                                                            <span className=''>{file.filename}</span>
+                                                                        </button>
+                                                                    )}
+                                                                </>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <></>
+                                            )}
+                                        </div>
+                                        {commentaireValidateur ? (
+                                            <>
+                                                <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                    <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                        <span className='text-sm mr-2'>Commentaire validateur</span>
+                                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                    </div>
+                                                    <p className='text-sm text-blue-500 text-left'>{commentaireValidateur}</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                    </div>
+                                    {isDelivered ? (
+                                        <>
+                                            <div className='grid grid-cols-2 justify-between items-center mb-6'>
+                                                <div>
+                                                    <div>
+                                                        <span>Statut réception</span>
+                                                    </div>
+                                                    <div className='mt-3'>
+                                                        <span className={statutClassLivraison}>
+                                                            {statutLivraison}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isReceived ? (
+                                                <div>
+                                                    <div className='overflow-hidden mb-6 pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                        <div className='mb-6 pb-2 w-full border-b text-right'>
+                                                            <span className='text-sm mr-2'>Commentaire réception</span>
+                                                            <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                        </div>
+                                                        {commentaireReception ? (
+                                                            <p className='text-sm text-orange-500 text-right'>{commentaireReception}</p>
+                                                        ) : (
+                                                            <p className='text-xs opacity-20 text-right'>Sans commentaire</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <></>
+                                            )}
+                                        </>
                                     ) : (
                                         <></>
-                                    )}
-                                </>
-                            ) : (
-                                <></>
-                            )
-                        }
-
-                        <div className='flex justify-center items-center'>
-                            <div className='w-full px-20 py-6 bg-white rounded-2xl border'>
-                                <div className='w-full text-center mb-4'>
-                                    <span className='text-md underline'>
-                                        Mouvement de stock
-                                    </span>
-                                </div>
-                                <div className='w-full text-center mb-4'>
-                                    <span className='font-bold'>
-                                        {motifDemande}
-                                    </span>
-                                </div>
-                                <table className='border w-full text-xs'>
-                                    <tbody>
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Pièce demandée</th>
-                                            <th className='border w-1/2 flex-col'>
-                                                <div className='text-sm'>{nomPiece}</div>
-                                                <div className='font-medium'>{nomModel}</div>
-                                                <div className='font-medium'>{servicePiece}</div>
-                                            </th>
-                                        </tr>
-                                        {nomStock ? (
-                                            <>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Code Stock</th>
-                                                    <th className='border w-1/2'>{nomStock}</th>
-                                                </tr>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Service demandeur</th>
-                                            <th className='border w-1/2'>{serviceDemandeur}</th>
-                                        </tr>
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Demandeur</th>
-                                            <th className='border w-1/2'>{nomDemandeur}</th>
-                                        </tr>
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Mouvement stock</th>
-                                            <th className='border w-1/2'>{typeDemande}</th>
-                                        </tr>
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Quantité demandée</th>
-                                            <th className='border w-1/2'>{quantiteDemande}</th>
-                                        </tr>
-                                        {valide ? (
-                                            <>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Quantité validée</th>
-                                                    <th className='border w-1/2'>{quantiteValidee}</th>
-                                                </tr>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {isDelivered ? (
-                                            <>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Quantité initiale</th>
-                                                    <th className='border w-1/2'>{stockDepart}</th>
-                                                </tr>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Quantité livrée</th>
-                                                    <th className='border w-1/2'>{quantiteLivree}</th>
-                                                </tr>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Quantité finale</th>
-                                                    <th className='border w-1/2'>{stockFinal}</th>
-                                                </tr>
-                                            </>
-                                        ) : (
-                                            <>
-                                            </>
-                                        )}
-                                        {/* <tr className='border h-15'>
-                                            <th className='border w-1/2'>Stock initial pièce</th>
-                                            <th className='border w-1/2'>{stockDepartPiece}</th>
-                                        </tr>
-                                        <tr className='border h-15'>
-                                            <th className='border w-1/2'>Stock final pièce</th>
-                                            <th className='border w-1/2'>{stockFinalPiece}</th>
-                                        </tr> */}
-                                        {nomenclature ? (
-                                            <tr className='border h-15'>
-                                                <th className='border w-1/2'>Nomenclature</th>
-                                                <th className='border w-1/2'>{nomenclature}</th>
-                                            </tr>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {otherFields.map((field) => {
-                                            return (
-                                                <>
+                                    )
+                                    }
+                                    <div className='flex justify-center items-center'>
+                                        <div className='w-full px-20 py-6 bg-white rounded-2xl border'>
+                                            <div className='w-full text-center mb-4'>
+                                                <span className='text-md underline'>
+                                                    Mouvement de stock
+                                                </span>
+                                            </div>
+                                            <div className='w-full text-center mb-4'>
+                                                <span className='font-bold'>
+                                                    {motifDemande}
+                                                </span>
+                                            </div>
+                                            <table className='border w-full text-xs'>
+                                                <tbody>
                                                     <tr className='border h-15'>
-                                                        <th className='border w-1/2'>{field.titre}</th>
-                                                        <th className='border w-1/2'>{field.information}</th>
+                                                        <th className='border w-1/2'>Pièce demandée</th>
+                                                        <th className='border w-1/2 flex-col'>
+                                                            <div className='text-sm'>{nomPiece}</div>
+                                                            <div className='font-medium'>{nomModel}</div>
+                                                            <div className='font-medium'>{servicePiece}</div>
+                                                        </th>
                                                     </tr>
-                                                </>
-                                            )
-                                        })}
-                                        {isReceived ? (
-                                            <>
-                                                <tr className='border h-15'>
-                                                    <th className='border w-1/2'>Recepteur</th>
-                                                    <th className='border w-1/2'>{nomRecepteur}</th>
+                                                    {nomStock ? (
+                                                        <>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Code Stock</th>
+                                                                <th className='border w-1/2'>{nomStock}</th>
+                                                            </tr>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    <tr className='border h-15'>
+                                                        <th className='border w-1/2'>Service demandeur</th>
+                                                        <th className='border w-1/2'>{serviceDemandeur}</th>
+                                                    </tr>
+                                                    <tr className='border h-15'>
+                                                        <th className='border w-1/2'>Demandeur</th>
+                                                        <th className='border w-1/2'>{nomDemandeur}</th>
+                                                    </tr>
+                                                    <tr className='border h-15'>
+                                                        <th className='border w-1/2'>Mouvement stock</th>
+                                                        <th className='border w-1/2'>{typeDemande}</th>
+                                                    </tr>
+                                                    <tr className='border h-15'>
+                                                        <th className='border w-1/2'>Quantité demandée</th>
+                                                        <th className='border w-1/2'>{quantiteDemande}</th>
+                                                    </tr>
+                                                    {valide ? (
+                                                        <>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Quantité validée</th>
+                                                                <th className='border w-1/2'>{quantiteValidee}</th>
+                                                            </tr>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {isDelivered ? (
+                                                        <>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Quantité initiale</th>
+                                                                <th className='border w-1/2'>{stockDepart}</th>
+                                                            </tr>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Quantité livrée</th>
+                                                                <th className='border w-1/2'>{quantiteLivree}</th>
+                                                            </tr>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Quantité finale</th>
+                                                                <th className='border w-1/2'>{stockFinal}</th>
+                                                            </tr>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                        </>
+                                                    )}
+                                                    {/* <tr className='border h-15'>
+                                                    <th className='border w-1/2'>Stock initial pièce</th>
+                                                    <th className='border w-1/2'>{stockDepartPiece}</th>
                                                 </tr>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                    </tbody>
-                                </table>
+                                                <tr className='border h-15'>
+                                                    <th className='border w-1/2'>Stock final pièce</th>
+                                                    <th className='border w-1/2'>{stockFinalPiece}</th>
+                                                </tr> */}
+                                                    {nomenclature ? (
+                                                        <tr className='border h-15'>
+                                                            <th className='border w-1/2'>Nomenclature</th>
+                                                            <th className='border w-1/2'>{nomenclature}</th>
+                                                        </tr>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {otherFields.map((field) => {
+                                                        return (
+                                                            <>
+                                                                <tr className='border h-15'>
+                                                                    <th className='border w-1/2'>{field.titre}</th>
+                                                                    <th className='border w-1/2'>{field.information}</th>
+                                                                </tr>
+                                                            </>
+                                                        )
+                                                    })}
+                                                    {isReceived ? (
+                                                        <>
+                                                            <tr className='border h-15'>
+                                                                <th className='border w-1/2'>Recepteur</th>
+                                                                <th className='border w-1/2'>{nomRecepteur}</th>
+                                                            </tr>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                </tbody>
+                                            </table>
 
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                </>)
-            }
-
+                        </>)
+                }
+            </div>
             <Modal isOpen={isModalValidateOpen} onClose={() => setIsModalValidateOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
                     <div className="w-full text-center mb-3">
@@ -1254,6 +1353,64 @@ export default function DemandeDetails() {
                             <span className='text-sm text-gray-700 font-medium'>Créer nouveau stock</span>
                         </Link>
                     </div> */}
+                </div>
+            </Modal>
+            <Modal isOpen={isModalRegReceptionOpen} onClose={() => setIsModalRegReceptionOpen(false)} className="p-4 max-w-md">
+                <div className='p-1'>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Réception</span>
+                    </div>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la réception</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
+                        <SignatureCanvas
+                            ref={data => setSignatureReception(data)}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
+                        />
+                        <div className='w-full'>
+                            <Label>Date Réception <span className="text-red-700">*</span></Label>
+                            <Calendar
+                                value={dateReceptionReg}
+                                locale="fr"
+                                onChange={(e) => setDateReceptionReg(e.value)}
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                                maxDate={new Date()}
+                                minDate={new Date(dateLivraison)}
+                                className="w-full"
+                                style={{ fontSize: '2px' }}
+                            />
+                        </div>
+                        <div className='w-full'>
+                            <Label>Commentaire</Label>
+                            <TextArea
+                                value={messageReception}
+                                onChange={(value) => setMessageReception(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+
+                        <div className='w-full flex justify-center items-center'>
+                            <button
+                                onClick={handleClearReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleRegReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorSignReception}
+                        </span>
+                    </div>
                 </div>
             </Modal>
         </>

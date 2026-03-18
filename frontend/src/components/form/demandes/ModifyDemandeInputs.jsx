@@ -557,7 +557,7 @@ export default function ModifyDemandeInputs() {
                           </>
                         )}
                       </div>
-                      <div>
+                      {/* <div>
                         <Label>Service Demandeur <span className="text-red-700">*</span></Label>
                         <Select
                           options={optionsServicesUsers}
@@ -574,7 +574,7 @@ export default function ModifyDemandeInputs() {
                           onChange={handleSelectUser}
                           className="dark:bg-dark-900"
                         />
-                      </div>
+                      </div> */}
                       <div>
                         <Label>Motif <span className="text-red-700">*</span></Label>
                         <Input

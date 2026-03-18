@@ -98,9 +98,10 @@ export default function AllDemandesList() {
             serviceDemandeurs,
             selectedModels,
             servicesPieces,
+            selectedStatusReception,
             isReg,
         });
-    }, [globalFilter, selectedStatus, selectedItems, startDate, endDate, serviceDemandeurs, selectedModels, servicesPieces, isReg]);
+    }, [globalFilter, selectedStatus, selectedItems, startDate, endDate, serviceDemandeurs, selectedModels, servicesPieces, selectedStatusReception, isReg]);
 
     useEffect(() => {
         const fetchDemandeData = async () => {
@@ -349,7 +350,8 @@ export default function AllDemandesList() {
     const dateReceptionTemplate = (demandeForms) => {
         if (demandeForms.reception_piece.length > 0 && demandeForms.demande_livree == true) {
             let index = demandeForms.reception_piece.length - 1
-            return (<span className="text-theme-xs text-gray-700 font-medium dark:text-gray-400">{formatDate(demandeForms.reception_piece[index].date)}</span>)
+            const reception = demandeForms.reception_piece[index]
+            return (<span className="text-theme-xs text-gray-700 font-medium dark:text-gray-400">{formatDate(reception.created_at)}</span>)
         } else {
             return (<span className="text-xs">N/A</span>)
         }
@@ -377,10 +379,12 @@ export default function AllDemandesList() {
             validation = item.validation_demande[index]
             itemDate = new Date(item.validation_demande[index].date_validation_demande)
             if (validation.statut_validation_demande == 'valide') {
-                if (item.demande_livree) {
-                    statutReception = 'réceptionnée'
-                } else {
-                    statutReception = 'en_cours'
+                if(item.demande_livree){
+                    if (item.demande_recue) {
+                        statutReception = 'réceptionnée'
+                    } else {
+                        statutReception = 'en_cours'
+                    }
                 }
             }
         }

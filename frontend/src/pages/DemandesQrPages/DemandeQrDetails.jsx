@@ -1629,7 +1629,7 @@ export default function DemandeQrDetails() {
 
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
-                            {errorSignLivraison}
+                            {errorSignReception}
                         </span>
                     </div>
                 </div>

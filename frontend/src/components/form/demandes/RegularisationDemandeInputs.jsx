@@ -212,6 +212,10 @@ export default function RegularisationDemandeInputs() {
                 // const models_data = await stockData.getAllModels()
                 // setModels(models_data)
 
+                const user = await userData.getOneUser(userId)
+                setNomUser(user.fullname)
+                setServiceUser(user.user_services[0].service_id)
+
 
             } catch (error) {
                 console.log(error)
@@ -378,10 +382,6 @@ export default function RegularisationDemandeInputs() {
             setError("Vous devez choisir le service demandeur")
             return false
         }
-        if (!selectedUser) {
-            setError("Vous devez choisir le demandeur")
-            return false
-        }
         if (!motif) {
             setError("Vous devez précisier le motif !")
             return false
@@ -475,17 +475,17 @@ export default function RegularisationDemandeInputs() {
             typeDemande,
             quantite,
         }
-        const payload = {
-            detailsDemande: details,
-            userId,
-            quantite,
-            serviceUser,
-            selectedUser,
-            nomUser,
-            motif,
-            commentaire,
-            otherFields: fields,
-        }
+        // const payload = {
+        //     detailsDemande: details,
+        //     userId,
+        //     quantite,
+        //     serviceUser,
+        //     selectedUser,
+        //     nomUser,
+        //     motif,
+        //     commentaire,
+        //     otherFields: fields,
+        // }
 
         const fd = new FormData();
 
@@ -493,7 +493,7 @@ export default function RegularisationDemandeInputs() {
         fd.append('userId', userId)
         fd.append('quantite', quantite)
         fd.append('serviceUser', serviceUser)
-        fd.append('selectedUser', selectedUser)
+        fd.append('selectedUser', userId)
         fd.append('nomUser', nomUser)
         fd.append('motif', motif)
         fd.append('commentaire', commentaire)
@@ -617,7 +617,7 @@ export default function RegularisationDemandeInputs() {
                                                     </>
                                                 )}
                                             </div>
-                                            <div>
+                                            {/* <div>
                                                 <Label>Service Demandeur <span className="text-red-700">*</span></Label>
                                                 <Select
                                                     options={optionsServicesUsers}
@@ -634,7 +634,7 @@ export default function RegularisationDemandeInputs() {
                                                     onChange={handleSelectUser}
                                                     className="dark:bg-dark-900"
                                                 />
-                                            </div>
+                                            </div> */}
                                             <div>
                                                 <Label>Motif <span className="text-red-700">*</span></Label>
                                                 <Input

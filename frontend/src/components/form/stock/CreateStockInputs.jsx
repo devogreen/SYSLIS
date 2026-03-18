@@ -155,17 +155,6 @@ export default function CreateStockInputs() {
                 const roles_id = userRoles_data.roles.map((role) => {
                     return role.id_role
                 })
-                if (roles_id.includes(4)) {
-                    const successPath = from === "demande-details" && idDemande
-                        ? `/valider-demande/${idDemande}`
-                        : "/voir-stocks";
-                    setFromSuccess(successPath)
-
-                    const failPath = from === "demande-details" && idDemande
-                        ? `/demande-details/${idDemande}`
-                        : "/voir-stocks";
-                    setFromFail(failPath)
-                }
                 if (idDemande) {
                     const demande_data = await demandeData.getOneDemande(idDemande)
                     const details = JSON.parse(demande_data.details_demande)
@@ -194,6 +183,20 @@ export default function CreateStockInputs() {
                     })
                     const nomService = service ? service.nom_service : ''
                     setNomService(nomService)
+                    if (demande_data.statut_demande != 'valide' && roles_id.includes(4)) {
+                        const successPath = from === "demande-details"
+                            ? `/valider-demande/${idDemande}`
+                            : "/voir-stocks";
+                        setFromSuccess(successPath)
+
+                        const failPath = from === "demande-details"
+                            ? `/demande-details/${idDemande}`
+                            : "/voir-stocks";
+                        setFromFail(failPath)
+                    } else if (demande_data.statut_demande == 'valide') {
+                        const successPath = `/livraison-demande/${idDemande}`
+                        setFromSuccess(successPath)
+                    }
                 }
 
             } catch (error) {
