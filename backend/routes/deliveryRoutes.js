@@ -9,7 +9,7 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
-    updateRemplacement, returnRemplacement, generateRemplacementPDF,
+    updateRemplacement, returnRemplacement, generateRemplacementPDF,deliverregularisation,regularisationReception,
 } = require("../controllers/Delivery/deliveryController")
 
 // router.post('/deliver', uploadDeliver.fields([
@@ -17,6 +17,8 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
 //     { name: "files", maxCount: 10 }
 // ]), deliver
 // );
+router.post('/deliverregularisation', upload.single('signature_expediteur'), deliverregularisation);
+router.post('/regularisationReception', upload.single('signature_expediteur'), regularisationReception);
 router.post('/deliver', upload.single('signature_expediteur'), deliver);
 router.get("/getAllLivraisons", getAllLivraisons);
 router.get("/getOneLivraison/:id", getOneLivraison);

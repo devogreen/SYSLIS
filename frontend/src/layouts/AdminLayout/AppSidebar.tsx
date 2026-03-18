@@ -33,6 +33,7 @@ const navItems: NavItem[] = [
     name: "Dashboard",
     subItems: [
       { name: "Semaine en cours", path: "/", pro: false },
+      { name: "Dashboard Livraison", path: "/", pro: false },
       // { name: "Données Générales", path:"/donnees-generales", pro: false},
       // { name: "Statistiques livraisons", path: "/statistiques-livraisons", pro: false },
       // { name: "Stock chargeur", path: "/gestion-stock-chargeur", pro: false },
@@ -46,6 +47,7 @@ const navItems: NavItem[] = [
       { name: "Toutes les livraisons", path:"/toutes-les-livraisons", pro: false},
       { name: "Nouveau Remplacement", path: "/nouveau-remplacement", roles:[1], pro: false},
       { name: "Tous les remplacements", path: "/tous-les-remplacements", pro: false},
+      { name: "REG Livraison", path: "/regularisation-livraison", pro: false},
     ],
     
   },
@@ -79,7 +81,7 @@ const navItems: NavItem[] = [
   {
     icon: <StockBox />,
     name: "Gestion Stock",
-    roles:[],
+    roles:[7],
     subItems: [
       // { name: "Ajouter Element Stock", path: "/ajouter-stock", pro: false },
       { name: "Nouvelle Demande Stock", path:"/nouvelle-demande", roles:[3], pro: false},
@@ -92,7 +94,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <UserCircleIcon />,
-    name: "Gestion Profils",
+    name: "Gestion des Profils",
     roles:[5],
     subItems: [
       { name: "Ajouter utilisateur", path:"/créer-utilisateur", pro: false},
@@ -101,7 +103,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <DeliveryAdd />,
-    name: "Gestion Livraison",
+    name: "Parametrage Livraison",
     roles:[14],
     subItems: [
       { name: "Ajouter type livraison", path: "/ajouter-type-livraison", pro: false },
