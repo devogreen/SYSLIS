@@ -1044,10 +1044,10 @@ const livraisonDemande = async (req, res) => {
             const updatedStockDemandeur = await tx.stocks.update({
               where: {
                 id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-                last_update: new Date(),
+                // code_stock: stockDonneur.code_stock,
+                // piece_id: 1,
+                // service_id: 3,
+                // last_update: new Date(),
               },
               data: {
                 quantite_piece: finalDemandeur,

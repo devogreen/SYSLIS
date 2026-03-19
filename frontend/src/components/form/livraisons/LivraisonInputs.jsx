@@ -114,7 +114,6 @@ export default function LivraisonInputs() {
       try {
         let data;
         data = await merchants.findMerchant();
-        console.log(data)
         setTerminals(data)
 
         let type_delivery_data = await productDeliveries.getAllTypeLivraisonCommerciale()

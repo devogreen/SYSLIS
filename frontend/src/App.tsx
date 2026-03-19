@@ -193,6 +193,9 @@ import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrFo
 // @ts-ignore
 import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
 
+// @ts-ignore
+import DecomForm from "./pages/Forms/DecomForms/DecomForm"
+
 export default function App() {
   return (
     <>
@@ -260,6 +263,9 @@ export default function App() {
               <Route path="/tous-les-remplacements" element={<AllRemplacements />} />
               <Route path="/remplacement-details/:id" element={<RemplacementDetails />} />
               <Route path="/modifier-remplacement/:id" element={<ModifyRemplacementForm />} />
+
+              {/* Décommissionnement */}
+              <Route path="/nouveau-decommissionnement" element={<DecomForm />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />

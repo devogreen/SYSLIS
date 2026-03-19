@@ -93,6 +93,13 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    name: "Gestion des décomm",
+    icon: <ListIcon />,
+    subItems: [
+      { name: "Nouveau décomm", path: "/nouveau-decommissionnement", pro: false },
+    ],
+  },
+  {
     icon: <RefreshTimeIcon />,
     name: "Gestion Régularisation",
     roles:[21],
