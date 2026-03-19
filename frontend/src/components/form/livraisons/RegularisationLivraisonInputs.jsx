@@ -440,22 +440,20 @@ export default function RegularisationLivraisonInputs() {
     fd.append('role_recepteur', selectedRole)
     fd.append('selected_model', selectedModel)
     fd.append('selectedStock', selectedStock)
+    fd.append('date_livraison', selectedDateLivraison)
     // selectedFiles.forEach((file) => {
     //   fd.append("files", file);
     // });
     if (sign) {
       const blob = await fetch(sign).then(res => res.blob());
-      fd.append('signature_expediteur', blob, 'signature.png');
+      fd.append('signature', blob, 'signature.png');
     }
 
     try {
-      const response = await productDeliveries.deliver(fd)
-
-      console.log(response);
-      console.log('Formulaire créé')
+      await productDeliveries.regLivraison(fd)
       Swal.fire({
         title: "Succès",
-        text: "Formulaire créé avec succès",
+        text: "Régularisation créé avec succès",
         icon: "success"
       });
       navigate('/toutes-les-livraisons');
@@ -506,7 +504,6 @@ export default function RegularisationLivraisonInputs() {
   // }
 
   const handleClear = () => {
-    console.log(signUrl)
     signature.clear()
   }
 

@@ -47,7 +47,6 @@ const navItems: NavItem[] = [
       { name: "Toutes les livraisons", path:"/toutes-les-livraisons", pro: false},
       { name: "Nouveau Remplacement", path: "/nouveau-remplacement", roles:[1], pro: false},
       { name: "Tous les remplacements", path: "/tous-les-remplacements", pro: false},
-      { name: "REG Livraison", path: "/regularisation-livraison", pro: false},
     ],
     
   },
@@ -61,26 +60,9 @@ const navItems: NavItem[] = [
     ],
     
   },
-  // {
-  //   name: "Remplacement TPE",
-  //   icon: <ListIcon />,
-  //   subItems: [
-      
-  //   ]
-  // },
-  // {
-  //   name: "Demande Stock",
-  //   icon: <ClipboardCheck />,
-  //   roles:[3, 11],
-  //   subItems: [
-  //     { name: "Nouvelle Demande", path:"/nouvelle-demande", roles:[3], pro: false},
-  //     // { name: "Nouvelle Demande TPE", path:"/nouvelle-demande-terminal", roles:[3], pro: false},
-  //     { name: "Toutes les demandes", path: "/toutes-les-demandes", pro: false },
-  //   ], 
-  // },
   {
     icon: <StockBox />,
-    name: "Gestion Stock",
+    name: "Gestion des Stocks",
     roles:[7],
     subItems: [
       // { name: "Ajouter Element Stock", path: "/ajouter-stock", pro: false },
@@ -115,8 +97,9 @@ const navItems: NavItem[] = [
     name: "Gestion Régularisation",
     roles:[21],
     subItems: [
-      { name: "REG Demande QRC", path: "/regularisation-demande-qr",roles:[21], pro: false },
+      { name: "REG Livraison", path: "/regularisation-livraison", pro: false},
       { name: "REG Demande Stock", path: "/regularisation-demande", pro: false},
+      { name: "REG Demande QRC", path: "/regularisation-demande-qr",roles:[21], pro: false },
     ],
   },
 

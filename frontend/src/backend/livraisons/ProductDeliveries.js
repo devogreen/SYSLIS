@@ -18,9 +18,9 @@ export class ProductDeliveries {
     }
   };
 
-   async regularisationReception(formData) {
+   async regReception(formData) {
     try {
-      const response = await axios.post(`${urlBase}/api/delivery/regularisationReception`, formData,
+      const response = await axios.post(`${urlBase}/api/delivery/regReception`, formData,
         {
           headers: {
             'Content-Type': 'multipart/form-data'
@@ -33,9 +33,9 @@ export class ProductDeliveries {
     }
   };
 
-  async deliverrugalrisation(formData) {
+  async regLivraison(formData) {
     try {
-      const response = await axios.post(`${urlBase}/api/delivery/deliverregularisation`, formData,
+      const response = await axios.post(`${urlBase}/api/delivery/regLivraison`, formData,
         {
           headers: {
             'Content-Type': 'multipart/form-data'

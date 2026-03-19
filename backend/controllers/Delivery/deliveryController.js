@@ -35,7 +35,7 @@ if (test_env) {
   GENERAL_URL = localUrl
 }
 // Fonction de regularisationReception
-const regularisationReception = async (req, res) => {
+const regReception = async (req, res) => {
   const {
     date_reception,
     livraison_id,
@@ -73,76 +73,98 @@ const regularisationReception = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const newValidation = await prisma.validations.create({
-      data: {
-        date_reception: new Date(datereception),
-        livraison_id: parseInt(livraison_id),
-        date_validation: new Date(),
-        commentaire,
-        user_id: user_id ? parseInt(user_id) : null,
-        nom_recepteur: user.fullname,
-        signature,
-      },
-    });
+    const dateAction = new Date(date_reception)
 
-    await prisma.livraison.update({
-      where: { id_livraison: parseInt(livraison_id) },
-      data: { statut_livraison: "livre" },
-    });
+    const reception = await prisma.$transaction(async (tx) => {
 
-    // ***************************************     GESTION STOCK CHARGEUR     *************************************
+      const receptionForm = await tx.forms.create({
+        data: {
+          type: 'reception_sn',
+          created_by: user.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: user.fullname,
+          commentaire,
+          is_reg: true,
+        }
+      })
+      const newValidation = await tx.validations.create({
+        data: {
+          livraison_id: parseInt(livraison_id),
+          date_validation: dateAction,
+          commentaire,
+          user_id: user_id ? parseInt(user_id) : null,
+          nom_recepteur: user.fullname,
+          signature,
+          form_id: receptionForm.id,
+        },
+      });
+  
+      await tx.livraison.update({
+        where: { id_livraison: parseInt(livraison_id) },
+        data: { statut_livraison: "livre" },
+      });
 
-    const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
-      where: {
-        id_type_livraison: livraison.type_livraison_id
+      // ***************************************     GESTION STOCK CHARGEUR     *************************************
+  
+      const typeLivraison = await tx.type_livraison_commerciale.findUnique({
+        where: {
+          id_type_livraison: livraison.type_livraison_id
+        }
+      })
+      let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
+  
+      if (livraison.stock_id) {
+        const stockChargeur = await tx.stocks.findUnique({
+          where: {
+            id: livraison.stock_id,
+          },
+        })
+        const quantiteChargeur = stockChargeur.quantite_piece
+        // Mettre à jour le stock
+        await tx.stocks.update({
+          where: {
+            id: stockChargeur.id,
+          },
+          data: {
+            quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            last_update: new Date(),
+          }
+        })
+        const mouvementDetails = {
+          typeMouvement: 5,
+          stockInitialPiece: quantiteChargeur,
+          quantiteMouvement: livraison.qte_totale_livraison,
+          stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+        }
+        await tx.mouvement_stock.create({
+          data: {
+            type: 'sortie',
+            created_at: dateAction,
+            mouvement: 5,
+            formulaire_id: livraison.id_livraison,
+            stock_id: stockChargeur.id,
+            piece_id: 1,
+            service_origine: 3,
+            service_destination: livraison.service_id,
+            model_id: 1,
+            stock_initial: quantiteChargeur,
+            quantite: livraison.qte_totale_livraison,
+            stock_final: quantiteChargeur - livraison.qte_totale_livraison,
+            quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            motif: livraisonTypeName,
+            commentaire: livraison.commentaire,
+            details_mouvement: JSON.stringify(mouvementDetails),
+          }
+        })
+      }
+
+      return {
+        receptionForm,
+        newValidation,
       }
     })
-    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-    if (livraison.stock_id) {
-      const stockChargeur = await prisma.stocks.findUnique({
-        where: {
-          id: livraison.stock_id,
-        },
-      })
-      const quantiteChargeur = stockChargeur.quantite_piece
-      // Mettre à jour le stock
-      await prisma.stocks.update({
-        where: {
-          id: stockChargeur.id,
-        },
-        data: {
-          quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
-          last_update: new Date(),
-        }
-      })
-      const mouvementDetails = {
-        typeMouvement: 5,
-        stockInitialPiece: quantiteChargeur,
-        quantiteMouvement: livraison.qte_totale_livraison,
-        stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
-      }
-      await prisma.mouvement_stock.create({
-        data: {
-          type: 'sortie',
-          created_at: new Date(date_reception),
-          mouvement: 5,
-          formulaire_id: livraison.id_livraison,
-          stock_id: stockChargeur.id,
-          piece_id: 1,
-          service_origine: 3,
-          service_destination: livraison.service_id,
-          model_id: 1,
-          stock_initial: quantiteChargeur,
-          quantite: livraison.qte_totale_livraison,
-          stock_final: quantiteChargeur - livraison.qte_totale_livraison,
-          quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
-          motif: livraisonTypeName,
-          commentaire: livraison.commentaire,
-          details_mouvement: JSON.stringify(mouvementDetails),
-        }
-      })
-    }
     /******************************* GESTION DES MAILS  *******************************/
 
     let produitsLivre = livraison.produitsLivre
@@ -177,10 +199,10 @@ const regularisationReception = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `RECEPTION LIVRAISON (${livraisonTypeName})`;
+      const subject = `REGULARISATION RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
-        <p>La livraison ${livraison.id_livraison} a été réceptionnée.</p>
+        <p>La réception de la livraison ${livraison.id_livraison} a été régularisée.</p>
         <ul>
           <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
@@ -217,7 +239,11 @@ const regularisationReception = async (req, res) => {
       }
     }
 
-    return res.status(201).json(newValidation);
+    console.log('Réception effectuée avec succès !')
+    return res.status(201).json({
+      message: 'Réception effectuée avec succès !',
+      data: reception,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
@@ -430,7 +456,7 @@ const deliver = async (req, res) => {
     res.status(500).json({ message: "Erreur interne", error });
   }
 };
-const deliverregularisation = async (req, res) => {
+const regLivraison = async (req, res) => {
   try {
     const {
       date_livraison,
@@ -489,8 +515,13 @@ const deliverregularisation = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
     // Gestion de l'upload Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
     const signature_expediteur = uploadResult.secure_url;
@@ -499,25 +530,57 @@ const deliverregularisation = async (req, res) => {
       return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
     }
 
-    const nouvelleLivraison = await prisma.livraison.create({
-      data: {
-        statut_livraison: "en_cours",
-        date_livraison: new Date(date_livraison),
-        qte_totale_livraison: produits.length,
-        produitsLivre: JSON.stringify(produits),
-        commentaire,
-        nom_livreur: utilisateur.fullname || null,
-        date_livraison: new Date(),
-        deleted: false,
-        type_livraison_id: parseInt(type_livraison_id),
-        user_id: utilisateur ? utilisateur.id_user : null,
-        signature_expediteur,
-        service_id: parseInt(service_recepteur),
-        role_id: role_recepteur ? parseInt(role_recepteur) : null,
-        model_id: selected_model ? parseInt(selected_model) : null,
-        stock_id: selectedStock ? +selectedStock : null,
+    const dateAction = new Date(date_livraison)
+
+    const livraison = await prisma.$transaction(async (tx) => {
+
+      const livraisonForm = await tx.forms.create({
+        data: {
+          type: 'livraison_sn',
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: utilisateur.fullname,
+          commentaire,
+          is_reg: true,
+        }
+      })
+      const nouvelleLivraison = await tx.livraison.create({
+        data: {
+          statut_livraison: "en_cours",
+          date_livraison: new Date(date_livraison),
+          qte_totale_livraison: produits.length,
+          produitsLivre: JSON.stringify(produits),
+          commentaire,
+          nom_livreur: utilisateur.fullname || null,
+          date_livraison: new Date(dateAction),
+          deleted: false,
+          type_livraison_id: parseInt(type_livraison_id),
+          user_id: utilisateur ? utilisateur.id_user : null,
+          signature_expediteur,
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          model_id: selected_model ? parseInt(selected_model) : null,
+          stock_id: selectedStock ? +selectedStock : null,
+          form_id: livraisonForm.id,
+        }
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: livraisonForm.id,
+          signature_url: signature.path,
+          signed_by: utilisateur.id_user,
+          signed_at: dateAction,
+          role: 'livreur',
+        },
+      })
+
+      return {
+        livraisonForm,
+        nouvelleLivraison,
       }
-    });
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -576,32 +639,32 @@ const deliverregularisation = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${nouvelleLivraison.id_livraison}`;
+    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `NOUVELLE LIVRAISON (${livraisonTypeName})`;
-      const html = `
-        <p>Bonjour,</p>
-        <p>Une nouvelle livraison a été enregistrée.</p>
-        <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
-          <li><strong>Nombre de produits:</strong> ${produits.length}</li>
-        </ul>
-        <br>
-          <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la livraison à ce lien : 
-          <span>
-            <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-              Cliquez ici !
-            </a>
-          </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-      `;
+    const subject = `REGULARISATION LIVRAISON (${livraisonTypeName})`;
+    const html = `
+      <p>Bonjour,</p>
+      <p>Une régularisation de livraison a été enregistrée.</p>
+      <ul>
+        <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+        <li><strong>Nombre de produits:</strong> ${produits.length}</li>
+      </ul>
+      <br>
+        <p>Commentaire : ${commentaire_mail}<p>
+      <br>
+      <p>Retrouvez la livraison à ce lien : 
+        <span>
+          <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+            Cliquez ici !
+          </a>
+        </span>
+      </p>
+      <br><br>
+      <p>Green - Pay vous remercie.</p>
+    `;
 
+    if (service_users && service_users.length > 0) {
       for (const service_user of service_users) {
         await sendMail({
           to: service_user.email,
@@ -609,28 +672,21 @@ const deliverregularisation = async (req, res) => {
           html,
         });
       }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
+    }
+    if (superviseurs && superviseurs.length > 0) {
+      for (const superviseur of superviseurs) {
+        await sendMail({
+          to: superviseur.email,
+          subject,
+          html,
+        });
       }
-
-      // for (const recepteur of recepteurs) {
-      //   await sendMail({
-      //     to: recepteur.email,
-      //     subject,
-      //     html,
-      //   });
-      // }
     }
 
+    console.log("Livraison enregistrée avec succès")
     res.status(201).json({
       message: "Livraison enregistrée avec succès",
-      livraison: nouvelleLivraison
+      data: livraison,
     });
 
   } catch (error) {
@@ -645,6 +701,7 @@ const getAllLivraisons = async (req, res) => {
       where: { deleted: false },
       orderBy: { date_livraison: 'desc' },
       include: {
+        forms: true,
         validations: true
       }
     });
@@ -662,6 +719,7 @@ const getOneLivraison = async (req, res) => {
     const livraison = await prisma.livraison.findUnique({
       where: { id_livraison: parseInt(id) },
       include: {
+        forms: true,
         validations: true,
       }
     });
@@ -3210,8 +3268,8 @@ const generateRemplacementPDF = async (req, res) => {
 
 module.exports = {
   deliver,
-  deliverregularisation,
-  regularisationReception,
+  regLivraison,
+  regReception,
   getAllLivraisons,
   getOneLivraison,
   updateLivraison,

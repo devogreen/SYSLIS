@@ -1,6 +1,7 @@
 const express = require("express")
 const router = express.Router();
 const upload = require("../middlewares/uploads");
+const uploadAll = require("../middlewares/uploadAll")
 // const uploadDeliver = require("../middlewares/uploadDeliver");
 // const multer = require("multer")
 // const upload = multer({ storage: multer.memoryStorage() });
@@ -9,7 +10,7 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
-    updateRemplacement, returnRemplacement, generateRemplacementPDF,deliverregularisation,regularisationReception,
+    updateRemplacement, returnRemplacement, generateRemplacementPDF, regLivraison, regReception,
 } = require("../controllers/Delivery/deliveryController")
 
 // router.post('/deliver', uploadDeliver.fields([
@@ -17,8 +18,12 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
 //     { name: "files", maxCount: 10 }
 // ]), deliver
 // );
-router.post('/deliverregularisation', upload.single('signature_expediteur'), deliverregularisation);
-router.post('/regularisationReception', upload.single('signature_expediteur'), regularisationReception);
+router.post('/regLivraison', uploadAll.fields([
+    { name: 'signature' },
+]), regLivraison);
+router.post('/regReception', uploadAll.fields([
+    { name: 'signature' },
+]), regReception);
 router.post('/deliver', upload.single('signature_expediteur'), deliver);
 router.get("/getAllLivraisons", getAllLivraisons);
 router.get("/getOneLivraison/:id", getOneLivraison);

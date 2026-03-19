@@ -67,24 +67,26 @@ export default function DeliveryDetails() {
     const [isCompleted, setIsCompleted] = useState(false)
 
     const [quantiteLivraison, setQuantiteLivraison] = useState()
-    const [selectedDateReception, setselectedDateReception] = useState(null);
+    const [selectedDateReception, setSelectedDateReception] = useState(null);
+
+    const [isReg, setIsReg] = useState(false)
 
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
     };
 
- addLocale('fr', {
-    firstDayOfWeek: 1,
-    showMonthAfterYear: false,
-    dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
-    dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
-    dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
-    monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
-    monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
-    today: 'Aujourd\'hui',
-    clear: 'Effacer'
-  });
+    addLocale('fr', {
+        firstDayOfWeek: 1,
+        showMonthAfterYear: false,
+        dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+        dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+        dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+        monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+        today: 'Aujourd\'hui',
+        clear: 'Effacer'
+    });
     useEffect(() => {
         if (id) {
             const fetchDeliveryDetails = async () => {
@@ -103,7 +105,6 @@ export default function DeliveryDetails() {
                     let livraison_data;
                     livraison_data = await productDeliveries.getOneLivraison(id);
                     let index;
-                    console.log(livraison_data)
                     setDeliveryDetails({
                         ...livraison_data,
                         produitsLivre: JSON.parse(livraison_data.produitsLivre)
@@ -113,6 +114,13 @@ export default function DeliveryDetails() {
                     setLivraisonID(livraison_data.id_livraison)
                     setDateLivraison(formatDate(livraison_data.date_livraison))
                     setCommentaire(livraison_data.commentaire)
+
+                    const livraisonForm = livraison_data.forms
+                    if (livraisonForm) {
+                        if (livraisonForm.is_reg) {
+                            setIsReg(true)
+                        }
+                    }
                     if (livraison_data.statut_livraison == 'livre') {
                         setIsCompleted(true)
                         setActionButtons(true)
@@ -200,6 +208,7 @@ export default function DeliveryDetails() {
             fd.append('livraison_id', livraisonID);
             fd.append('user_id', userId);
             fd.append('commentaire', messageReception);
+            fd.append('date_reception', selectedDateReception)
             if (sign) {
                 const blob = await fetch(sign).then(res => res.blob());
                 fd.append('signature', blob, 'signature.png');
@@ -207,19 +216,12 @@ export default function DeliveryDetails() {
             for (let [key, value] of fd.entries()) {
                 console.log(`${key}:`, value);
             }
-            const response = await reception.receive(fd);
+            if(isReg) {
+                await productDeliveries.regReception(fd)
+            } else {
+                await reception.receive(fd);
+            }
 
-            // let piece_id = 1
-            // let stock_initial = piece.quantite
-            // let nouveau_stock = stock_initial - quantiteProduit
-            // let utilisateur_id = null
-
-            // let modifStock = null
-            // if(livraisonID == 7 || livraisonID == 8 || livraisonID == 5){
-            //     modifStock = await stock.setStock(piece_id, stock_initial, nouveau_stock, utilisateur_id)
-            //     console.log(modifStock)
-            //     console.log("Diminution stock chargeur")
-            // }
             Swal.fire({
                 title: "Succès",
                 text: "Formulaire réceptionné avec succès",
@@ -286,11 +288,22 @@ export default function DeliveryDetails() {
                     <PageBreadcrumb pageTitle={`Livraison | ${typeLivraison}`} />
                     <div>
                         <div className='grid grid-cols-2 justify-between items-center mb-6'>
-                            <div>
+                            <div className='space-y-4'>
+                                {isReg ? (
+                                    <>
+                                        <div>
+                                            <div className="">
+                                                <span className="border p-1.5 border-red-800 text-red-800 text-xs font-light">Régularisation</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <></>
+                                )}
                                 <div>
                                     <span>{`Livraison du ${dateLivraison}`}</span>
                                 </div>
-                                <div className='mt-3'>
+                                <div className=''>
                                     <span className={statutClass}>
                                         {statutLivraison}
                                     </span>
@@ -354,20 +367,27 @@ export default function DeliveryDetails() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalReceptionOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
-                                                        </button>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalRegularisationReceptionOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
-                                                        </button>
+                                                        {isReg ? (
+                                                            <>
+                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                    onClick={() => {
+                                                                        setIsModalRegularisationReceptionOpen(true)
+                                                                    }}>
+                                                                    <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                    <span className='text-sm text-gray-700 font-medium'>Reg Réception</span>
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                    onClick={() => {
+                                                                        setIsModalReceptionOpen(true)
+                                                                    }}>
+                                                                    <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                    <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
+                                                                </button>
+                                                            </>
+                                                        )}
                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                             onClick={() => {
                                                                 setIsModalReturnLivraisonOpen(true)
@@ -511,7 +531,7 @@ export default function DeliveryDetails() {
                 </>)
             }
             {/* Formulaire de reception */}
-            
+
             <Modal isOpen={isModalReceptionOpen} onClose={() => setIsModalReceptionOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
                     <div className='text-center mb-3 text-sm'>
@@ -551,31 +571,36 @@ export default function DeliveryDetails() {
                     </div>
                 </div>
             </Modal>
-            
-        {/* Ajout du modal de reception d'une livraison de regularisation */}
+
+            {/* Ajout du modal de reception d'une livraison de regularisation */}
             <Modal isOpen={isModalRegularisationReceptionOpen} onClose={() => setIsModalRegularisationReceptionOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
-                    <div className='text-center mb-3 text-sm'>
-                        <span>Signez manuellement pour valider la livraison</span>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Réception</span>
                     </div>
-                    <div className='flex flex-col justify-center items-center'>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la réception</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
                         <SignatureCanvas
                             ref={data => setSignatureReception(data)}
-                            canvasProps={{ width: 300, height: 250, className: 'sigCanvas border border-gray-300 rounded' }}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
                         />
-                         <div>
-                            <Label>Date Reception <span className="text-red-700">*</span></Label>
+                        <div className='w-full'>
+                            <Label>Date Réception <span className="text-red-700">*</span></Label>
                             <Calendar
                                 value={selectedDateReception}
                                 locale="fr"
-                                onChange={(e) => setselectedDateReception(e.value)}
+                                onChange={(e) => setSelectedDateReception(e.value)}
                                 dateFormat="dd/mm/yy"
                                 placeholder="dd/mm/yyyy"
+                                minDate={new Date(dateLivraison)}
                                 maxDate={new Date()}
                                 className="w-full"
+                                style={{fontSize:'2px'}}
                             />
                         </div>
-                        <div className='w-full mt-3'>
+                        <div className='w-full'>
                             <Label>Commentaire</Label>
                             <TextArea
                                 value={messageReception}
@@ -584,8 +609,8 @@ export default function DeliveryDetails() {
                                 placeholder="Ajoutez un commentaire"
                             />
                         </div>
-                       
-                        <div className='w-full mt-6 flex justify-center items-center'>
+
+                        <div className='w-full flex justify-center items-center'>
                             <button
                                 onClick={handleClearReception}
                                 className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
@@ -598,6 +623,7 @@ export default function DeliveryDetails() {
                             </button>
                         </div>
                     </div>
+
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
                             {errorSignReception}
