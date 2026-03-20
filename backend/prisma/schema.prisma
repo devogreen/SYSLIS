@@ -783,6 +783,17 @@ model type_paiement {
   marchands_qr marchands_qr[]
 }
 
+model form_decom {
+  id          Int                @id @default(autoincrement())
+  form_id     Int
+  statut      forms_decom_statut
+  quantite    Int?
+  liste_decom String?            @db.LongText
+  forms       forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
+
+  @@index([form_id], map: "form_id")
+}
+
 model forms {
   id                            Int                       @id @default(autoincrement())
   type                          forms_type
@@ -811,6 +822,7 @@ model forms {
   validation_demande            validation_demande[]
   validation_remplacement       validation_remplacement[]
   validations                   validations[]
+  form_decom                    form_decom[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -915,6 +927,7 @@ enum fichiers_type_formulaire {
   remplacement
   demande
   demande_qr
+  decom
 }
 
 enum fichiers_role {
@@ -941,4 +954,12 @@ enum forms_type {
   reception_qr
   reception_piece
   livraison_stock
+  decom
+}
+
+enum forms_decom_statut {
+  en_cours
+  retourne
+  recu
+  clos
 }

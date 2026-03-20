@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Merchants } from "../../../backend/livraisons/Merchants"
 import ComponentCard from "../../common/ComponentCard"
 import Label from "../Label.tsx";
@@ -14,18 +14,25 @@ import {
     TableRow,
 } from "../../ui/table";
 import { Modal } from "../../ui/modal";
+import { useDropzone } from "react-dropzone"
+import Swal from "sweetalert2";
+import { ProgressSpinner } from "primereact/progressspinner";
+import JSZip from "jszip";
+import { Decom } from "../../../backend/decom/decom.js";
 
 export default function DecomInputs() {
 
     const merchantsData = new Merchants()
-    
+    const userId = localStorage.getItem('id');
+    const decomData = new Decom()
+
     const LISTE_KEY = "listeDecom";
     const saveListe = (liste) => {
-        sessionStorage.setItem(LISTE_KEY, liste);
+        sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
     };
     const loadListe = () => {
         const stored = sessionStorage.getItem(LISTE_KEY);
-        return stored ? stored : null;
+        return stored ? JSON.parse(stored) : null;
     };
     const savedListe = loadListe()
 
@@ -52,10 +59,15 @@ export default function DecomInputs() {
     const [isRAS, setIsRAS] = useState(false)
     const [isProblem, setIsProblem] = useState(false)
 
-    const [listeDecom, setListeDecom] = useState(savedListe?.map((item)) || [])
-    const [quantiteTotale, setQuantiteTotale] = useState(0)
+    const [listeDecom, setListeDecom] = useState(savedListe?.listeDecom || [])
+    const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
 
+    const [message, setMessage] = useState('')
+    const [selectedFiles, setSelectedFiles] = useState([])
 
+    const [loadingValidation, setLoadingValidation] = useState(false)
+
+    const [isModalValidateOpen, setIsModalValidateOpen] = useState(false)
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -75,8 +87,12 @@ export default function DecomInputs() {
     }, [])
 
     useEffect(() => {
-        saveListe(listeDecom)
-    }, [listeDecom])
+        console.log(savedListe)
+        saveListe({
+            listeDecom,
+            quantiteTotale,
+        })
+    }, [listeDecom, quantiteTotale])
 
     const handleChangeSn = (value) => {
         setTerminalName('')
@@ -94,6 +110,72 @@ export default function DecomInputs() {
             setIdEcobank(pointMarchand.Id_Terminal_CB)
         }
     }
+
+    const onDrop = useCallback(async (acceptedFiles) => {
+        const updatedFiles = [...selectedFiles];
+
+        for (const file of acceptedFiles) {
+
+            // Handle ZIP files
+            if (file.type === "application/zip" || file.name.endsWith(".zip")) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+
+                    const extractedFiles = await Promise.all(
+                        Object.keys(zip.files).map(async (filename) => {
+                            const zipEntry = zip.files[filename];
+
+                            if (!zipEntry.dir) {
+                                const blob = await zipEntry.async("blob");
+
+                                return new File([blob], filename, {
+                                    type: blob.type,
+                                });
+                            }
+                            return null;
+                        })
+                    );
+
+                    extractedFiles.forEach((extractedFile) => {
+                        if (
+                            extractedFile &&
+                            !updatedFiles.find(
+                                (f) =>
+                                    f.name === extractedFile.name &&
+                                    f.size === extractedFile.size
+                            )
+                        ) {
+                            updatedFiles.push(extractedFile);
+                        }
+                    });
+
+                } catch (error) {
+                    console.error("ZIP extraction error:", error);
+                    Swal.fire({
+                        title: "Attention",
+                        text: "Erreur d'exctraction de fichiers !",
+                        icon: "warining"
+                    })
+                }
+            } else {
+                // Normal file
+                if (
+                    !updatedFiles.find(
+                        (f) => f.name === file.name && f.size === file.size
+                    )
+                ) {
+                    updatedFiles.push(file);
+                }
+            }
+        }
+
+        setSelectedFiles(updatedFiles);
+    }, [selectedFiles]);
+
+    const { getRootProps, getInputProps } = useDropzone({
+        onDrop,
+        multiple: true,
+    });
 
     const checkValidate = () => {
         if (!terminalSN) {
@@ -154,6 +236,7 @@ export default function DecomInputs() {
         }
         setListeDecom((prev) => [...prev, newElement]);
         setQuantiteTotale((prev) => prev + 1);
+        saveListe({ listeDecom })
         setTerminalSN('')
         setTerminalName('')
         setTerminalCaisse('')
@@ -171,6 +254,55 @@ export default function DecomInputs() {
         );
         setQuantiteTotale((prev) => prev - 1);
     };
+
+    const handleConfirmValidate = () => {
+        if (listeDecom.length == 0) {
+            Swal.fire({
+                title: "Attention",
+                text: "Aucun S/N enregistré !",
+                icon: "warning"
+            })
+            return
+        }
+
+        setIsModalValidateOpen(true)
+    }
+    const handleValidate = async () => {
+        setIsModalValidateOpen(false)
+        setLoadingValidation(true)
+        try {
+            const fd = new FormData()
+            selectedFiles.forEach((file) => {
+                fd.append("files", file);
+            });
+            fd.append("commentaire", commentaire)
+            fd.append("listeDecom", JSON.stringify(listeDecom))
+            fd.append("quantite", quantiteTotale)
+            fd.append("userId", Number(userId))
+
+            console.log("Sending data : ")
+
+            await decomData.faireDecom(fd)
+            Swal.fire({
+                title: "Succès",
+                text: "Décommissionement éffectuée avec succès !",
+                icon: "success"
+            })
+            // navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur de demande : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite !",
+                icon: "warning"
+            })
+            // navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingValidation(false)
+            setListeDecom([])
+            setQuantiteTotale(0)
+        }
+    }
 
     return (
         <>
@@ -193,7 +325,47 @@ export default function DecomInputs() {
                                     <ComponentCard className="md:w-1/2 w-full" title="Décommissionnement">
                                         <div className="space-y-3">
                                             <div className="space-y-4">
-                                                <div className="pb-3 text-center">
+                                                <div>
+                                                    <Label>Commentaire Général</Label>
+                                                    <TextArea
+                                                        type="text"
+                                                        placeholder="Ajoutez un commentaire"
+                                                        value={message}
+                                                        onChange={(value) => setMessage(value)}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                                    <div
+                                                        {...getRootProps()}
+                                                        className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
+                                                    >
+                                                        <input {...getInputProps()} />
+                                                        <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
+                                                    </div>
+                                                    <div className="max-h-38 overflow-y-auto">
+                                                        {selectedFiles.length > 0 ? (
+                                                            <div className="mt-3">
+                                                                {selectedFiles.map((selectedFile, index) => (
+                                                                    <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
+                                                                        <span>
+                                                                            <i className="pi pi-file-check"></i>
+                                                                        </span>
+                                                                        <span className=" text-center" style={{ fontSize: '9px' }}>
+                                                                            {selectedFile.name}
+                                                                        </span>
+                                                                        <button onClick={() => handleDeleteFile(index)}>
+                                                                            <span className="text-error-600"><i className="pi pi-times"></i></span>
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="text-center">
                                                     <span className="text-sm font-semibold">Informations Terminal</span>
                                                 </div>
                                                 <div>
@@ -433,8 +605,7 @@ export default function DecomInputs() {
                     <div>
                         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                             <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
-                                <span>Nombre élément : </span>
-                                <span>Total QR Code : </span>
+                                <span>Total : {quantiteTotale}</span>
                             </div>
                             <div className="max-w-full overflow-x-auto">
                                 <Table>
@@ -500,7 +671,7 @@ export default function DecomInputs() {
                                                 <TableCell
                                                     isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    {index+1}
+                                                    {index + 1}
                                                 </TableCell>
                                                 <TableCell
                                                     isHeader
@@ -525,7 +696,7 @@ export default function DecomInputs() {
                                                 <TableCell
                                                     isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    <span style={{fontSize: '9px'}}>
+                                                    <span style={{ fontSize: '9px' }}>
                                                         {item.etat}
                                                     </span>
                                                 </TableCell>
@@ -542,7 +713,7 @@ export default function DecomInputs() {
                                                 <TableCell
                                                     isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    <span style={{fontSize: '9px'}}>
+                                                    <span style={{ fontSize: '9px' }}>
                                                         {item.commentaire}
                                                     </span>
                                                 </TableCell>
@@ -562,6 +733,33 @@ export default function DecomInputs() {
                                 </Table>
                             </div>
                         </div>
+                        {listeDecom.length > 0 ? (
+                            <>
+                                <div className="mt-3">
+                                    <div className="text-center">
+                                        {loadingValidation ? (
+                                            <>
+                                                <div>
+                                                    <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="w-full flex justify-center items-center">
+                                                    <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                        onClick={handleConfirmValidate}
+                                                    >
+                                                        Valider
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <></>
+                        )}
                     </div>
                 </div>
             </div>
@@ -656,6 +854,30 @@ export default function DecomInputs() {
                         <div className="w-full flex justify-center items-center">
                             <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
                                 onClick={handleAjout}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalValidateOpen} onClose={() => setIsModalValidateOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-5">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Validation</span>
+                    </div>
+                    <div className="">
+                        <div className="text-xs text-center space-y-1">
+                            <div>
+                                <span>Total decom : </span>
+                                <span className="font-bold text-sm">{quantiteTotale}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleValidate}
                             >
                                 Valider
                             </button>

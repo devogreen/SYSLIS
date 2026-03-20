@@ -576,7 +576,6 @@ const faireDemandeQr = async (req, res) => {
         console.error("Erreur lors de la demande :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
-
 }
 
 const getAllTypePaiement = async (req, res) => {

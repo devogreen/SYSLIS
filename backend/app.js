@@ -17,6 +17,7 @@ const demandesRoutes = require("./routes/demandesRoutes")
 // const stockRoutes = require("./routes/stockRoutes")
 const stockRoutes = require("./routes/stockRoutes")
 const demandeQrRoutes = require("./routes/demandeQrRoutes")
+const decomRoutes = require("./routes/decomRoutes")
 
 dotenv.config()
 
@@ -52,7 +53,8 @@ app.use('/api/merchants', merchantsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/demandes', demandesRoutes);
 app.use('/api/stock', stockRoutes);
-app.use('/api/demandeQr', demandeQrRoutes)
+app.use('/api/demandeQr', demandeQrRoutes);
+app.use('/api/decom', decomRoutes);
 // app.use('/api/stock', stockRoutes);
 
 
