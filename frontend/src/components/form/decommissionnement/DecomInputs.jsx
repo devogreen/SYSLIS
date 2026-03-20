@@ -18,6 +18,16 @@ import { Modal } from "../../ui/modal";
 export default function DecomInputs() {
 
     const merchantsData = new Merchants()
+    
+    const LISTE_KEY = "listeDecom";
+    const saveListe = (liste) => {
+        sessionStorage.setItem(LISTE_KEY, liste);
+    };
+    const loadListe = () => {
+        const stored = sessionStorage.getItem(LISTE_KEY);
+        return stored ? stored : null;
+    };
+    const savedListe = loadListe()
 
     const [errorForm, setErrorForm] = useState('')
     const [errorAjout, setErrorAjout] = useState('')
@@ -42,6 +52,10 @@ export default function DecomInputs() {
     const [isRAS, setIsRAS] = useState(false)
     const [isProblem, setIsProblem] = useState(false)
 
+    const [listeDecom, setListeDecom] = useState(savedListe?.map((item)) || [])
+    const [quantiteTotale, setQuantiteTotale] = useState(0)
+
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -60,6 +74,10 @@ export default function DecomInputs() {
         fetchData()
     }, [])
 
+    useEffect(() => {
+        saveListe(listeDecom)
+    }, [listeDecom])
+
     const handleChangeSn = (value) => {
         setTerminalName('')
         setTerminalBanque('')
@@ -77,17 +95,81 @@ export default function DecomInputs() {
         }
     }
 
-    const handleConfirm = () => {
+    const checkValidate = () => {
+        if (!terminalSN) {
+            setErrorAjout("S/N invalide !")
+            return false
+        }
+        const isDuplicate = listeDecom.some(item => {
+            return item.terminalSN == terminalSN
+        });
+        if (isDuplicate) {
+            setErrorAjout("Vous avez déjà ajouté ce S/N !");
+            return false;
+        }
+        if (!terminalName) {
+            setErrorAjout("Nom du marchand invalide !")
+            return false
+        }
+        if (!terminalCaisse) {
+            setErrorAjout("Caisse du terminal invalide !")
+            return false
+        }
+        if (!isRAS && !isProblem) {
+            setErrorAjout("Vous devez confirmer l'état du TPE !")
+            return false
+        }
 
+        return true
+    }
+
+    const handleConfirm = () => {
+        if (!checkValidate()) {
+            return
+        }
+        setErrorAjout('')
+        setIsModalConfirmOpen(true)
+    }
+
+    const handleAjout = () => {
+        setIsModalConfirmOpen(false)
+        let etat = ''
+        if (isRAS) {
+            etat = 'R.A.S'
+            if (!hasCarton) {
+                etat = 'Sans Carton / R.A.S'
+            }
+        } else {
+            etat = (hasCarton ? 'Avec Carton' : 'Sans Carton') + ' / ' + (hasChargeur ? 'Avec Chargeur' : 'Sans Chargeur') + ' / ' + `${etatTpe}`
+        }
+        const newElement = {
+            pointMarchand: terminalName,
+            terminalSN,
+            idGim,
+            idEcobank,
+            etat,
+            RI: isRAS ? '' : isRI ? 'OK' : 'NOK',
+            nomCommercial,
+            commentaire,
+        }
+        setListeDecom((prev) => [...prev, newElement]);
+        setQuantiteTotale((prev) => prev + 1);
+        setTerminalSN('')
+        setTerminalName('')
+        setTerminalCaisse('')
+        setTerminalBanque('')
+        setIdGim('')
+        setIdEcobank('')
+        setIsRAS(false)
+        setIsProblem(false)
+        setCommentaire('')
     }
 
     const handleDelete = (indexToRemove) => {
-        setListeLivraison((prev) =>
+        setListeDecom((prev) =>
             prev.filter((_, index) => index !== indexToRemove)
         );
         setQuantiteTotale((prev) => prev - 1);
-        const element = listeLivraison.at(indexToRemove)
-        setTotalQr((prev) => prev - element.quantiteQr)
     };
 
     return (
@@ -129,7 +211,7 @@ export default function DecomInputs() {
                                                     }} />
                                                 </div>
                                                 <div>
-                                                    <Label>Point Marchand</Label>
+                                                    <Label>Point Marchand <span className="text-red-700">*</span></Label>
                                                     <Input type="text" id="input"
                                                         className=""
                                                         value={terminalName}
@@ -140,7 +222,7 @@ export default function DecomInputs() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label>Caisse</Label>
+                                                    <Label>Caisse <span className="text-red-700">*</span></Label>
                                                     <Input type="text" id="input"
                                                         className=""
                                                         value={terminalCaisse}
@@ -186,7 +268,7 @@ export default function DecomInputs() {
                                                 <div className="pb-3 text-center">
                                                     <span className="text-sm font-semibold">Etat du terminal</span>
                                                 </div>
-                                                <div className="flex items-center gap-3 my-2">
+                                                <div className="flex items-center gap-3">
                                                     <Checkbox
                                                         checked={isRAS}
                                                         onChange={(e) => {
@@ -194,11 +276,12 @@ export default function DecomInputs() {
                                                                 setIsRAS(false)
                                                             } else {
                                                                 setIsRAS(true)
+                                                                setIsProblem(false)
                                                             }
                                                         }}
                                                         label="R.A.S" />
                                                 </div>
-                                                <div className="flex items-center gap-3 my-2">
+                                                <div className="flex items-center gap-3">
                                                     <Checkbox
                                                         checked={isProblem}
                                                         onChange={(e) => {
@@ -206,62 +289,97 @@ export default function DecomInputs() {
                                                                 setIsProblem(false)
                                                             } else {
                                                                 setIsProblem(true)
+                                                                setIsRAS(false)
                                                             }
                                                         }}
                                                         label="Problème signalé" />
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <div>
-                                                        <span className="text-sm">Récupéré avec</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 my-2">
-                                                        <Checkbox
-                                                            checked={hasCarton}
-                                                            onChange={(e) => {
-                                                                if (hasCarton) {
-                                                                    setHasCarton(false)
-                                                                } else {
-                                                                    setHasCarton(true)
-                                                                }
-                                                            }}
-                                                            label="Carton" />
-                                                    </div>
-                                                    <div className="flex items-center gap-3 my-2">
-                                                        <Checkbox
-                                                            checked={hasChargeur}
-                                                            onChange={(e) => {
-                                                                if (hasChargeur) {
-                                                                    setHasChargeur(false)
-                                                                } else {
-                                                                    setHasChargeur(true)
-                                                                }
-                                                            }}
-                                                            label="Chargeur" />
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <Label>Autre</Label>
-                                                    <TextArea
-                                                        value={etatTpe}
-                                                        onChange={(value) => setEtatTpe(value)}
-                                                        rows={2}
-                                                        placeholder="Précisez l'état dans lequel le TPE est récupéré"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-3 my-2">
-                                                        <Checkbox
-                                                            checked={isRI}
-                                                            onChange={(e) => {
-                                                                if (isRI) {
-                                                                    setIsRI(false)
-                                                                } else {
-                                                                    setIsRI(true)
-                                                                }
-                                                            }}
-                                                            label="Rapport d'Incident" />
-                                                    </div>
-                                                </div>
+                                                {isProblem ? (
+                                                    <>
+                                                        <div className="space-y-4">
+                                                            <div className="flex flex-col">
+                                                                <div>
+                                                                    <span className="text-sm">Récupéré avec</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3 my-2">
+                                                                    <Checkbox
+                                                                        checked={hasCarton}
+                                                                        onChange={(e) => {
+                                                                            if (hasCarton) {
+                                                                                setHasCarton(false)
+                                                                            } else {
+                                                                                setHasCarton(true)
+                                                                            }
+                                                                        }}
+                                                                        label="Carton" />
+                                                                </div>
+                                                                <div className="flex items-center gap-3 my-2">
+                                                                    <Checkbox
+                                                                        checked={hasChargeur}
+                                                                        onChange={(e) => {
+                                                                            if (hasChargeur) {
+                                                                                setHasChargeur(false)
+                                                                            } else {
+                                                                                setHasChargeur(true)
+                                                                            }
+                                                                        }}
+                                                                        label="Chargeur" />
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <Label>Autre</Label>
+                                                                <TextArea
+                                                                    value={etatTpe}
+                                                                    onChange={(value) => setEtatTpe(value)}
+                                                                    rows={2}
+                                                                    placeholder="Précisez l'état dans lequel le TPE est récupéré"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-3 my-2">
+                                                                    <Checkbox
+                                                                        checked={isRI}
+                                                                        onChange={(e) => {
+                                                                            if (isRI) {
+                                                                                setIsRI(false)
+                                                                            } else {
+                                                                                setIsRI(true)
+                                                                            }
+                                                                        }}
+                                                                        label="Rapport d'Incident" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {isRAS ? (
+                                                            <>
+                                                                <div>
+                                                                    <div className="flex flex-col">
+                                                                        <div>
+                                                                            <span className="text-sm">Récupéré avec</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3 my-2">
+                                                                            <Checkbox
+                                                                                checked={hasCarton}
+                                                                                onChange={(e) => {
+                                                                                    if (hasCarton) {
+                                                                                        setHasCarton(false)
+                                                                                    } else {
+                                                                                        setHasCarton(true)
+                                                                                    }
+                                                                                }}
+                                                                                label="Carton" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <></>
+                                                        )}
+                                                    </>
+                                                )}
                                                 <div>
                                                     <Label>Commercial</Label>
                                                     <Input type="text" id="input"
@@ -377,7 +495,69 @@ export default function DecomInputs() {
                                     </TableHeader>
                                     {/* Table Body */}
                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-
+                                        {listeDecom.map((item, index) => (
+                                            <TableRow>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {index+1}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.pointMarchand}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.terminalSN}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.idGim}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.idEcobank}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    <span style={{fontSize: '9px'}}>
+                                                        {item.etat}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.RI}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.nomCommercial}
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    <span style={{fontSize: '9px'}}>
+                                                        {item.commentaire}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    <button
+                                                        className="text-red-500 hover:text-red-700"
+                                                        onClick={() => handleDelete(index)}
+                                                    >
+                                                        <i className="pi pi-trash" style={{ color: 'black' }}></i>
+                                                    </button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
                                     </TableBody>
                                 </Table>
                             </div>
@@ -401,51 +581,81 @@ export default function DecomInputs() {
                                 <span>S/N: </span>
                                 <span className="font-bold text-sm">{terminalSN}</span>
                             </div>
-                            <div>
-                                <span>Banque: </span>
-                                <span className="font-bold text-sm">{terminalBanque}</span>
-                            </div>
-                            <div>
-                                <span>Etat: </span>
-                                <span className="font-bold text-sm">{etatTpe}</span>
-                            </div>
-                            {hasCarton ? (
+                            {terminalBanque ? (
                                 <>
-                                    <span className="font-bold text-sm">Avec carton</span>
+                                    <div>
+                                        <span>Banque: </span>
+                                        <span className="font-bold text-sm">{terminalBanque}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <></>
+                            )}
+                            {isRAS ? (
+                                <>
+                                    <div>
+                                        <div>
+                                            <span>Etat: </span>
+                                            <span className="font-bold text-sm">R.A.S</span>
+                                        </div>
+                                        {hasCarton ? (
+                                            <>
+                                                <div>
+                                                    <span>Avec Carton</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div>
+                                                    <span>Sans Carton</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
                                 <>
-                                    <span className="font-bold text-sm">Sans carton</span>
+                                    <div className="flex flex-col space-y-2">
+                                        <div className="flex flex-col">
+                                            <span>Etat: </span>
+                                            <span className="font-bold text-sm">{etatTpe}</span>
+                                        </div>
+                                        {hasCarton ? (
+                                            <>
+                                                <span className="font-bold text-sm">Avec Carton</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-sm">Sans Carton</span>
+                                            </>
+                                        )}
+                                        {hasChargeur ? (
+                                            <>
+                                                <span className="font-bold text-sm">Avec Chargeur</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-sm">Sans Chargeur</span>
+                                            </>
+                                        )}
+                                        {isRI ? (
+                                            <>
+                                                <span className="font-bold text-sm">RI OK</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-sm">RI NOK</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </>
                             )}
-                            {hasChargeur ? (
-                                <>
-                                    <span className="font-bold text-sm">Avec chargeur</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="font-bold text-sm">Sans chargeur</span>
-                                </>
-                            )}
-                            {isRI ? (
-                                <>
-                                    <span className="font-bold text-sm">RI OK</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="font-bold text-sm">RI NOK</span>
-                                </>
-                            )}
-                            <div>
-                                <span>Etat: </span>
-                                <span className="font-bold text-sm">{etatTpe}</span>
-                            </div>
                         </div>
                     </div>
                     <div>
                         <div className="w-full flex justify-center items-center">
                             <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                onClick={''}
+                                onClick={handleAjout}
                             >
                                 Valider
                             </button>
