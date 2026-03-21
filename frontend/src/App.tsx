@@ -195,6 +195,8 @@ import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/Regularisa
 
 // @ts-ignore
 import DecomForm from "./pages/Forms/DecomForms/DecomForm"
+// @ts-ignore
+import AllDecom from "./pages/DecomPages/AllDecom"
 
 export default function App() {
   return (
@@ -266,6 +268,7 @@ export default function App() {
 
               {/* Décommissionnement */}
               <Route path="/nouveau-decommissionnement" element={<DecomForm />} />
+              <Route path="/tous-les-decommissionnements" element={<AllDecom />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />

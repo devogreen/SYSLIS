@@ -14,4 +14,13 @@ export class Decom {
             throw error.response.data;
         }
     }
+
+    async getAllDecoms() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllDecoms`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

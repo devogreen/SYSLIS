@@ -5,11 +5,12 @@ const uploadAll = require("../middlewares/uploadAll")
 const uploadExcel = require("../middlewares/uploadExcel");
 
 const {
-    faireDecom,
+    faireDecom, getAllDecoms
 } = require("../controllers/Decom/decomController")
 
 router.post('/faireDecom', uploadAll.fields([
     { name: 'files' },
 ]), faireDecom); 
+router.get('/getAllDecoms', getAllDecoms);
 
 module.exports = router

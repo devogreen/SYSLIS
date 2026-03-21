@@ -124,6 +124,27 @@ const faireDecom = async (req, res) => {
     }
 }
 
+const getAllDecoms = async (req, res) => {
+    try {
+        const decoms = await prisma.form_decom.findMany({
+            include: {
+                forms: true,
+            },
+            orderBy: {
+                forms: {
+                    last_modified_at: 'desc',
+                }
+            },
+        });
+
+        res.status(200).json(decoms);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des décoms :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des décoms", error });
+    }
+}
+
 module.exports = {
     faireDecom,
+    getAllDecoms,
 }

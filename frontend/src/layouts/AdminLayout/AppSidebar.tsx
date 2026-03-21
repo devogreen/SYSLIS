@@ -97,6 +97,7 @@ const navItems: NavItem[] = [
     icon: <ListIcon />,
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", pro: false },
+       { name: "Tous les décomm", path: "/tous-les-decommissionnements", pro: false },
     ],
   },
   {
