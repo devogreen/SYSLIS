@@ -245,6 +245,7 @@ export default function ModifyLivraisonInputs() {
     setOrangeChecked(false)
     setMTNChecked(false)
     setMOOVChecked(false)
+    setRneChecked(false)
     setTerminalSN(value)
     const pointMarchand = terminals.find((terminal) => {
       return terminal.SERIAL_NUMBER == value
@@ -261,6 +262,9 @@ export default function ModifyLivraisonInputs() {
       }
       if (pointMarchand.NUM_MOOV.startsWith("01")) {
         setMOOVChecked(true)
+      }
+      if(pointMarchand.RNE) {
+        setRneChecked(true)
       }
     }
   }
