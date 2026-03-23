@@ -76,7 +76,7 @@ export default function ModifyDecomInputs() {
             try {
                 setLoadingData(true)
                 const merchants = await merchantsData.findMerchant()
-                console.log(merchants)
+                // console.log(merchants)
                 setMerchantList(merchants)
 
                 const decom = await decomData.getOneDecom(idDecom)

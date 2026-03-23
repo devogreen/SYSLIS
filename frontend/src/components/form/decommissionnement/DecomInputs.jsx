@@ -75,7 +75,7 @@ export default function DecomInputs() {
             try {
                 setLoadingData(true)
                 const merchants = await merchantsData.findMerchant()
-                console.log(merchants)
+                // console.log(merchants)
                 setMerchantList(merchants)
 
             } catch (error) {

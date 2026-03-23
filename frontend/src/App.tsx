@@ -201,6 +201,8 @@ import AllDecom from "./pages/DecomPages/AllDecom"
 import DecomDetails from "./pages/DecomPages/DecomDetails"
 // @ts-ignore
 import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
+// @ts-ignore
+import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomForm"
 
 export default function App() {
   return (
@@ -275,6 +277,7 @@ export default function App() {
               <Route path="/tous-les-decommissionnements" element={<AllDecom />} />
               <Route path="/decom-details/:id" element={<DecomDetails />} />
               <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
+              <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />
