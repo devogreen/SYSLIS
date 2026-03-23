@@ -19,12 +19,14 @@ import Swal from "sweetalert2";
 import { ProgressSpinner } from "primereact/progressspinner";
 import JSZip from "jszip";
 import { Decom } from "../../../backend/decom/decom.js";
+import { useParams, Link, useNavigate } from "react-router";
 
 export default function DecomInputs() {
 
     const merchantsData = new Merchants()
     const userId = localStorage.getItem('id');
     const decomData = new Decom()
+    const navigate = useNavigate()
 
     const LISTE_KEY = "listeDecom";
     const saveListe = (liste) => {
@@ -62,7 +64,7 @@ export default function DecomInputs() {
     const [listeDecom, setListeDecom] = useState(savedListe?.listeDecom || [])
     const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
 
-    const [message, setMessage] = useState('')
+    const [message, setMessage] = useState(savedListe?.message || '')
     const [selectedFiles, setSelectedFiles] = useState([])
 
     const [loadingValidation, setLoadingValidation] = useState(false)
@@ -87,12 +89,12 @@ export default function DecomInputs() {
     }, [])
 
     useEffect(() => {
-        console.log(savedListe)
         saveListe({
             listeDecom,
             quantiteTotale,
+            message,
         })
-    }, [listeDecom, quantiteTotale])
+    }, [listeDecom, quantiteTotale, message])
 
     const handleChangeSn = (value) => {
         setTerminalName('')
@@ -227,6 +229,8 @@ export default function DecomInputs() {
         const newElement = {
             pointMarchand: terminalName,
             terminalSN,
+            caisse: terminalCaisse,
+            banque: terminalBanque,
             idGim,
             idEcobank,
             etat,
@@ -275,7 +279,7 @@ export default function DecomInputs() {
             selectedFiles.forEach((file) => {
                 fd.append("files", file);
             });
-            fd.append("commentaire", commentaire)
+            fd.append("commentaire", message)
             fd.append("listeDecom", JSON.stringify(listeDecom))
             fd.append("quantite", quantiteTotale)
             fd.append("userId", Number(userId))
@@ -288,7 +292,7 @@ export default function DecomInputs() {
                 text: "Décommissionement éffectuée avec succès !",
                 icon: "success"
             })
-            // navigate('/toutes-les-demandes-qr')
+            navigate('/tous-les-decommissionnements')
         } catch (error) {
             console.log("Erreur de demande : ", error)
             Swal.fire({
@@ -296,11 +300,12 @@ export default function DecomInputs() {
                 text: "Une erreur s'est produite !",
                 icon: "warning"
             })
-            // navigate('/toutes-les-demandes-qr')
+            navigate('/tous-les-decommissionnements')
         } finally {
             setLoadingValidation(false)
             setListeDecom([])
             setQuantiteTotale(0)
+            setMessage('')
         }
     }
 

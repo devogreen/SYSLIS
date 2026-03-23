@@ -784,14 +784,47 @@ model type_paiement {
 }
 
 model form_decom {
-  id          Int                @id @default(autoincrement())
-  form_id     Int
-  statut      forms_decom_statut
-  quantite    Int?
-  liste_decom String?            @db.LongText
-  forms       forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
+  id              Int                @id @default(autoincrement())
+  form_id         Int
+  statut          forms_decom_statut
+  quantite        Int?
+  liste_decom     String?            @db.LongText
+  forms           forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
+  reception_decom reception_decom[]
+  sn_decom        sn_decom[]
 
   @@index([form_id], map: "form_id")
+}
+
+model reception_decom {
+  id         Int                  @id @default(autoincrement())
+  form_id    Int
+  decom_id   Int
+  type       reception_decom_type
+  forms      forms                @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_1")
+  form_decom form_decom           @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_2")
+
+  @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+}
+
+model sn_decom {
+  id             Int        @id @default(autoincrement())
+  serial_number  String     @db.VarChar(255)
+  point_marchand String?    @db.VarChar(255)
+  tid_gim        String?    @db.VarChar(255)
+  tid_ecobank    String?    @db.VarChar(255)
+  etat           String?    @db.VarChar(255)
+  ri             String?    @db.VarChar(255)
+  commercial     String?    @db.VarChar(255)
+  commentaire    String?    @db.VarChar(255)
+  created_at     DateTime   @default(now()) @db.DateTime(0)
+  is_deleted     Boolean    @default(false)
+  decom_id       Int
+  form_decom     form_decom @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "sn_decom_ibfk_1")
+
+  @@index([serial_number], map: "serial_number")
+  @@index([decom_id], map: "decom_id")
 }
 
 model forms {
@@ -823,6 +856,7 @@ model forms {
   validation_remplacement       validation_remplacement[]
   validations                   validations[]
   form_decom                    form_decom[]
+  reception_decom               reception_decom[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -955,6 +989,7 @@ enum forms_type {
   reception_piece
   livraison_stock
   decom
+  reception_decom
 }
 
 enum forms_decom_statut {
@@ -962,4 +997,9 @@ enum forms_decom_statut {
   retourne
   recu
   clos
+}
+
+enum reception_decom_type {
+  validation
+  retour
 }

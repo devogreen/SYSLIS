@@ -95,9 +95,10 @@ const navItems: NavItem[] = [
   {
     name: "Gestion des décomm",
     icon: <ListIcon />,
+    roles: [23, 24, 25, 26],
     subItems: [
-      { name: "Nouveau décomm", path: "/nouveau-decommissionnement", pro: false },
-       { name: "Tous les décomm", path: "/tous-les-decommissionnements", pro: false },
+      { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles:[23], pro: false },
+       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles:[23, 24, 25, 26], pro: false },
     ],
   },
   {

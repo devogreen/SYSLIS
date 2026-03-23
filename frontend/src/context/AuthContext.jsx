@@ -30,6 +30,8 @@ export const AuthProvider = ({ children }) => {
 
       // Fetch roles using your API function
       const roles = await users.getAllUserRoles();
+      const rolesData = await users.getUserRoles(id)
+      // console.log('User Roles :', rolesData)
       // console.log("ROLES : ",roles)
       const userRoles = roles.filter(item =>{
         return item.user_id == id
@@ -44,6 +46,7 @@ export const AuthProvider = ({ children }) => {
         email,
         username,
         roleList, // include roles here
+        rolesData,
       });
     } catch (err) {
       console.error("Error fetching user roles:", err);

@@ -197,6 +197,10 @@ import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/Regularisa
 import DecomForm from "./pages/Forms/DecomForms/DecomForm"
 // @ts-ignore
 import AllDecom from "./pages/DecomPages/AllDecom"
+// @ts-ignore
+import DecomDetails from "./pages/DecomPages/DecomDetails"
+// @ts-ignore
+import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
 
 export default function App() {
   return (
@@ -269,6 +273,8 @@ export default function App() {
               {/* Décommissionnement */}
               <Route path="/nouveau-decommissionnement" element={<DecomForm />} />
               <Route path="/tous-les-decommissionnements" element={<AllDecom />} />
+              <Route path="/decom-details/:id" element={<DecomDetails />} />
+              <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />

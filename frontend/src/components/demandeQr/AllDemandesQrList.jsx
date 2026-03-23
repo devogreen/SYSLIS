@@ -171,7 +171,7 @@ export default function AllDemandesQrList() {
             </div>
         )
     }
-    const dateDetmandeTemplate = (demande) => {
+    const dateDemandeTemplate = (demande) => {
         return (
             <div className="">
                 <span className="font-medium">{formatDate(demande.forms.last_modified_at)}</span>
@@ -453,7 +453,7 @@ export default function AllDemandesQrList() {
                         <Column field="statut" header="Statut" body={statutTemplate} sortable></Column>
                         <Column field="quantite_qr" header="Quantité QRC" body={quantiteQrTemplate} sortable></Column>
                         <Column field="quantite_marchand" header="Quantité Marchand" body={quantiteMarchandTemplate} sortable></Column>
-                        <Column field="forms.last_modified_at" header="Date demande" body={dateDetmandeTemplate} sortable></Column>
+                        <Column field="forms.last_modified_at" header="Date demande" body={dateDemandeTemplate} sortable></Column>
                         <Column header="Date Génération" body={dateGenerationTemplate}></Column>
                         <Column header="Date Impression" body={dateImpressionTemplate}></Column>
                         <Column header="Date Livraison" body={dateLivraisonTemplate}></Column>
