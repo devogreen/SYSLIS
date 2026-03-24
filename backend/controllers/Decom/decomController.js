@@ -134,6 +134,11 @@ const getAllDecoms = async (req, res) => {
                         forms: true,
                     },
                 },
+                retour_technique: {
+                    include: {
+                        forms: true,
+                    },
+                },
             },
             orderBy: {
                 forms: {
@@ -161,6 +166,11 @@ const getOneDecom = async (req, res) => {
             }, include: {
                 forms: true,
                 reception_decom: {
+                    include: {
+                        forms: true,
+                    },
+                },
+                retour_technique: {
                     include: {
                         forms: true,
                     },
@@ -550,6 +560,16 @@ const returnDecom = async (req, res) => {
         console.error("Erreur lors de la réception :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
+}
+
+const getSnDecom = async (req, res) => {
+    // try {
+    //     const {
+    //         id
+    //     } = req.params
+
+    //     const 
+    // }
 }
 
 module.exports = {
