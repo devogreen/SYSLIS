@@ -48,7 +48,7 @@ export default function DemandeQrInputs() {
     const [optionsMarchands, setOptionsMarchands] = useState([])
     const [quantiteTerminal, setQuantiteTerminal] = useState(0)
     const [quantiteQr, setQuantiteQr] = useState(0)
-    const [quantite, setQuantite] = useState(1)
+    const [quantite, setQuantite] = useState(2)
 
     const [selectedTypeQr, setSelectedTypeQr] = useState('')
     const [selectedChaine, setSelectedChaine] = useState('')
@@ -100,7 +100,7 @@ export default function DemandeQrInputs() {
                 setLoadingData(true)
                 const merchantList = await merchantsData.findMerchant()
                 // console.log('Total' ,merchantList.length)
-
+                console.log(merchantList)
                 const uniqueMerchants = Array.from(
                     new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
                 );
@@ -385,7 +385,7 @@ export default function DemandeQrInputs() {
         if (marchand) {
             setSelectedChaine(marchand.GROUPE)
             setQuantiteTerminal(marchand.count)
-            setQuantiteQr(marchand.count)
+            setQuantiteQr(quantite*marchand.count)
         }
     }
 
@@ -625,7 +625,7 @@ export default function DemandeQrInputs() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                                    <Label>Importer des fichiers</Label>
                                                     <div
                                                         {...getRootProps()}
                                                         className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
@@ -823,6 +823,7 @@ export default function DemandeQrInputs() {
                                                                             onChange={(e) => {
                                                                                 const value = Number(e.target.value)
                                                                                 if (value >= 1) {
+                                                                                    setQuantite(value)
                                                                                     handleNumberChange(value)
                                                                                 }
                                                                             }}
