@@ -113,6 +113,69 @@ const faireDecom = async (req, res) => {
 
         /****************    GESTION DES MAILS     *****************/
 
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesReception = await prisma.user_roles.findMany({
+            where: {
+                role_id: 24,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const receveurs = rolesReception.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.nouveauDecom.id}`;
+
+        const subject = `NOUVEAU DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Un nouveau décommissionnement a été soumis.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        if (receveurs && receveurs.length > 0) {
+            for (const receveur of receveurs) {
+                await sendMail({
+                    to: receveur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
         console.log("Décommissionnement enregistré avec succès ! ")
         res.status(201).json({
             message: "Décommissionnement enregistré avec succès !",
@@ -134,7 +197,7 @@ const getAllDecoms = async (req, res) => {
                         forms: true,
                     },
                 },
-                retour_technique: {
+                retour_decom: {
                     include: {
                         forms: true,
                     },
@@ -170,7 +233,7 @@ const getOneDecom = async (req, res) => {
                         forms: true,
                     },
                 },
-                retour_technique: {
+                retour_decom: {
                     include: {
                         forms: true,
                     },
@@ -281,6 +344,68 @@ const modifyDecom = async (req, res) => {
 
         /*****************          GESTION MAIL             *****************/
 
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesReception = await prisma.user_roles.findMany({
+            where: {
+                role_id: 24,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const receveurs = rolesReception.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${updatedDecom.decom.id}`;
+
+        const subject = `MODIFICATION DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Le décommissionnement ${updatedDecom.decom.id} a été modifié.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        if (receveurs && receveurs.length > 0) {
+            for (const receveur of receveurs) {
+                await sendMail({
+                    to: receveur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
 
         console.log("Décommissionnement modifié avec succès ! ")
         res.status(201).json({
@@ -351,6 +476,59 @@ const cancelDecom = async (req, res) => {
 
         /*****************          GESTION MAIL             *****************/
 
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesReception = await prisma.user_roles.findMany({
+            where: {
+                role_id: 24,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const receveurs = rolesReception.map(us => us.users)
+
+        // let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${canceledDecom.decom.id}`;
+
+        const subject = `ANNULATION DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+                <p>Le décommissionnement ${canceledDecom.decom.id} a été annulé.</p>
+                <p><strong>Plus d'actions ne seront menées sur cette demande</strong</p>
+                <br>
+                <br>
+                <br>
+                <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        if (receveurs && receveurs.length > 0) {
+            for (const receveur of receveurs) {
+                await sendMail({
+                    to: receveur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
         console.log(`Décommissionnement annulé avec succès par : ${userId}! `)
         res.status(201).json({
             message: "Décommissionnement annulé avec succès",
@@ -408,7 +586,7 @@ const receptionDecom = async (req, res) => {
         const listeDecom = typeof decom.liste_decom === "string"
             ? JSON.parse(decom.liste_decom)
             : decom.liste_decom;
-        
+
         const dateAction = new Date()
 
         const receptionDecom = await prisma.$transaction(async (tx) => {
@@ -443,12 +621,14 @@ const receptionDecom = async (req, res) => {
                     point_marchand: item.pointMarchand,
                     tid_gim: item.idGim,
                     tid_ecobank: item.idEcobank,
+                    banque: item.banque,
                     etat: item.etat,
                     ri: item.RI,
                     commercial: item.nomCommercial,
                     commentaire: item.commentaire,
                     created_at: dateAction,
                     decom_id: decom.id,
+                    last_modified_at: dateAction,
                 }))
             })
 
@@ -458,7 +638,88 @@ const receptionDecom = async (req, res) => {
         })
 
         /************** GESTION DES MAILS  **************/
-        
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.id}`;
+
+        const subject = `RECEPTION DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Le décommissionnement ${decom.id} a été réceptionné.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        if (verificateurs && verificateurs.length > 0) {
+            for (const verificateur of verificateurs) {
+                await sendMail({
+                    to: verificateur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
         console.log('Liste de décom réceptionnée avec succès !')
         res.status(201).json({
             message: 'Liste de décom réceptionnée avec succès !',
@@ -513,7 +774,7 @@ const returnDecom = async (req, res) => {
             console.error('Utilisateur non enregistré !')
             return res.status(404).json({ message: "Utilisateur non enregistré !" });
         }
-        
+
         const dateAction = new Date()
 
         const receptionDecom = await prisma.$transaction(async (tx) => {
@@ -549,7 +810,87 @@ const returnDecom = async (req, res) => {
         })
 
         /************** GESTION DES MAILS  **************/
-        
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.id}`;
+
+        const subject = `RETOUR DE DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Le décommissionnement ${decom.id} a été retourné pour modification ou annulation.</p>
+            <ul>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        // if (verificateurs && verificateurs.length > 0) {
+        //     for (const verificateur of verificateurs) {
+        //         await sendMail({
+        //             to: verificateur.email,
+        //             subject,
+        //             html,
+        //         });
+        //     }
+        // }
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
         console.log('Liste de décom retournée avec succès !')
         res.status(201).json({
             message: 'Liste de décom retournée avec succès !',
@@ -563,14 +904,412 @@ const returnDecom = async (req, res) => {
 }
 
 const getSnDecom = async (req, res) => {
-    // try {
-    //     const {
-    //         id
-    //     } = req.params
+    try {
+        const {
+            id
+        } = req.params
 
-    //     const 
-    // }
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+        })
+        if (!decom) {
+            console.error('Erreur: décommissionnement introuvale !')
+            return res.status(404).json({ message: "decom introuvable !" });
+        }
+
+        const listeSn = await prisma.sn_decom.findMany({
+            where: {
+                decom_id: parseInt(id),
+            },
+            include: {
+                retour_technique: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+        })
+        res.status(200).json(listeSn);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des sn décom :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des sn décom", error });
+    }
 }
+
+const verifyDecom = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            userId,
+            commentaire,
+            checkMail,
+            listeDecom,
+        } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+        })
+        if (!decom) {
+            console.error('Erreur: décommissionnement introuvale !')
+            return res.status(404).json({ message: "decom introuvable !" });
+        }
+        if (decom.statut != 'recu') {
+            console.error('Statut de décommissionnement non conforme !')
+            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: {
+                id: decom.form_id
+            }
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        const listeVerified = typeof listeDecom === "string"
+            ? JSON.parse(listeDecom)
+            : listeDecom;
+
+        const dateAction = new Date()
+
+        const verification = await prisma.$transaction(async (tx) => {
+            const retourDecomForm = await tx.forms.create({
+                data: {
+                    type: 'retour_decom',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                }
+            })
+            const retourDecom = await tx.retour_decom.create({
+                data: {
+                    form_id: retourDecomForm.id,
+                    decom_id: decom.id,
+                }
+            })
+            for (const item of listeVerified) {
+                const retourTechForm = await tx.forms.create({
+                    data: {
+                        type: 'retour_technique',
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        nom_user: utilisateur.fullname,
+                    },
+                })
+                await tx.retour_technique.create({
+                    data: {
+                        form_id: retourTechForm.id,
+                        decom_id: decom.id,
+                        retour_id: retourDecom.id,
+                        sn_id: item.id,
+                        commentaire_retour: item.retour,
+                        pieces_recuperees: item.pieces_recuperees,
+                        pieces_defectueuses: item.pieces_defectueuses,
+                        is_ok: item.is_ok,
+                        statut: item.statut,
+                    },
+                })
+                await tx.sn_decom.update({
+                    where: {
+                        id: item.id,
+                    },
+                    data: {
+                        commentaire_retour: item.retour,
+                        pieces_recuperees: item.pieces_recuperees,
+                        pieces_defectueuses: item.pieces_defectueuses,
+                        is_ok: item.is_ok,
+                        statut: item.statut,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                    },
+                })
+            }
+
+            return {
+                retourDecomForm, retourDecom
+            }
+        })
+
+        /************** GESTION DES MAILS  **************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.id}`;
+
+        const subject = `NOUVELLE VERIFICATION DE DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if(checkMail) {
+            if (superviseurs && superviseurs.length > 0) {
+                for (const superviseur of superviseurs) {
+                    await sendMail({
+                        to: superviseur.email,
+                        subject,
+                        html,
+                    });
+                }
+            } 
+            if (demandeurs && demandeurs.length > 0) {
+                for (const demandeur of demandeurs) {
+                    await sendMail({
+                        to: demandeur.email,
+                        subject,
+                        html,
+                    });
+                }
+            }
+        }
+
+        console.log(`${listeVerified.length} de la liste de décom vérifié(s) avec succès !`)
+        res.status(201).json({
+            message: `${listeVerified.length} de la liste de décom vérifié(s) avec succès !`,
+            data: verification,
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la vérification :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const clotureDecom = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            userId,
+            commentaire,
+            listeDecom,
+        } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+        })
+        if (!decom) {
+            console.error('Erreur: décommissionnement introuvale !')
+            return res.status(404).json({ message: "decom introuvable !" });
+        }
+        if (decom.statut != 'recu') {
+            console.error('Statut de décommissionnement non conforme !')
+            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
+        }
+        if (decom.statut == 'clos') {
+            console.error('Décommissionnement déjà clôturé !')
+            return res.status(400).json({ message: "Décommissionnement déjà clôturé !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: {
+                id: decom.form_id
+            }
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        // const listeVerified = typeof listeDecom === "string"
+        //     ? JSON.parse(listeDecom)
+        //     : listeDecom;
+
+        const dateAction = new Date()
+
+        const cloturation = await prisma.$transaction(async (tx) => {
+            const retourDecomForm = await tx.forms.create({
+                data: {
+                    type: 'retour_decom',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                },
+            })
+            const retourDecom = await tx.retour_decom.create({
+                data: {
+                    form_id: retourDecomForm.id,
+                    decom_id: decom.id,
+                    type: 'cloture',
+                },
+            })
+            await tx.form_decom.update({
+                where: {
+                    id: decom.id,
+                },
+                data: {
+                    statut: 'clos',
+                },
+            })
+
+            return {
+                retourDecomForm,
+                retourDecom,
+            }
+        })
+
+        /************ GESTION MAIL  ************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.id}`;
+
+        const subject = `CLOTURE DE DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Le décommissionnement ${decom.id} a été clôturé.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        } 
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log(`Utilisateur ${userId} a cloturé le décommissionnement avec succès !`)
+        res.status(201).json({
+            message: `Utilisateur ${userId} a cloturé le décommissionnement avec succès !`,
+            data: cloturation,
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la cloture :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}   
 
 module.exports = {
     faireDecom,
@@ -580,4 +1319,7 @@ module.exports = {
     cancelDecom,
     receptionDecom,
     returnDecom,
+    getSnDecom,
+    verifyDecom,
+    clotureDecom,
 }

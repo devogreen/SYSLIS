@@ -72,4 +72,32 @@ export class Decom {
             throw error.response.data;
         }
     }
+
+    async getSnDecom(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getSnDecom/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async verifyDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/verifyDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async clotureDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/clotureDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+    
 }

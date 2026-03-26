@@ -126,6 +126,9 @@ export default function AllDecomList() {
         } else if (decom.statut == 'retourne') {
             statut = 'retourné'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-red-100 text-red-300'
+        } else if (decom.statut == 'clos') {
+            statut = 'clos'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-100 text-gray-400'
         }
         return (
             <div>
@@ -144,6 +147,26 @@ export default function AllDecomList() {
         const index = decom.reception_decom.length - 1
         const reception = decom.reception_decom[index]
         const dateValue = reception && decom.statut != 'en_cours' ? formatDate(reception.forms.last_modified_at) : 'N/A'
+        return (
+            <div className="">
+                <span className="font-medium">{dateValue}</span>
+            </div>
+        )
+    }
+    const dateVerificationTemplate = (decom) => {
+        const index = decom.retour_decom.length - 1
+        const retour = decom.retour_decom[index]
+        const dateValue = retour && decom.statut != 'en_cours' ? formatDate(retour.forms.last_modified_at) : 'N/A'
+        return (
+            <div className="">
+                <span className="font-medium">{dateValue}</span>
+            </div>
+        )
+    }
+    const dateClotureTemplate = (decom) => {
+        const index = decom.retour_decom.length - 1
+        const retour = decom.retour_decom[index]
+        const dateValue = retour && decom.statut != 'en_cours' ? formatDate(retour.forms.last_modified_at) : 'N/A'
         return (
             <div className="">
                 <span className="font-medium">{dateValue}</span>
@@ -319,8 +342,8 @@ export default function AllDecomList() {
                         <Column field="quantite" header="Quantité" sortable></Column>
                         <Column field="forms.last_modified_at" header="Date Décom" body={dateDecomTemplate} sortable></Column>
                         <Column header="Date Réception" body={dateReceptionTemplate} sortable></Column>
-                        <Column header="Dernière Vérification" sortable></Column>
-                        <Column header="Date Cloture" sortable></Column>
+                        <Column header="Dernière Vérification" body={dateVerificationTemplate} sortable></Column>
+                        <Column header="Date Cloture" body={dateClotureTemplate} sortable></Column>
                         <Column header="Actions" body={actionTemplate}></Column>
                     </DataTable>
                 </div>

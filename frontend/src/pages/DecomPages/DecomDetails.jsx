@@ -20,6 +20,7 @@ import Swal from "sweetalert2";
 import { FilesHandler } from "../../backend/filesHandler/FilesHandler";
 import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
+import { Stock } from "../../backend/stock/Stock";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -33,6 +34,7 @@ addLocale('fr', {
 export default function DecomDetails() {
     const decomData = new Decom()
     const userData = new Users()
+    const stockData = new Stock()
     const { id: idDecom } = useParams()
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
@@ -42,6 +44,7 @@ export default function DecomDetails() {
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
     const [loadingReception, setLoadingReception] = useState(false)
+    const [loadingVerification, setLoadingVerification] = useState(false)
 
     const [errorData, setErrorData] = useState('')
 
@@ -61,16 +64,25 @@ export default function DecomDetails() {
 
     const [commentaireDecom, setCommentaireDecom] = useState('')
     const [commentaireReception, setCommentaireReception] = useState('')
+    const [ceommentaireVerification, setCommentaireVerification] = useState('')
 
     const [fileId, setFileId] = useState(null);
     const [decomFiles, setDecomFiles] = useState([])
 
     const [messageReception, setMessageReception] = useState('')
     const [messageReturn, setMessageReturn] = useState('')
+    const [messageCloture, setMessageCloture] = useState('')
 
     const [isModalCancelOpen, setIsModalCancelOpen] = useState(false)
     const [isModalReturnOpen, setIsModalReturnOpen] = useState(false)
     const [isModalReceptionOpen, setIsModalReceptionOpen] = useState(false)
+    const [isModalClotureOpen, setIsModalClotureOpen] = useState(false)
+
+    const [checking, setChecking] = useState(false)
+    const [listeChecking, setListeChecking] = useState([])
+
+    const [pieces, setPieces] = useState([])
+
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -118,6 +130,9 @@ export default function DecomDetails() {
                 const indexReception = decom.reception_decom.length - 1
                 const reception = decom.reception_decom[indexReception]
 
+                const indexVerification = decom.retour_decom.length - 1
+                const verification = decom.retour_decom[indexVerification]
+
                 if (statut == 'en_cours') {
                     setStatutDecom('en cours')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-warning-100 text-warning-300')
@@ -134,6 +149,7 @@ export default function DecomDetails() {
                     if (nomRoles.includes('verification_decom')) {
                         setIsVerificateur(true)
                     }
+                    setChecking(true)
                 } else if (statut == 'retourne' && reception && reception.type == 'retour') {
                     setStatutDecom('retourné')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-red-100 text-red-300')
@@ -142,8 +158,25 @@ export default function DecomDetails() {
                     }
                 }
 
+                if (statut == 'recu' || statut == 'clos') {
+                    const listeSn = await decomData.getSnDecom(idDecom)
+                    setListeDecom(listeSn)
+                    const listeChecking = listeSn.filter((item) => {
+                        return item.statut == 'checking'
+                    })
+                    setListeChecking(listeChecking)
+                }
+
+                const allItems = await stockData.getAllItems()
+                const items = allItems.filter((item) => {
+                    return item.is_deleted == false && item.type != 'TERMINAL'
+                })
+                setPieces(items)
+
                 setCommentaireDecom(decomForm.commentaire)
                 setCommentaireReception(reception?.forms.commentaire)
+                setCommentaireVerification(verification?.forms.commentaire)
+
 
                 const allFiles = await filesData.getAllFormFiles(decomForm.id)
                 const dFiles = allFiles.filter((item) => {
@@ -248,6 +281,37 @@ export default function DecomDetails() {
             navigate('/tous-les-decommissionnements')
         } finally {
             setLoadingReception(false)
+        }
+    }
+
+    const handleClotureDecom = async () => {
+        setIsModalClotureOpen(false)
+        try {
+            setLoadingVerification(true)
+            const payload = {
+                userId,
+                commentaire: messageCloture,
+            }
+            const id = idDecom
+
+            await decomData.clotureDecom(id, payload)
+
+            Swal.fire({
+                title: "Succès",
+                text: "Décom clôturé avec succès !",
+                icon: "success"
+            })
+            navigate('/tous-les-decommissionnements')
+        } catch (error) {
+            console.log("Erreur de la réception : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la clôture !",
+                icon: "warning"
+            })
+            navigate('/tous-les-decommissionnements')
+        } finally {
+            setLoadingVerification(false)
         }
     }
     return (
@@ -375,14 +439,40 @@ export default function DecomDetails() {
                                                     )}
                                                     {isVerificateur ? (
                                                         <>
-                                                            <div>
-                                                                <div className="space-y-0.5">
-                                                                    <Link to={`/verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                        <span className='mr-4'><i className="pi pi-clipboard"></i></span>
-                                                                        <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
-                                                                    </Link>
-                                                                </div>
-                                                            </div>
+                                                            {loadingVerification ? (
+                                                                <>
+                                                                    <div className='text-center'>
+                                                                        <span className=''>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <div>
+                                                                        <div className="space-y-0.5">
+                                                                            <Link to={`/verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                <span className='mr-4'><i className="pi pi-clipboard"></i></span>
+                                                                                <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
+                                                                            </Link>
+                                                                        </div>
+                                                                        {listeChecking.length == 0 ? (
+                                                                            <>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalClotureOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-circle-fill"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Cloturer décomm</span>
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </>
                                                     ) : (
                                                         <></>
@@ -466,6 +556,19 @@ export default function DecomDetails() {
                                                 ) : (
                                                     <></>
                                                 )}
+                                                {ceommentaireVerification ? (
+                                                    <>
+                                                        <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                            <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                                <span className='text-sm mr-2'>Commentaire vérification</span>
+                                                                <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                            </div>
+                                                            <p className='text-sm text-blue-500 text-left'>{ceommentaireVerification}</p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
                                             </div>
                                         </div>
                                         {/* Deuxième partie de page avec le tableau de la liste de décommissionnement */}
@@ -476,114 +579,252 @@ export default function DecomDetails() {
                                                         <span>Total : {quantiteDecom}</span>
                                                     </div>
                                                     <div className="max-w-full overflow-x-auto">
-                                                        <Table>
-                                                            {/* Table Header */}
-                                                            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                                                                <TableRow>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        N°
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        Point Marchand
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        S/N
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        TID GIM
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        TID ECOBANK
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        Etat
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        RI
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        Commercial
-                                                                    </TableCell>
-                                                                    <TableCell
-                                                                        isHeader
-                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        Commentaire
-                                                                    </TableCell>
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            {/* Table Body */}
-                                                            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                                                                {listeDecom.map((item, index) => (
-                                                                    <TableRow>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {index + 1}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.pointMarchand}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.terminalSN}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.idGim}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.idEcobank}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            <span style={{ fontSize: '9px' }}>
-                                                                                {item.etat}
-                                                                            </span>
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.RI}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            {item.nomCommercial}
-                                                                        </TableCell>
-                                                                        <TableCell
-                                                                            isHeader
-                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                            <span style={{ fontSize: '9px' }}>
-                                                                                {item.commentaire}
-                                                                            </span>
-                                                                        </TableCell>
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
+                                                        {checking ? (
+                                                            <>
+                                                                <Table>
+                                                                    {/* Table Header */}
+                                                                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                                                                        <TableRow>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                N°
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Point Marchand
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                S/N
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Statut
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Retour technique
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Pièces Défectueuses
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Pièces Récupérées
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    </TableHeader>
+                                                                    {/* Table Body */}
+                                                                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                                                                        {listeDecom.map((item, index) => {
+                                                                            let statutClass = ''
+                                                                            if (item.statut == 'checking') {
+                                                                                statutClass = 'text-warning-200 font-semi-bold'
+                                                                            } else if (item.statut == 'parametrage') {
+                                                                                statutClass = 'text-blue-200 font-semi-bold'
+                                                                            } else if (item.statut == 'rebus') {
+                                                                                statutClass = 'text-red-500 font-semi-bold'
+                                                                            }
+
+                                                                            const piecesDefectueuses = JSON.parse(item.pieces_defectueuses)
+                                                                            const piecesRecuperables = JSON.parse(item.pieces_recuperees)
+                                                                            return (
+                                                                                <>
+                                                                                    <TableRow>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            {index + 1}
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400">
+                                                                                            {item.point_marchand}
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            {item.serial_number}
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            <span className={statutClass}>
+                                                                                                {item.statut}
+                                                                                            </span>
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            {item.commentaire_retour}
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            <div className="grid grid-cols-2 text-xs">
+                                                                                                {piecesDefectueuses?.map((item) => {
+                                                                                                    const piece = pieces.find((p) => {
+                                                                                                        return p.id_piece == parseInt(item)
+                                                                                                    })
+                                                                                                    if (piece) {
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                <div>
+                                                                                                                    <span className="text-red-700 font-medium">{piece.nom_piece}</span>
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )
+                                                                                                    }
+                                                                                                })}
+                                                                                            </div>
+                                                                                        </TableCell>
+                                                                                        <TableCell
+                                                                                            isHeader
+                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                            <div className="grid grid-cols-2 text-xs">
+                                                                                                {piecesRecuperables?.map((item) => {
+                                                                                                    const piece = pieces.find((p) => {
+                                                                                                        return p.id_piece == parseInt(item)
+                                                                                                    })
+                                                                                                    if (piece) {
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                <div>
+                                                                                                                    <span className="text-green-700 font-medium">{piece.nom_piece}</span>
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )
+                                                                                                    }
+                                                                                                })}
+                                                                                            </div>
+                                                                                        </TableCell>
+                                                                                    </TableRow>
+                                                                                </>
+                                                                            )
+                                                                        })}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Table>
+                                                                    {/* Table Header */}
+                                                                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                                                                        <TableRow>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                N°
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Point Marchand
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                S/N
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                TID GIM
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                TID ECOBANK
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Etat
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                RI
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Commercial
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Commentaire
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    </TableHeader>
+                                                                    {/* Table Body */}
+                                                                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                                                                        {listeDecom.map((item, index) => (
+                                                                            <TableRow>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {index + 1}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.pointMarchand}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.terminalSN}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.idGim}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.idEcobank}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    <span style={{ fontSize: '9px' }}>
+                                                                                        {item.etat}
+                                                                                    </span>
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.RI}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    {item.nomCommercial}
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    isHeader
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    <span style={{ fontSize: '9px' }}>
+                                                                                        {item.commentaire}
+                                                                                    </span>
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -676,6 +917,43 @@ export default function DecomDetails() {
                             >
                                 Retourner
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalClotureOpen} onClose={() => setIsModalClotureOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-7">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-black text-white font-medium">Clôture</span>
+                    </div>
+                    <div className="text-center text-sm font-medium">
+                        <span>Êtes-vous sûr de vouloir clôturer ce décommissionnement ?</span>
+                    </div>
+                    <div>
+                        <Label>Commentaire</Label>
+                        <TextArea
+                            value={messageCloture}
+                            onChange={(value) => setMessageCloture(value)}
+                            rows={3}
+                            placeholder="Ajoutez un commentaire"
+                        />
+                    </div>
+                    <div>
+                        <div className="flex justify-between">
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={() => setIsModalClotureOpen(false)}
+                                >
+                                    Non
+                                </button>
+                            </div>
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={handleClotureDecom}
+                                >
+                                    Oui
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
