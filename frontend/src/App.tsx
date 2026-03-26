@@ -189,6 +189,10 @@ import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
 import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
 // @ts-ignore
 import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
+// @ts-ignore
+import SousDashboardLivraison from "./pages/Dashboards/SousDashboardLivraison"
+import SousDashboardDemande from "./pages/Dashboards/SousDashboardDemande";
+import SousDashboardQRcode from "./pages/Dashboards/SousDashboardQRcode";
 
 export default function App() {
   return (
@@ -201,6 +205,9 @@ export default function App() {
 
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
+              <Route path="/sous-dashboard-livraison" element={<SousDashboardLivraison />} />
+              <Route path="/sous-dashboard-demande" element={<SousDashboardDemande />} />
+              <Route path="/sous-dashboard-qrcode" element={<SousDashboardQRcode />} />
               {/* Others Page */}
               <Route path="/profile" element={<UserProfiles />} />
               <Route path="/calendar" element={<Calendar />} />

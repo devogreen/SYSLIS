@@ -4,44 +4,44 @@ const prisma = new PrismaClient();
 
 // Stats livreurs
 // 
-const nbdeliverycharger =  async(req,res)=>{
+const nbdeliverycharger = async (req, res) => {
 
-    const {id} = req.params
+    const { id } = req.params
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id)
+        where: {
+            id_user: parseInt(id)
         }
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
-        
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
+
 
     await prisma.transactions.count({
-        where : {
-            user_id : parseInt(id)
+        where: {
+            user_id: parseInt(id)
         }
-    }).then((results)=>{
-        if(results){
-            return res.status(200).json({nbdeliverycharger:results})
-        }else{
-            return res.status(404).json({message : "Aucune donnée"})
+    }).then((results) => {
+        if (results) {
+            return res.status(200).json({ nbdeliverycharger: results })
+        } else {
+            return res.status(404).json({ message: "Aucune donnée" })
         }
-    }).catch(err=>{
+    }).catch(err => {
         console.log(err)
     })
 }
 
 // 
-const nbdeliverychargeurperperdiod = async(req,res)=>{
-    const {datedebut, datefin} = req.body
-    const {id} = req.params
+const nbdeliverychargeurperperdiod = async (req, res) => {
+    const { datedebut, datefin } = req.body
+    const { id } = req.params
 
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id)
+        where: {
+            id_user: parseInt(id)
         }
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
-        
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
+
 
     await prisma.transactions.count({
         where: {
@@ -64,75 +64,75 @@ const nbdeliverychargeurperperdiod = async(req,res)=>{
 }
 
 // 
-const nbexitcharger = async(req,res)=>{
-    const {id} = req.params
+const nbexitcharger = async (req, res) => {
+    const { id } = req.params
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id),
+        where: {
+            id_user: parseInt(id),
         },
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
     console.log(id)
     await prisma.transactions.count({
-        where : {
-            AND : {
-                user_id : parseInt(id),
-                type_transaction : 'sortie'
+        where: {
+            AND: {
+                user_id: parseInt(id),
+                type_transaction: 'sortie'
             }
         }
-    }).then((results)=>{
-        if(results){
-            return res.status(200).json({nbexitcharger:results})
-        }else{
-            return res.status(404).json({message : "Aucune donnée"})
+    }).then((results) => {
+        if (results) {
+            return res.status(200).json({ nbexitcharger: results })
+        } else {
+            return res.status(404).json({ message: "Aucune donnée" })
         }
-    }).catch(err=>{
+    }).catch(err => {
         console.log(err)
     })
 }
 
 // 
-const nbreturncharger = async(req,res)=>{
+const nbreturncharger = async (req, res) => {
     // const {user_id} = req.body
-    const {id} = req.params
+    const { id } = req.params
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id)
+        where: {
+            id_user: parseInt(id)
         }
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
-        
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
+
     console.log(id)
     await prisma.transactions.count({
-        where : {
-            AND : {
-                user_id : parseInt(id),
-                type_transaction : 'retour'
+        where: {
+            AND: {
+                user_id: parseInt(id),
+                type_transaction: 'retour'
             }
         }
-    }).then((results)=>{
-        if(results){
-            return res.status(200).json({nbreturncharger:results})
-        }else{
-            return res.status(404).json({message : "Aucune donnée"})
+    }).then((results) => {
+        if (results) {
+            return res.status(200).json({ nbreturncharger: results })
+        } else {
+            return res.status(404).json({ message: "Aucune donnée" })
         }
-    }).catch(err=>{
+    }).catch(err => {
         console.log(err)
     })
 }
 
 
 // 
-const nblivraisonpartype = async(req,res)=>{
+const nblivraisonpartype = async (req, res) => {
     // const {user_id} = req.body
-    const {id} = req.params
+    const { id } = req.params
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id)
+        where: {
+            id_user: parseInt(id)
         }
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
-        
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
+
     const [
         nblivraisontpegim,
         nblivraisontpemobile,
@@ -142,30 +142,30 @@ const nblivraisonpartype = async(req,res)=>{
     ] = await Promise.all([
         prisma.livraison.count({
             where: {
-                type_livraison_id : 1,
-                user_id : parseInt(id),
-                statut_livraison : "livre"
+                type_livraison_id: 1,
+                user_id: parseInt(id),
+                statut_livraison: "livre"
             }
         }),
         prisma.livraison.count({
             where: {
-                type_livraison_id : 4,
-                user_id : parseInt(id),
-                statut_livraison : "livre"
+                type_livraison_id: 4,
+                user_id: parseInt(id),
+                statut_livraison: "livre"
             }
         }),
         prisma.livraison.count({
             where: {
-                type_livraison_id : 2,
-                user_id : parseInt(id),
-                statut_livraison : "livre"
+                type_livraison_id: 2,
+                user_id: parseInt(id),
+                statut_livraison: "livre"
             }
         }),
         prisma.livraison.count({
             where: {
-                type_livraison_id : 3,
-                user_id : parseInt(id),
-                statut_livraison : "livre"
+                type_livraison_id: 3,
+                user_id: parseInt(id),
+                statut_livraison: "livre"
             }
         })
     ]).catch(err => {
@@ -187,26 +187,26 @@ const nblivraisonpartype = async(req,res)=>{
 
 // Stats receveurs
 
-const statsreceveurs = async(req,res)=>{
+const statsreceveurs = async (req, res) => {
     // const {user_id} = req.body
-    const {id} = req.params
+    const { id } = req.params
     const user = await prisma.users.findFirst({
-        where : {
-            id_user : parseInt(id)
+        where: {
+            id_user: parseInt(id)
         },
-        include : {
-            roles : {
-                where : {
-                    id_role : 2
+        include: {
+            roles: {
+                where: {
+                    id_role: 2
                 }
             }
         }
     })
-    if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
-        console.log(user)
-    if(user.role_id !== 2) return res.status(404).json({message :"Utilisateur non recepteur"})
-     
-        
+    if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" })
+    console.log(user)
+    if (user.role_id !== 2) return res.status(404).json({ message: "Utilisateur non recepteur" })
+
+
     const [
         nbtpegimreçus,
         nbtpemobilereçus,
@@ -219,16 +219,16 @@ const statsreceveurs = async(req,res)=>{
                 user_id: parseInt(id),
                 etat_validation: "valide",
                 livraison: {
-                  type_livraison_id: 1
+                    type_livraison_id: 1
                 }
-              },
-              select: {
+            },
+            select: {
                 livraison: {
-                  select: {
-                    qte_totale_livraison: true
-                  }
+                    select: {
+                        qte_totale_livraison: true
+                    }
                 }
-              }
+            }
         }).then((results) => {
             let total = 0;
             results.forEach((result) => {
@@ -243,16 +243,16 @@ const statsreceveurs = async(req,res)=>{
                 user_id: parseInt(id),
                 etat_validation: "valide",
                 livraison: {
-                  type_livraison_id: 4
+                    type_livraison_id: 4
                 }
-              },
-              select: {
+            },
+            select: {
                 livraison: {
-                  select: {
-                    qte_totale_livraison: true
-                  }
+                    select: {
+                        qte_totale_livraison: true
+                    }
                 }
-              }
+            }
         }).then((results) => {
             let total = 0;
             results.forEach((result) => {
@@ -267,16 +267,16 @@ const statsreceveurs = async(req,res)=>{
                 user_id: parseInt(id),
                 etat_validation: "valide",
                 livraison: {
-                  type_livraison_id: 2
+                    type_livraison_id: 2
                 }
-              },
-              select: {
+            },
+            select: {
                 livraison: {
-                  select: {
-                    qte_totale_livraison: true
-                  }
+                    select: {
+                        qte_totale_livraison: true
+                    }
                 }
-              }
+            }
         }).then((results) => {
             let total = 0;
             results.forEach((result) => {
@@ -291,16 +291,16 @@ const statsreceveurs = async(req,res)=>{
                 user_id: parseInt(id),
                 etat_validation: "valide",
                 livraison: {
-                  type_livraison_id: 3
+                    type_livraison_id: 3
                 }
-              },
-              select: {
+            },
+            select: {
                 livraison: {
-                  select: {
-                    qte_totale_livraison: true
-                  }
+                    select: {
+                        qte_totale_livraison: true
+                    }
                 }
-              }
+            }
         }).then((results) => {
             let total = 0;
             results.forEach((result) => {
@@ -315,9 +315,9 @@ const statsreceveurs = async(req,res)=>{
                 user_id: parseInt(id),
                 etat_validation: "valide",
                 livraison: {
-                  type_livraison_id: 5
+                    type_livraison_id: 5
                 }
-              }
+            }
         }).then((results) => {
             return results;
         }).catch(err => {
@@ -381,17 +381,17 @@ const nbetpepartypeparperiod = async (req, res) => {
             nbchargeursreçus,
         ] = await Promise.all([
             // Type 1 - TPE GIM
-           prisma.livraison.count({
-            where: {
-                type_livraison_id : 1,
-                user_id : parseInt(id),
-                statut_livraison : "livre",
-                date_validation: {
+            prisma.livraison.count({
+                where: {
+                    type_livraison_id: 1,
+                    user_id: parseInt(id),
+                    statut_livraison: "livre",
+                    date_validation: {
                         gte: startDate,
                         lte: endDate
                     },
-            }
-        }),
+                }
+            }),
 
             // Type 4 - TPE Mobile
             prisma.validations.findMany({
@@ -627,7 +627,7 @@ const nbetpepartypeparperiod = async (req, res) => {
 //     if(!user) return res.status(404).json({message :"Utilisateur non trouvé"})
 //         console.log(user)
 //     if(user.role_id !== 1) return res.status(404).json({message :"Utilisateur non recepteur"})
-    
+
 //     const [
 //         nbtpegimreçus,
 //         nbtpemobilereçus,
@@ -765,13 +765,166 @@ const nbetpepartypeparperiod = async (req, res) => {
 // }
 
 
+const getGeneralStats = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const whereDate = startDate && endDate ? {
+            date_livraison: {
+                gte: new Date(startDate + 'T00:00:00'),
+                lte: new Date(endDate + 'T23:59:59')
+            },
+            deleted: false
+        } : { deleted: false };
+
+        // Livraisons stats
+        const livraisons = await prisma.livraison.findMany({
+            where: whereDate,
+            select: {
+                statut_livraison: true,
+
+                type_livraison: {   // 👈 AJOUT ICI
+                    select: {
+                        libelle: true
+                    }
+                },
+
+                validations: {
+                    select: { etat_validation: true }
+                }
+            }
+        });
+
+        const statsTypesLivraisons = {};
+
+        livraisons.forEach(l => {
+            // ✅ on filtre uniquement les livraisons livrées
+            if (l.statut_livraison === "livre") {
+
+                const type = l.type_livraison?.libelle || "Inconnu";
+
+                if (!statsTypesLivraisons[type]) {
+                    statsTypesLivraisons[type] = 0;
+                }
+
+                statsTypesLivraisons[type]++;
+            }
+        });
+        const statsLivraisons = {
+            total: livraisons.length,
+            attente: livraisons.filter(l => l.statut_livraison === 'en_cours' || l.statut_livraison === 'en_attente').length,
+            livrees: livraisons.filter(l => l.statut_livraison === 'livre').length,
+            retours: livraisons.filter(l => l.validations?.some(v => v.etat_validation === 'retourne')).length
+        };
+
+        // Demandes stats
+        const statsDemandes = await prisma.demandes.groupBy({
+            by: ['statut_demande'],
+            where: startDate ? {
+                date_demande: {
+                    gte: new Date(startDate + 'T00:00:00'),
+                    lte: new Date(endDate + 'T23:59:59')
+                }
+            } : {},
+            _count: { _all: true }
+        }).catch(err => {
+            console.error('Demandes groupBy error:', err);
+            return [];
+        });
+
+        // Stocks summary (total items by service)
+        const statsStocks = await prisma.stocks.aggregate({
+            where: { is_deleted: false },
+            _sum: { quantite_piece: true, quantite_carton: true, quantite_lot: true }
+        });
+
+        // QR Codes stats
+        const statsQr = await prisma.demande_qr.findMany({
+            where: startDate ? {
+                forms: {
+                    created_at: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    }
+                }
+            } : {},
+            select: { statut: true }
+        }).catch(err => {
+            console.error('QR stats error:', err);
+            return [];
+        });
+
+        const statsDemandesMap = statsDemandes.reduce((acc, curr) => ({ ...acc, [curr.statut_demande]: curr._count._all }), {});
+        const statsQrMap = statsQr.reduce((acc, curr) => ({ ...acc, [curr.statut]: (acc[curr.statut] || 0) + 1 }), {});
+
+        const stats = {
+            typesLivraisons: statsTypesLivraisons,
+            livraisons: statsLivraisons,
+            demandes: statsDemandesMap,
+            stocks: statsStocks._sum,
+            qr_codes: statsQrMap
+        };
+
+        res.json(stats);
+    } catch (error) {
+        console.error('Stats error:', error);
+        res.status(500).json({ message: 'Erreur stats' });
+    }
+};
+
+const getLivraisonsParTypeLivre = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const whereClause = {
+      deleted: false,
+      statut_livraison: "livre"
+    };
+
+    if (startDate && endDate) {
+      whereClause.date_livraison = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    // Get all livraison types
+    const types = await prisma.type_livraison_commerciale.findMany({
+      where: { is_deleted: false },
+      select: { id_type_livraison: true, nom_type_livraison: true }
+    });
+
+    // Count livraisons per type
+    const counts = await Promise.all(
+      types.map(async (type) => {
+        const count = await prisma.livraison.count({
+          where: {
+            ...whereClause,
+            type_livraison_id: type.id_type_livraison
+          }
+        });
+        return {
+          id: type.id_type_livraison,
+          nom: type.nom_type_livraison || `Type ${type.id_type_livraison}`,
+          count
+        };
+      })
+    );
+
+    res.status(200).json({ livraisonsParType: counts });
+  } catch (error) {
+    console.error("Erreur getLivraisonsParTypeLivre:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
 module.exports = {
     nbdeliverycharger,
     nbexitcharger,
     nbreturncharger,
-    nbdeliverychargeurperperdiod,
     nblivraisonpartype,
+    nbdeliverychargeurperperdiod,
     statsreceveurs,
     nbetpepartypeparperiod,
+    getGeneralStats,
+    getLivraisonsParTypeLivre
 }
-

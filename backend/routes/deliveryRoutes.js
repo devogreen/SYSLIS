@@ -9,7 +9,7 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
-    updateRemplacement, returnRemplacement, generateRemplacementPDF,deliverregularisation,regularisationReception,
+    updateRemplacement, returnRemplacement, generateRemplacementPDF,deliverregularisation,regularisationReception,getLivraisonsInRange,getStatsLivraisons,
 } = require("../controllers/Delivery/deliveryController")
 
 // router.post('/deliver', uploadDeliver.fields([
@@ -47,5 +47,8 @@ router.post("/generateRemplacementsXLSX", generateRemplacementsXLSX);
 router.put("/updateRemplacement/:id", updateRemplacement);
 router.post("/returnRemplacement", returnRemplacement);
 router.get("/generateRemplacementPDF/:id", generateRemplacementPDF);
+// router.get("/livraisons-stats",getStatsLivraisons);
+// router.get("/statsLivraisons", require("../controllers/Delivery/statsLivraisonsController").getStatsLivraisons);
+router.get('/livraisons-in-range', getLivraisonsInRange);
 
 module.exports = router
