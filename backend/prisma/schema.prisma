@@ -462,6 +462,9 @@ model users {
   validation_remplacement               validation_remplacement[]
   validations                           validations[]
   stockOwner                            stocks[]
+  tpe_created                           parc_tpe[]                   @relation("tpe_created_by_user")
+  tpe_updated                           parc_tpe[]                   @relation("tpe_updated_by_user")
+  history_tpe                           history_tpe[]
 }
 
 model validation_demande {
@@ -553,6 +556,7 @@ model stocks {
   users_stocks_updated_byTousers users?               @relation("stocks_updated_byTousers", fields: [updated_by], references: [id_user], map: "stocks_ibfk_5")
   stockOwner                     users?               @relation(fields: [owner], references: [id_user], map: "stocks_ibfk_6")
   validation_demande             validation_demande[]
+  history_tpe                    history_tpe[]
 
   @@index([created_by], map: "created_by")
   @@index([model_id], map: "model_id")
@@ -908,6 +912,7 @@ model forms {
   reception_decom               reception_decom[]
   retour_technique              retour_technique[]
   retour_decom                  retour_decom[]
+  history_tpe                   history_tpe[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -918,6 +923,55 @@ model format_qr {
   id           Int            @id @default(autoincrement())
   format       String         @db.VarChar(255)
   marchands_qr marchands_qr[]
+}
+
+model parc_tpe {
+  id               Int           @id @default(autoincrement())
+  serial_number    String        @unique @db.VarChar(255)
+  created_by       Int
+  updated_by       Int?
+  created_at       DateTime      @default(now()) @db.DateTime(0)
+  updated_at       DateTime?     @db.DateTime(0)
+  last_modified_at DateTime      @default(now()) @db.DateTime(0)
+  statut_id        Int
+  users_create_tpe users         @relation("tpe_created_by_user", fields: [created_by], references: [id_user], map: "parc_tpe_ibfk_1")
+  users_update_tpe users?        @relation("tpe_updated_by_user", fields: [updated_by], references: [id_user], map: "parc_tpe_ibfk_2")
+  statut_tpe       statut_tpe    @relation(fields: [statut_id], references: [id], map: "parc_tpe_ibfk_3")
+  history_tpe      history_tpe[]
+
+  @@index([created_by], map: "created_by")
+  @@index([updated_by], map: "updated_by")
+  @@index([statut_id], map: "statut_id")
+}
+
+model history_tpe {
+  id         Int        @id @default(autoincrement())
+  id_tpe     Int
+  created_at DateTime   @default(now()) @db.DateTime(0)
+  created_by Int?
+  statut_id  Int
+  form_id    Int?
+  stock_id   Int?
+  users      users?     @relation(fields: [created_by], references: [id_user], map: "history_tpe_ibfk_1")
+  forms      forms?     @relation(fields: [form_id], references: [id], map: "history_tpe_ibfk_2")
+  stocks     stocks?    @relation(fields: [stock_id], references: [id], map: "history_tpe_ibfk_3")
+  parc_tpe   parc_tpe   @relation(fields: [id_tpe], references: [id], map: "history_tpe_ibfk_4")
+  statut_tpe statut_tpe @relation(fields: [statut_id], references: [id], map: "history_tpe_ibfk_5")
+
+  @@index([created_by], map: "created_by")
+  @@index([form_id], map: "form_id")
+  @@index([stock_id], map: "stock_id")
+  @@index([id_tpe], map: "id_tpe")
+  @@index([statut_id], map: "statut_id")
+}
+
+model statut_tpe {
+  id          Int           @id @default(autoincrement())
+  statut      String        @db.VarChar(255)
+  parc_tpe    parc_tpe[]
+  history_tpe history_tpe[]
+
+  @@index([statut], map: "statut")
 }
 
 enum livraison_statut_livraison {
@@ -1066,4 +1120,12 @@ enum sn_decom_statut {
 enum retour_decom_type {
   verification
   cloture
+}
+
+enum statut_parc_tpe {
+  neuf
+  back_office
+  decom
+  parametrage
+  rebut
 }

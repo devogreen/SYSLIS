@@ -165,7 +165,7 @@ const faireDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         if (receveurs && receveurs.length > 0) {
             for (const receveur of receveurs) {
                 await sendMail({
@@ -396,7 +396,7 @@ const modifyDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         if (receveurs && receveurs.length > 0) {
             for (const receveur of receveurs) {
                 await sendMail({
@@ -518,7 +518,7 @@ const cancelDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         if (receveurs && receveurs.length > 0) {
             for (const receveur of receveurs) {
                 await sendMail({
@@ -632,6 +632,86 @@ const receptionDecom = async (req, res) => {
                 }))
             })
 
+            // Récupérer les SN de la liste
+            const serials = listeDecom.map(item => item.terminalSN);
+
+            // Récupérer les TPE déjà enregistrés dans le PARC
+            const existingTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+            // Faire une liste SN, ID pour les TPE déjà enregistrés
+            const existingMap = new Map(
+                existingTpes.map(e => [e.serial_number, e.id])
+            );
+
+            const toCreate = [];
+            const toUpdate = [];
+
+            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
+            listeDecom.forEach(item => {
+                if (existingMap.has(item.terminalSN)) {
+                    toUpdate.push(item);
+                } else {
+                    toCreate.push(item);
+                }
+            });
+
+            // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
+            if (toCreate.length > 0) {
+                await tx.parc_tpe.createMany({
+                    data: toCreate.map(item => ({
+                        serial_number: item.terminalSN,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: 3,
+                    }))
+                });
+            }
+
+            // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+            await Promise.all(
+                toUpdate.map(item =>
+                    tx.parc_tpe.update({
+                        where: { serial_number: item.terminalSN },
+                        data: {
+                            updated_by: utilisateur.id_user,
+                            updated_at: dateAction,
+                            last_modified_at: dateAction,
+                            statut_id: 3,
+                        }
+                    })
+                )
+            );
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            const allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: 3,
+                    form_id: decomForm.id,
+                }))
+            });
+
             return {
                 receptionForm, reception
             }
@@ -677,7 +757,7 @@ const receptionDecom = async (req, res) => {
             <p>Bonjour,</p>
             <p>Le décommissionnement ${decom.id} a été réceptionné.</p>
             <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
             </ul>
             <br>
             <p>Commentaire : ${commentaire_mail}<p>
@@ -700,7 +780,7 @@ const receptionDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         if (verificateurs && verificateurs.length > 0) {
             for (const verificateur of verificateurs) {
                 await sendMail({
@@ -871,7 +951,7 @@ const returnDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         // if (verificateurs && verificateurs.length > 0) {
         //     for (const verificateur of verificateurs) {
         //         await sendMail({
@@ -1045,6 +1125,97 @@ const verifyDecom = async (req, res) => {
                 })
             }
 
+            const statutMap = {
+                parametrage: 4,
+                rebus: 5,
+            };
+
+            // Récupérer les SN de la liste
+            const serials = listeVerified.map(item => item.serial_number);
+
+            // Récupérer les TPE déjà enregistrés dans le PARC
+            const existingTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+            // Faire une liste SN, ID pour les TPE déjà enregistrés
+            const existingMap = new Map(
+                existingTpes.map(e => [e.serial_number, e.id])
+            );
+
+            const toCreate = [];
+            const toUpdate = [];
+
+            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
+            listeVerified.forEach(item => {
+                if (existingMap.has(item.serial_number)) {
+                    toUpdate.push(item);
+                } else {
+                    toCreate.push(item);
+                }
+            });
+
+            // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
+            if (toCreate.length > 0) {
+                await tx.parc_tpe.createMany({
+                    data: toCreate.map(item => ({
+                        serial_number: item.serial_number,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: statutMap[item.statut],
+                    }))
+                });
+            }
+
+            // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+            await Promise.all(
+                toUpdate.map(item =>
+                    tx.parc_tpe.update({
+                        where: { serial_number: item.serial_number },
+                        data: {
+                            updated_by: utilisateur.id_user,
+                            updated_at: dateAction,
+                            last_modified_at: dateAction,
+                            statut_id: statutMap[item.statut],
+                        }
+                    })
+                )
+            );
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            const allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => {
+                    const item = listeVerified.find(
+                        i => i.serial_number === tpe.serial_number
+                    );
+
+                    return {
+                        id_tpe: tpe.id,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                        statut_id: statutMap[item.statut],
+                        form_id: decomForm.id,
+                    };
+                })
+            });
+
             return {
                 retourDecomForm, retourDecom
             }
@@ -1090,7 +1261,7 @@ const verifyDecom = async (req, res) => {
             <p>Bonjour,</p>
             <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
             <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            <li><strong>Nombre de TPE :</strong> ${listeVerified.length}</li>
             </ul>
             <br>
             <p>Commentaire : ${commentaire_mail}<p>
@@ -1105,7 +1276,7 @@ const verifyDecom = async (req, res) => {
             <br><br>
             <p>Green - Pay vous remercie.</p>
         `;
-        if(checkMail) {
+        if (checkMail) {
             if (superviseurs && superviseurs.length > 0) {
                 for (const superviseur of superviseurs) {
                     await sendMail({
@@ -1114,7 +1285,7 @@ const verifyDecom = async (req, res) => {
                         html,
                     });
                 }
-            } 
+            }
             if (demandeurs && demandeurs.length > 0) {
                 for (const demandeur of demandeurs) {
                     await sendMail({
@@ -1288,7 +1459,7 @@ const clotureDecom = async (req, res) => {
                     html,
                 });
             }
-        } 
+        }
         if (demandeurs && demandeurs.length > 0) {
             for (const demandeur of demandeurs) {
                 await sendMail({
@@ -1309,7 +1480,7 @@ const clotureDecom = async (req, res) => {
         console.error("Erreur lors de la cloture :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
-}   
+}
 
 module.exports = {
     faireDecom,

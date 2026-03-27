@@ -99,21 +99,21 @@ const regReception = async (req, res) => {
           form_id: receptionForm.id,
         },
       });
-  
+
       await tx.livraison.update({
         where: { id_livraison: parseInt(livraison_id) },
         data: { statut_livraison: "livre" },
       });
 
       // ***************************************     GESTION STOCK CHARGEUR     *************************************
-  
+
       const typeLivraison = await tx.type_livraison_commerciale.findUnique({
         where: {
           id_type_livraison: livraison.type_livraison_id
         }
       })
       let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
-  
+
       if (livraison.stock_id) {
         const stockChargeur = await tx.stocks.findUnique({
           where: {
@@ -317,25 +317,111 @@ const deliver = async (req, res) => {
     if (!signature_expediteur) {
       return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
     }
+    const dateAction = new Date()
 
-    const nouvelleLivraison = await prisma.livraison.create({
-      data: {
-        statut_livraison: "en_cours",
-        qte_totale_livraison: produits.length,
-        produitsLivre: JSON.stringify(produits),
-        commentaire,
-        nom_livreur: utilisateur.fullname || null,
-        date_livraison: new Date(),
-        deleted: false,
-        type_livraison_id: parseInt(type_livraison_id),
-        user_id: utilisateur ? utilisateur.id_user : null,
-        signature_expediteur,
-        service_id: parseInt(service_recepteur),
-        role_id: role_recepteur ? parseInt(role_recepteur) : null,
-        model_id: selected_model ? parseInt(selected_model) : null,
-        stock_id: selectedStock ? +selectedStock : null,
+    const livraison = await prisma.$transaction(async (tx) => {
+      const nouvelleLivraison = await tx.livraison.create({
+        data: {
+          statut_livraison: "en_cours",
+          qte_totale_livraison: produits.length,
+          produitsLivre: JSON.stringify(produits),
+          commentaire,
+          nom_livreur: utilisateur.fullname || null,
+          date_livraison: new Date(),
+          deleted: false,
+          type_livraison_id: parseInt(type_livraison_id),
+          user_id: utilisateur ? utilisateur.id_user : null,
+          signature_expediteur,
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          model_id: selected_model ? parseInt(selected_model) : null,
+          stock_id: selectedStock ? +selectedStock : null,
+        }
+      });
+
+      // Récupérer les SN de la liste
+      const serials = produits.map(item => item.serialNumber);
+
+      // Récupérer les TPE déjà enregistrés dans le PARC
+      const existingTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+      // Faire une liste SN, ID pour les TPE déjà enregistrés
+      const existingMap = new Map(
+        existingTpes.map(e => [e.serial_number, e.id])
+      );
+
+      const toCreate = [];
+      const toUpdate = [];
+
+      // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
+      produits.forEach(item => {
+        if (existingMap.has(item.serialNumber)) {
+          toUpdate.push(item);
+        } else {
+          toCreate.push(item);
+        }
+      });
+
+      // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
+      if (toCreate.length > 0) {
+        await tx.parc_tpe.createMany({
+          data: toCreate.map(item => ({
+            serial_number: item.serialNumber,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 2,
+          }))
+        });
       }
-    });
+
+      // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+      await Promise.all(
+        toUpdate.map(item =>
+          tx.parc_tpe.update({
+            where: { serial_number: item.serialNumber },
+            data: {
+              updated_by: utilisateur.id_user,
+              updated_at: dateAction,
+              last_modified_at: dateAction,
+              statut_id: 2,
+            }
+          })
+        )
+      );
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      const allTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 2,
+        }))
+      });
+
+      return {
+        nouvelleLivraison,
+      }
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -394,7 +480,7 @@ const deliver = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${nouvelleLivraison.id_livraison}`;
+    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
@@ -448,7 +534,7 @@ const deliver = async (req, res) => {
 
     res.status(201).json({
       message: "Livraison enregistrée avec succès",
-      livraison: nouvelleLivraison
+      livraison: livraison
     });
 
   } catch (error) {

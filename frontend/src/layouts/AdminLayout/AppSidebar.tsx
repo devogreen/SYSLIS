@@ -14,7 +14,8 @@ import {
   StockBox,
   DeliveryAdd,
   QrCodeIcon,
-  RefreshTimeIcon
+  RefreshTimeIcon,
+  BaseLinePhoneIcon,
 } from "../../icons";
 import { useSidebar } from "../../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -102,6 +103,13 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    icon: <BaseLinePhoneIcon />,
+    name: "Gestion Parc TPE",
+    subItems: [
+      { name: "Voir Parc", path: "/parc-tpe", pro: false},
+    ],
+  },
+  {
     icon: <RefreshTimeIcon />,
     name: "Gestion Régularisation",
     roles:[21],
@@ -113,6 +121,7 @@ const navItems: NavItem[] = [
   },
 
 ];
+
 
 const othersItems: NavItem[] = [
   

@@ -204,6 +204,11 @@ import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
 // @ts-ignore
 import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomForm"
 
+// @ts-ignore
+import AllParcTpe from "./pages/GestionTpePages/AllParcTpe"
+// @ts-ignore
+import HistoryTpe from "./pages/GestionTpePages/HistoryTpe"
+
 export default function App() {
   return (
     <>
@@ -278,6 +283,10 @@ export default function App() {
               <Route path="/decom-details/:id" element={<DecomDetails />} />
               <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
               <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
+
+              {/* Gestion Parc TPE */}
+              <Route path="/parc-tpe" element={<AllParcTpe />} />
+              <Route path="/historique-tpe/:id" element={<HistoryTpe />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />
