@@ -100,11 +100,11 @@ export default function DemandeQrInputs() {
                 setLoadingData(true)
                 const merchantList = await merchantsData.findMerchant()
                 // console.log('Total' ,merchantList.length)
-                console.log(merchantList)
+                // console.log(merchantList)
                 const uniqueMerchants = Array.from(
                     new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
                 );
-                // console.log(uniqueMerchants)
+                console.log(uniqueMerchants)
                 // console.log(('unique', uniqueMerchants.length))
 
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
@@ -130,7 +130,7 @@ export default function DemandeQrInputs() {
                 setOptionsMarchands(optionsPm)
 
                 // Fonction pour avoir la liste des marchands + nbr de TPE, groupés par chaîne
-                const groupedChaine = merchantList.reduce((acc, item) => {
+                const groupedChaine = uniqueMerchants.reduce((acc, item) => {
                     const { GROUPE, POINT_MARCHAND } = item
 
                     // 1️⃣ Create group if it doesn't exist
@@ -149,6 +149,7 @@ export default function DemandeQrInputs() {
                     return acc
                 }, {})
                 // 4️⃣ Convert object to desired array structure
+                console.log(groupedChaine)
                 const listeChaine = Object.entries(groupedChaine).map(
                     ([GROUPE, points]) => ({
                         GROUPE,
@@ -344,6 +345,7 @@ export default function DemandeQrInputs() {
         const chaine = chaineGroup.find((item) => {
             return item.GROUPE == value
         })
+        console.log(chaine)
         if (chaine) {
             const listMarchands = chaine.POINT_MARCHAND.map((item, index) => ({
                 id: index,
