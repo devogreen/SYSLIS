@@ -49,7 +49,7 @@ export default function ModifyDemandeQrInputs() {
     const [optionsMarchands, setOptionsMarchands] = useState([])
     const [quantiteTerminal, setQuantiteTerminal] = useState(0)
     const [quantiteQr, setQuantiteQr] = useState(0)
-    const [quantite, setQuantite] = useState(1)
+    const [quantite, setQuantite] = useState(2)
 
     const [selectedTypeQr, setSelectedTypeQr] = useState('')
     const [selectedChaine, setSelectedChaine] = useState('')
@@ -119,14 +119,20 @@ export default function ModifyDemandeQrInputs() {
                 // setSelectedFiles(dFiles)
 
                 const merchantList = await merchantsData.findMerchant()
-                // console.log(merchantList)
+                // console.log('Total' ,merchantList.length)
+                console.log(merchantList)
+                const uniqueMerchants = Array.from(
+                    new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
+                );
+                // console.log(uniqueMerchants)
+                // console.log(('unique', uniqueMerchants.length))
 
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
-                const countByPointMarchand = merchantList.reduce((acc, { CHAINE, POINT_MARCHAND }) => {
-                    const key = `${CHAINE}__${POINT_MARCHAND}`
+                const countByPointMarchand = uniqueMerchants.reduce((acc, { GROUPE, POINT_MARCHAND }) => {
+                    const key = `${GROUPE}__${POINT_MARCHAND}`
                     if (!acc[key]) {
                         acc[key] = {
-                            CHAINE,
+                            GROUPE,
                             POINT_MARCHAND,
                             count: 0
                         }
@@ -145,27 +151,27 @@ export default function ModifyDemandeQrInputs() {
 
                 // Fonction pour avoir la liste des marchands + nbr de TPE, groupés par chaîne
                 const groupedChaine = merchantList.reduce((acc, item) => {
-                    const { CHAINE, POINT_MARCHAND } = item
+                    const { GROUPE, POINT_MARCHAND } = item
 
                     // 1️⃣ Create group if it doesn't exist
-                    if (!acc[CHAINE]) {
-                        acc[CHAINE] = {}
+                    if (!acc[GROUPE]) {
+                        acc[GROUPE] = {}
                     }
 
                     // 2️⃣ Create point marchand inside group if not exists
-                    if (!acc[CHAINE][POINT_MARCHAND]) {
-                        acc[CHAINE][POINT_MARCHAND] = 0
+                    if (!acc[GROUPE][POINT_MARCHAND]) {
+                        acc[GROUPE][POINT_MARCHAND] = 0
                     }
 
                     // 3️⃣ Increment serial count
-                    acc[CHAINE][POINT_MARCHAND] += 1
+                    acc[GROUPE][POINT_MARCHAND] += 1
 
                     return acc
                 }, {})
                 // 4️⃣ Convert object to desired array structure
                 const listeChaine = Object.entries(groupedChaine).map(
-                    ([CHAINE, points]) => ({
-                        CHAINE,
+                    ([GROUPE, points]) => ({
+                        GROUPE,
                         POINT_MARCHAND: Object.entries(points).map(
                             ([POINT_MARCHAND, sn_count]) => ({
                                 POINT_MARCHAND,
@@ -177,8 +183,8 @@ export default function ModifyDemandeQrInputs() {
                 setChaineGroup(listeChaine)
                 // console.log(listeChaine)
                 const optionsC = listeChaine.map((item) => ({
-                    label: item.CHAINE,
-                    value: item.CHAINE
+                    label: item.GROUPE,
+                    value: item.GROUPE
                 }))
                 setOptionsChaines(optionsC)
 
@@ -356,7 +362,7 @@ export default function ModifyDemandeQrInputs() {
         const value = e.value
         setSelectedChaine(value)
         const chaine = chaineGroup.find((item) => {
-            return item.CHAINE == value
+            return item.GROUPE == value
         })
         if (chaine) {
             const listMarchands = chaine.POINT_MARCHAND.map((item, index) => ({
@@ -397,9 +403,9 @@ export default function ModifyDemandeQrInputs() {
             return value == item.POINT_MARCHAND
         })
         if (marchand) {
-            setSelectedChaine(marchand.CHAINE)
+            setSelectedChaine(marchand.GROUPE)
             setQuantiteTerminal(marchand.count)
-            setQuantiteQr(marchand.count)
+            setQuantiteQr(quantite*marchand.count)
         }
     }
 
