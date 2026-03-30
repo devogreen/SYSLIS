@@ -107,6 +107,7 @@ const navItems: NavItem[] = [
     name: "Gestion Parc TPE",
     subItems: [
       { name: "Voir Parc", path: "/parc-tpe", pro: false},
+      { name: "Manipulation TPE", path: "/manipulation-tpe", pro: false},
     ],
   },
   {

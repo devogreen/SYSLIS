@@ -208,6 +208,8 @@ import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomFor
 import AllParcTpe from "./pages/GestionTpePages/AllParcTpe"
 // @ts-ignore
 import HistoryTpe from "./pages/GestionTpePages/HistoryTpe"
+// @ts-ignore
+import ManipulationTpeForm from "./pages/Forms/GestionTpeForms/ManipulationTpeForm"
 
 export default function App() {
   return (
@@ -287,6 +289,7 @@ export default function App() {
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />
               <Route path="/historique-tpe/:id" element={<HistoryTpe />} />
+              <Route path="/manipulation-tpe" element={<ManipulationTpeForm />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />
