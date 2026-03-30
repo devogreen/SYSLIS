@@ -8,7 +8,7 @@ const {
     getAllTypePaiement, faireDemandeQr, getAllDemandesQr, getOneDemandeQr, uploadDemandeQr,
     downloadQrCodes, impressionDemandeQr, livraisonDemandeQr, receptionDemandeQr, getAllFormatsQr,
     regularisationDemandeQrV2, getAllFormFiles, modifyDemandeQr, cancelDemandeQr, regularisationLivraisonDemandeQr,
-    regularisationReceptionDemandeQr, extractMarchandsQr,
+    regularisationReceptionDemandeQr, extractMarchandsQr, getAllMarchandsQr,
 } = require("../controllers/Demande/demandeQrController")
 
 router.get('/getAllTypePaiement', getAllTypePaiement);
@@ -45,5 +45,6 @@ router.put('/regularisationReceptionDemandeQr/:idDemande/:idLivraison', uploadAl
     { name: 'signature' },
 ]), regularisationReceptionDemandeQr);
 router.post('/extractMarchandsQr', uploadExcel.single("file"), extractMarchandsQr);
+router.get('/getAllMarchandsQr', getAllMarchandsQr);
 
 module.exports = router

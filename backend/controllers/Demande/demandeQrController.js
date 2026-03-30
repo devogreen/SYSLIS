@@ -2204,6 +2204,32 @@ const extractMarchandsQr = async (req, res) => {
     }
 }
 
+// Fonction pour obternir tous les marchands et leur QR Codes livrés.
+const getAllMarchandsQr = async (req, res) => {
+    try {
+        const marchandsQr = await prisma.marchands_qr.findMany({
+            include: {
+                demande_qr: {
+                    include: {
+                        forms: true
+                    },
+                },
+                type_paiement: true,
+                format_qr: true,
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
+        });
+
+        console.log('Succès !')
+        res.status(200).json(marchandsQr);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des QR Codes de marchands :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des QR Codes de marchands", error });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2222,4 +2248,5 @@ module.exports = {
     regularisationLivraisonDemandeQr,
     regularisationReceptionDemandeQr,
     extractMarchandsQr,
+    getAllMarchandsQr,
 }
