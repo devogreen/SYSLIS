@@ -288,9 +288,6 @@ export default function LivraisonInputs() {
       if (pointMarchand.NUM_MOOV.startsWith("01")) {
         setMOOVChecked(true)
       }
-      if(pointMarchand.RNE) {
-        setRneChecked(true)
-      }
     }
   }
 

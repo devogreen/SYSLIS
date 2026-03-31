@@ -441,20 +441,13 @@ export default function DemandeQrDetails() {
             setLoadingDownload(true)
             const response = await demandeData.downloadQrCodes(idDemande, idGeneration);
 
-            const url = window.URL.createObjectURL(response.data);
+            const blob = new Blob([response.data], { type: "application/zip" });
+            const url = window.URL.createObjectURL(blob);
+
+            const fileName = `qr_codes_${idDemande}_${idGeneration}.zip`;
 
             const a = document.createElement("a");
             a.href = url;
-
-            // Extract filename from headers if backend sends it
-            const contentDisposition = response.headers["content-disposition"];
-            let fileName = "qr_codes";
-
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="?(.+)"?/);
-                if (match?.[1]) fileName = match[1];
-            }
-
             a.download = fileName;
             document.body.appendChild(a);
             a.click();
@@ -1542,7 +1535,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateDemandeReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
@@ -1600,7 +1593,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateLivraisonReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
