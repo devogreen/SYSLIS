@@ -1,17 +1,25 @@
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const TEST_ENV = require("../utils/consts")
+
+const localUrl = "uploads"
+const serverUrl =  "../syslisUploads"
+let baseUrl = serverUrl
+if (TEST_ENV) {
+  baseUrl = localUrl
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    let dir = "uploads/files/";
+    let dir = `${baseUrl}/files/`;
 
     if (file.fieldname === "signature") {
-      dir = "uploads/signatures/";
+      dir = `${baseUrl}/signatures/`;
     }
 
     if(file.fieldname === "qrCodes") {
-      dir = "uploads/qrCodes/"
+      dir = `${baseUrl}/qrCodes/`
     }
 
     if (!fs.existsSync(dir)) {

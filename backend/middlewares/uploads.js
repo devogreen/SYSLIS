@@ -1,10 +1,19 @@
 const multer = require('multer');
 const path = require('path');
 
+const TEST_ENV = require("../utils/consts")
+
+const localUrl = "uploads"
+const serverUrl =  "../syslisUploads"
+let baseUrl = serverUrl
+if (TEST_ENV) {
+  baseUrl = localUrl
+}
+
 // Config de stockage (ici stockage temporaire)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Dossier temporaire
+    cb(null, `${baseUrl}/`); // Dossier temporaire
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
