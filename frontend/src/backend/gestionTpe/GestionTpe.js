@@ -27,4 +27,20 @@ export class GestionTpe {
             throw error.response.data
         }
     }
+    async getTpeInfos(sn) {
+        try {
+            const response = await axios.get(`${urlBase}/api/gestion-tpe/getTpeInfos/${sn}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+    async changeTpeStatut(sn, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/gestion-tpe/changeTpeStatut/${sn}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }
