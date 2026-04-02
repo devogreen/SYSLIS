@@ -16,6 +16,7 @@ import {
   QrCodeIcon,
   RefreshTimeIcon,
   BaseLinePhoneIcon,
+  TrashBinIcon,
 } from "../../icons";
 import { useSidebar } from "../../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -95,7 +96,7 @@ const navItems: NavItem[] = [
   },
   {
     name: "Gestion des décomm",
-    icon: <ListIcon />,
+    icon: <TrashBinIcon />,
     roles: [23, 24, 25, 26],
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles:[23], pro: false },

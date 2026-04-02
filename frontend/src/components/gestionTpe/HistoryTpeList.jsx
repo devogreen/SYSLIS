@@ -68,6 +68,8 @@ export default function HistoryTpeList() {
             : null
     );
 
+    const [terminal, setTerminal] = useState(null)
+
     useEffect(() => {
         saveFilters({
             globalFilter,
@@ -83,6 +85,10 @@ export default function HistoryTpeList() {
                 setLoadingData(true)
                 const historiques = await parcData.getTpeHistory(id)
                 setHistoryTpe(historiques)
+
+                const tpeData = await parcData.getTpe(id)
+                // console.log(tpeData)
+                setTerminal(tpeData.serial_number)
     
                 const statuts = await parcData.getAllStatut()
                 const statutsOptions = statuts.map((item) => ({
@@ -173,6 +179,36 @@ export default function HistoryTpeList() {
         )
     }
 
+    const formTemplate = (tpe) => {
+        const form = tpe.forms
+        let typeForm = 'N/A'
+        if(form) {
+            typeForm = form.type
+        }
+        return (
+            <>
+                <div>
+                    <span className="font-medium">{typeForm}</span>
+                </div>
+            </>
+        )
+    }
+
+    const userTemplate = (tpe) => {
+        const user = tpe.users
+        let nomUser = 'N/A'
+        if(user) {
+            nomUser = user.fullname
+        }
+        return (
+            <>
+                <div>
+                    <span className="font-medium">{nomUser}</span>
+                </div>
+            </>
+        )
+    }
+
     const filteredTpe = historyTpe.filter((item) => {
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_id) : true;
         // const matchesDatesDecom = datesDecom ? (datesDecom[0] <= dateDecom && nextDayDecom >= dateDecom) : true;
@@ -189,21 +225,8 @@ export default function HistoryTpeList() {
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                 <div className="p-6 space-y-7">
-                    <div className="flex items-center">
-                        <div className="relative w-full">
-                            <Input
-                                className="pl-10"
-                                value={globalFilter}
-                                onChange={(e) => setGlobalFilter(e.target.value)}
-                                placeholder="Rechercher parmis les TPE..."
-                            />
-                            <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
-                        </div>
-                        <span className="pl-4">
-                            <button onClick={handleClearFilters}>
-                                <i className="pi pi-refresh"></i>
-                            </button>
-                        </span>
+                    <div>
+                        <span>TPE - {terminal}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3 pb-0">
                         <MultiSelect
@@ -233,21 +256,13 @@ export default function HistoryTpeList() {
                                 placeholder="jj/mm/aaaa - jj/mm/aaaa"
                             />
                         </div>
-                        {/* <div>
-                            <Label>Dates Update</Label>
-                            <Calendar
-                                value={datesUpdate}
-                                onChange={(e) => {
-                                    setDatesUpdate(e.value)
-                                }}
-                                selectionMode="range"
-                                readOnlyInput
-                                hideOnRangeSelection
-                                locale="fr"
-                                dateFormat="dd/mm/yy"
-                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
-                            />
-                        </div> */}
+                    </div>
+                    <div className="flex items-center">
+                        <span className="">
+                            <button onClick={handleClearFilters} className="border border-blue-500 text-blue-500 p-2 rounded text-xs hover:text-blue-700">
+                                Clear
+                            </button>
+                        </span>
                     </div>
                 </div>
                 <div className="p-6 pt-0 flex justify-between">
@@ -276,7 +291,9 @@ export default function HistoryTpeList() {
                         <Column field="statut_id" header="Statut" body={statutTemplate} sortable></Column>
                         {/* <Column field="last_modified_at" header="Dernière Modification" body={dateModificationTemplate} sortable></Column> */}
                         <Column field="created_at" header="Date mise à jour" body={dateCreationTemplate} sortable></Column>
-                        <Column header="Actions" body={''}></Column>
+                        <Column field="form_id" header="Formulaire" body={formTemplate} sortable></Column>
+                        <Column field="created_by" header="Utilisateur" body={userTemplate} sortable></Column>
+                        {/* <Column header="Actions" body={''}></Column> */}
                     </DataTable>
                 </div>
             </div>

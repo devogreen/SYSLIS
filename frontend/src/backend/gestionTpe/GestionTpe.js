@@ -43,4 +43,35 @@ export class GestionTpe {
             throw error.response.data
         }
     }
+    async extractSn(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/gestion-tpe/extractSn`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+    async changeListeStatut(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/gestion-tpe/changeListeStatut`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+    async getTpe(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/gestion-tpe/getTpe/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

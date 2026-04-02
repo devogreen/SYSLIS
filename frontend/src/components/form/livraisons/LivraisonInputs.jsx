@@ -25,6 +25,7 @@ import { Modal } from "../../ui/modal/index.tsx";
 import SignatureCanvas from 'react-signature-canvas'
 import { Users } from "../../../backend/users/Users.js"
 import { Stock } from "../../../backend/stock/Stock.js"
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 export default function LivraisonInputs() {
 
@@ -32,6 +33,7 @@ export default function LivraisonInputs() {
   const productDeliveries = new ProductDeliveries();
   const usersData = new Users()
   const stockData = new Stock()
+  const gestionTpeData = new GestionTpe()
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
 
@@ -92,6 +94,8 @@ export default function LivraisonInputs() {
   const [selectedFiles, setSelectedFiles] = useState([])
 
   const [isRneChecked, setRneChecked] = useState(false)
+
+  const [statutTpe, setStatutTpe] = useState('')
 
   // useEffect(() => {
   //   const savedProduits = sessionStorage.getItem("produitsLivreTable");
@@ -263,7 +267,7 @@ export default function LivraisonInputs() {
     );
   }
 
-  const handleChangeSn = (value) => {
+  const handleChangeSn = async (value) => {
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
@@ -271,23 +275,38 @@ export default function LivraisonInputs() {
     setMTNChecked(false)
     setMOOVChecked(false)
     setTerminalSN(value)
-    const pointMarchand = terminals.find((terminal) => {
-      return terminal.SERIAL_NUMBER == value
-    })
-    if (pointMarchand) {
-      console.log('Point marchand trouvé : ', pointMarchand)
-      setTerminalName(pointMarchand.POINT_MARCHAND)
-      setTerminalBanque(pointMarchand.BANQUE)
-      setTerminalCaisse(pointMarchand.TPE)
-      if (pointMarchand.NUM_ORANGE.startsWith("07")) {
-        setOrangeChecked(true)
+    setStatutTpe('')
+    try {
+      const pointMarchand = terminals.find((terminal) => {
+        return terminal.SERIAL_NUMBER == value
+      })
+      if (pointMarchand) {
+        console.log('Point marchand trouvé : ', pointMarchand)
+        setTerminalName(pointMarchand.POINT_MARCHAND)
+        setTerminalBanque(pointMarchand.BANQUE)
+        setTerminalCaisse(pointMarchand.TPE)
+        if (pointMarchand.NUM_ORANGE.startsWith("07")) {
+          setOrangeChecked(true)
+        }
+        if (pointMarchand.NUM_MTN.startsWith("05")) {
+          setMTNChecked(true)
+        }
+        if (pointMarchand.NUM_MOOV.startsWith("01")) {
+          setMOOVChecked(true)
+        }
       }
-      if (pointMarchand.NUM_MTN.startsWith("05")) {
-        setMTNChecked(true)
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        // console.log(tpeData)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpe(statutTpe)
+        } else {
+          setStatutTpe('non enregistré')
+        }
       }
-      if (pointMarchand.NUM_MOOV.startsWith("01")) {
-        setMOOVChecked(true)
-      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
     }
   }
 
@@ -361,7 +380,7 @@ export default function LivraisonInputs() {
     if (isMOOVChecked) {
       localMobileMoney.push("MOOV")
     };
-    if(isRneChecked) {
+    if (isRneChecked) {
       localMobileMoney.push("RNE")
     }
 
@@ -389,6 +408,7 @@ export default function LivraisonInputs() {
     setMOOVChecked(false);
     setRneChecked(false)
     setMobileMoney([]);
+    setStatutTpe('')
     setErrorAjout('')
     setIsConfirmModalOpen(false)
   }
@@ -432,7 +452,7 @@ export default function LivraisonInputs() {
     // });
     if (sign) {
       const blob = await fetch(sign).then(res => res.blob());
-      fd.append('signature_expediteur', blob, 'signature.png');
+      fd.append('signature', blob, 'signature.png');
     }
 
     try {
@@ -608,6 +628,7 @@ export default function LivraisonInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits

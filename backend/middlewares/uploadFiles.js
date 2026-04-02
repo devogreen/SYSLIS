@@ -1,9 +1,18 @@
 const multer = require("multer");
 const path = require("path");
 
+const TEST_ENV = require("../utils/consts")
+
+const localUrl = "uploads"
+const serverUrl =  "../syslisUploads"
+let baseUrl = serverUrl
+if (TEST_ENV) {
+  baseUrl = localUrl
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploadsFiles/");
+    cb(null, `${baseUrl}/uploadsFiles/`);
   },
   filename: (req, file, cb) => {
     const uniqueName =

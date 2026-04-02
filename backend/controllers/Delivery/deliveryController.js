@@ -308,8 +308,14 @@ const deliver = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+
     // Gestion de l'upload Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
     const signature_expediteur = uploadResult.secure_url;
@@ -320,6 +326,16 @@ const deliver = async (req, res) => {
     const dateAction = new Date()
 
     const livraison = await prisma.$transaction(async (tx) => {
+      const livraisonForm = await tx.forms.create({
+        data: {
+          type: 'livraison_sn',
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: utilisateur.fullname,
+          commentaire,
+        }
+      })
       const nouvelleLivraison = await tx.livraison.create({
         data: {
           statut_livraison: "en_cours",
@@ -327,7 +343,7 @@ const deliver = async (req, res) => {
           produitsLivre: JSON.stringify(produits),
           commentaire,
           nom_livreur: utilisateur.fullname || null,
-          date_livraison: new Date(),
+          date_livraison: dateAction,
           deleted: false,
           type_livraison_id: parseInt(type_livraison_id),
           user_id: utilisateur ? utilisateur.id_user : null,
@@ -336,90 +352,80 @@ const deliver = async (req, res) => {
           role_id: role_recepteur ? parseInt(role_recepteur) : null,
           model_id: selected_model ? parseInt(selected_model) : null,
           stock_id: selectedStock ? +selectedStock : null,
+          form_id: livraisonForm.id,
         }
       });
 
-      // Récupérer les SN de la liste
-      const serials = produits.map(item => item.serialNumber);
-
-      // Récupérer les TPE déjà enregistrés dans le PARC
-      const existingTpes = await tx.parc_tpe.findMany({
-        where: {
-          serial_number: { in: serials }
+      await tx.form_signatures.create({
+        data: {
+          form_id: livraisonForm.id,
+          signature_url: signature.path,
+          signed_by: utilisateur.id_user,
+          signed_at: dateAction,
+          role: 'livreur',
         },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
-      // Faire une liste SN, ID pour les TPE déjà enregistrés
-      const existingMap = new Map(
-        existingTpes.map(e => [e.serial_number, e.id])
-      );
+      })
 
-      const toCreate = [];
-      const toUpdate = [];
+      /*******************     GESTION PARC TPE     *******************/
 
-      // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-      produits.forEach(item => {
-        if (existingMap.has(item.serialNumber)) {
-          toUpdate.push(item);
-        } else {
-          toCreate.push(item);
-        }
-      });
+      let = allTpes = null
 
-      // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
-      if (toCreate.length > 0) {
+      if (nouvelleLivraison.type_livraison_id != 5 || nouvelleLivraison.type_livraison_id != 7 || nouvelleLivraison.type_livraison_id != 8) {
+        // Récupérer les SN de la liste
+        const serials = produits.map(item => item.serialNumber);
+
+        // 1. Create only missing ones
         await tx.parc_tpe.createMany({
-          data: toCreate.map(item => ({
-            serial_number: item.serialNumber,
+          data: serials.map(item => ({
+            serial_number: item,
             created_by: utilisateur.id_user,
             created_at: dateAction,
             last_modified_at: dateAction,
             statut_id: 2,
+          })),
+          skipDuplicates: true
+        });
+
+        // 2. Update ALL (existing + newly created)
+        await tx.parc_tpe.updateMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          data: {
+            updated_by: utilisateur.id_user,
+            updated_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 2,
+          }
+        });
+
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        allTpes = await tx.parc_tpe.findMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          select: {
+            id: true,
+            serial_number: true
+          }
+        });
+
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await tx.history_tpe.createMany({
+          data: allTpes.map(tpe => ({
+            id_tpe: tpe.id,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            statut_id: 2,
+            form_id: livraisonForm.id,
           }))
         });
       }
 
-      // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-      await Promise.all(
-        toUpdate.map(item =>
-          tx.parc_tpe.update({
-            where: { serial_number: item.serialNumber },
-            data: {
-              updated_by: utilisateur.id_user,
-              updated_at: dateAction,
-              last_modified_at: dateAction,
-              statut_id: 2,
-            }
-          })
-        )
-      );
-
-      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-      const allTpes = await tx.parc_tpe.findMany({
-        where: {
-          serial_number: { in: serials }
-        },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
-
-      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-      await tx.history_tpe.createMany({
-        data: allTpes.map(tpe => ({
-          id_tpe: tpe.id,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          statut_id: 2,
-        }))
-      });
-
       return {
-        nouvelleLivraison,
+        livraisonForm,
+        nouvelleLivraison, 
+        allTpes,
       }
     })
 
@@ -534,7 +540,7 @@ const deliver = async (req, res) => {
 
     res.status(201).json({
       message: "Livraison enregistrée avec succès",
-      livraison: livraison
+      data: livraison,
     });
 
   } catch (error) {
@@ -542,6 +548,7 @@ const deliver = async (req, res) => {
     res.status(500).json({ message: "Erreur interne", error });
   }
 };
+
 const regLivraison = async (req, res) => {
   try {
     const {
@@ -863,26 +870,88 @@ const updateLivraison = async (req, res) => {
       return res.status(404).json({ message: "Type de livraison non trouvé" });
     }
 
-    // Données à mettre à jour
-    const dataToUpdate = {
-      produitsLivre: typeof produitsLivre === "string" ? produitsLivre : JSON.stringify(produitsLivre),
-      commentaire,
-      statut_livraison: 'en_cours',
-      type_livraison_id: parseInt(type_livraison_id),
-      date_livraison: new Date(),
-      qte_totale_livraison: produits.length,
-      user_id: utilisateur ? utilisateur.id_user : null,
-      nom_livreur: utilisateur.fullname,
-      service_id: parseInt(service_recepteur),
-      role_id: parseInt(role_recepteur),
-      model_id: selected_model ? parseInt(selected_model) : null,
-    };
+    const dateAction = new Date()
 
-    // Mise à jour de la livraison
-    const updated = await prisma.livraison.update({
-      where: { id_livraison: parseInt(id) },
-      data: dataToUpdate
-    });
+    const livraison = await prisma.$transaction(async (tx) => {
+      // Données à mettre à jour
+      const dataToUpdate = {
+        produitsLivre: typeof produitsLivre === "string" ? produitsLivre : JSON.stringify(produitsLivre),
+        commentaire,
+        statut_livraison: 'en_cours',
+        type_livraison_id: parseInt(type_livraison_id),
+        date_livraison: new Date(),
+        qte_totale_livraison: produits.length,
+        user_id: utilisateur ? utilisateur.id_user : null,
+        nom_livreur: utilisateur.fullname,
+        service_id: parseInt(service_recepteur),
+        role_id: parseInt(role_recepteur),
+        model_id: selected_model ? parseInt(selected_model) : null,
+      };
+
+      // Mise à jour de la livraison
+      const updated = await prisma.livraison.update({
+        where: { id_livraison: parseInt(id) },
+        data: dataToUpdate
+      });
+
+      let = allTpes = null
+
+      if (updated.type_livraison_id != 5 || updated.type_livraison_id != 7 || updated.type_livraison_id != 8) {
+        // Récupérer les SN de la liste
+        const serials = produits.map(item => item.serialNumber);
+
+        // 1. Create only missing ones
+        await tx.parc_tpe.createMany({
+          data: serials.map(item => ({
+            serial_number: item,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 2,
+          })),
+          skipDuplicates: true
+        });
+
+        // 2. Update ALL (existing + newly created)
+        await tx.parc_tpe.updateMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          data: {
+            updated_by: utilisateur.id_user,
+            updated_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 2,
+          }
+        });
+
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        allTpes = await tx.parc_tpe.findMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          select: {
+            id: true,
+            serial_number: true
+          }
+        });
+
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await tx.history_tpe.createMany({
+          data: allTpes.map(tpe => ({
+            id_tpe: tpe.id,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            statut_id: 2,
+          }))
+        });
+      }
+
+      return {
+        updated,
+        allTpes,
+      }
+    })
 
 
     /********************************       GESTION DES MAILS       ***********************************/
@@ -943,14 +1012,14 @@ const updateLivraison = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${updated.id_livraison}`;
+    let deliveryLink = `${url}/formulaire/${livraison.updated.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `MODIFICATION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
-        <p>La livraison ${updated.id_livraison} a été modifiée.</p>
+        <p>La livraison ${livraison.updated.id_livraison} a été modifiée.</p>
         <ul>
           <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
@@ -994,7 +1063,10 @@ const updateLivraison = async (req, res) => {
       }
     }
 
-    return res.status(200).json(updated);
+    return res.status(200).json({
+      message: "Livraison effectuée avec succès",
+      data: livraison,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur lors de la mise à jour", error });

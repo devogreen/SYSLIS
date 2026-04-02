@@ -1436,7 +1436,7 @@ const clotureDecom = async (req, res) => {
             <p>Bonjour,</p>
             <p>Le décommissionnement ${decom.id} a été clôturé.</p>
             <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
             </ul>
             <br>
             <p>Commentaire : ${commentaire_mail}<p>

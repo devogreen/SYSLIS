@@ -166,7 +166,7 @@ export default function AllDecomList() {
     const dateClotureTemplate = (decom) => {
         const index = decom.retour_decom.length - 1
         const retour = decom.retour_decom[index]
-        const dateValue = retour && decom.statut != 'en_cours' ? formatDate(retour.forms.last_modified_at) : 'N/A'
+        const dateValue = retour && decom.statut == 'clos' ? formatDate(retour.forms.last_modified_at) : 'N/A'
         return (
             <div className="">
                 <span className="font-medium">{dateValue}</span>
@@ -268,7 +268,7 @@ export default function AllDecomList() {
                     </div>
                     <div className="flex justify-normal flex-wrap gap-3">
                         <div>
-                            <Label>Dates Décommissionnement</Label>
+                            <Label>Dates demande de décom</Label>
                             <Calendar
                                 value={datesDecom}
                                 onChange={(e) => {
@@ -340,7 +340,7 @@ export default function AllDecomList() {
                         <Column field="id" header="ID" sortable></Column>
                         <Column field="statut" header="Statut" body={statutTemplate} sortable></Column>
                         <Column field="quantite" header="Quantité" sortable></Column>
-                        <Column field="forms.last_modified_at" header="Date Décom" body={dateDecomTemplate} sortable></Column>
+                        <Column field="forms.last_modified_at" header="Date Demande" body={dateDecomTemplate} sortable></Column>
                         <Column header="Date Réception" body={dateReceptionTemplate} sortable></Column>
                         <Column header="Dernière Vérification" body={dateVerificationTemplate} sortable></Column>
                         <Column header="Date Cloture" body={dateClotureTemplate} sortable></Column>

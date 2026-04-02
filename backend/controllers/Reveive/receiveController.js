@@ -28,48 +28,45 @@ const createValidation = async (req, res) => {
       where: { id_livraison: parseInt(livraison_id) },
     });
 
-    if (!livraison) return res.status(404).json({ message: "Livraison introuvable." });
+    if (!livraison) {
+      console.error("Livraison introuvable.")
+      return res.status(404).json({ message: "Livraison introuvable." });
+    }
 
     if (livraison.statut_livraison === "livre") {
+      console.error("Livraison déjà validée.")
       return res.status(400).json({ message: "Livraison déjà validée." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Signature du récepteur requise." });
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
     }
 
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
-    const signature = uploadResult.secure_url;
+    const signatureCloud = uploadResult.secure_url;
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
-
+    if (!user_id) {
+      console.error("Utilisateur non authentifié.")
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
     });
 
+    let produitsLivre = livraison.produitsLivre
+
+    const produits = typeof produitsLivre === "string"
+      ? JSON.parse(produitsLivre)
+      : produitsLivre;
+
     if (!user) {
+      console.error("Utilisateur non trouvé.")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
-
-    const newValidation = await prisma.validations.create({
-      data: {
-        livraison_id: parseInt(livraison_id),
-        date_validation: new Date(),
-        commentaire,
-        user_id: user_id ? parseInt(user_id) : null,
-        nom_recepteur: user.fullname,
-        signature,
-      },
-    });
-
-    await prisma.livraison.update({
-      where: { id_livraison: parseInt(livraison_id) },
-      data: { statut_livraison: "livre" },
-    });
-
-    // ***************************************     GESTION STOCK CHARGEUR     *************************************
 
     const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
       where: {
@@ -78,55 +75,112 @@ const createValidation = async (req, res) => {
     })
     let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-    if (livraison.stock_id) {
-      const stockChargeur = await prisma.stocks.findUnique({
-        where: {
-          id: livraison.stock_id,
-        },
-      })
-      const quantiteChargeur = stockChargeur.quantite_piece
-      await prisma.stocks.update({
-        where: {
-          id: stockChargeur.id,
-        },
+    const dateAction = new Date()
+
+    const reception = await prisma.$transaction(async (tx) => {
+      const receptionForm = await tx.forms.create({
         data: {
-          quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
-          last_update: new Date(),
+          type: 'reception_sn',
+          created_by: user.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: user.fullname,
+          commentaire,
         }
       })
-      const mouvementDetails = {
-        typeMouvement: 5,
-        stockInitialPiece: quantiteChargeur,
-        quantiteMouvement: livraison.qte_totale_livraison,
-        stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+      const newValidation = await tx.validations.create({
+        data: {
+          livraison_id: parseInt(livraison_id),
+          date_validation: new Date(),
+          commentaire,
+          user_id: user_id ? parseInt(user_id) : null,
+          nom_recepteur: user.fullname,
+          signature: signatureCloud,
+          form_id: receptionForm.id,
+        },
+      });
+
+      await tx.livraison.update({
+        where: { id_livraison: parseInt(livraison_id) },
+        data: { statut_livraison: "livre" },
+      });
+
+      await tx.sn_livraison.createMany({
+        data: produits.map((item) => ({
+          serial_number: item.serialNumber,
+          point_marchand: item.pointMarchand,
+          caisse: item.caisse,
+          mobile_money: JSON.stringify(item.mobile_money),
+          banque: item.banque,
+          commentaire: item.commentaireTPE,
+          created_at: dateAction,
+          livraison_id: livraison.id_livraison,
+          last_modified_at: dateAction,
+        }))
+      })
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: receptionForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: dateAction,
+          role: 'receveur',
+        },
+      })
+
+      // ***************************************     GESTION STOCK CHARGEUR     *************************************
+
+      if (livraison.stock_id) {
+        const stockChargeur = await tx.stocks.findUnique({
+          where: {
+            id: livraison.stock_id,
+          },
+        })
+        const quantiteChargeur = stockChargeur.quantite_piece
+        await tx.stocks.update({
+          where: {
+            id: stockChargeur.id,
+          },
+          data: {
+            quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            last_update: new Date(),
+          }
+        })
+        const mouvementDetails = {
+          typeMouvement: 5,
+          stockInitialPiece: quantiteChargeur,
+          quantiteMouvement: livraison.qte_totale_livraison,
+          stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+        }
+        await tx.mouvement_stock.create({
+          data: {
+            type: 'sortie',
+            mouvement: 5,
+            formulaire_id: livraison.id_livraison,
+            stock_id: stockChargeur.id,
+            piece_id: 1,
+            service_origine: 3,
+            service_destination: livraison.service_id,
+            model_id: 1,
+            stock_initial: quantiteChargeur,
+            quantite: livraison.qte_totale_livraison,
+            stock_final: quantiteChargeur - livraison.qte_totale_livraison,
+            quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            motif: livraisonTypeName,
+            commentaire: livraison.commentaire,
+            details_mouvement: JSON.stringify(mouvementDetails),
+          }
+        })
       }
-      await prisma.mouvement_stock.create({
-        data: {
-          type: 'sortie',
-          mouvement: 5,
-          formulaire_id: livraison.id_livraison,
-          stock_id: stockChargeur.id,
-          piece_id: 1,
-          service_origine: 3,
-          service_destination: livraison.service_id,
-          model_id: 1,
-          stock_initial: quantiteChargeur,
-          quantite: livraison.qte_totale_livraison,
-          stock_final: quantiteChargeur - livraison.qte_totale_livraison,
-          quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
-          motif: livraisonTypeName,
-          commentaire: livraison.commentaire,
-          details_mouvement: JSON.stringify(mouvementDetails),
-        }
-      })
-    }
+
+      return {
+        receptionForm,
+        newValidation,
+      }
+    })
+
     /******************************* GESTION DES MAILS  *******************************/
-
-    let produitsLivre = livraison.produitsLivre
-
-    const produits = typeof produitsLivre === "string"
-      ? JSON.parse(produitsLivre)
-      : produitsLivre;
 
     const supervisionRole = await prisma.user_roles.findMany({
       where: {
@@ -194,7 +248,11 @@ const createValidation = async (req, res) => {
       }
     }
 
-    return res.status(201).json(newValidation);
+    console.log("Réception effectuée avec succès !")
+    return res.status(201).json({
+      message: "Réception effectuée avec succès",
+      data: reception,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });

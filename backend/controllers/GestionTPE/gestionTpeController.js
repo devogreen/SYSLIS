@@ -91,9 +91,9 @@ const getTpeHistory = async (req, res) => {
             },
             include: {
                 users: true,
-                forms: true,
                 stocks: true,
                 statut_tpe: true,
+                forms: true,
             },
             orderBy: {
                 created_at: 'desc'
@@ -256,32 +256,70 @@ const extractSn = async (req, res) => {
             });
         }
 
-        const serials = new Set();
+        const serials = [];
+        const snSet = new Set()
         let duplicateError = null;
+        let formatError = null;
+        const isOnlyDigits = (str) => /^\d+$/.test(str);
+
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
 
             const sn = normalize(row.getCell(headers[requireHeader]).value);
             if (!sn) return;
 
-            if (serials.has(sn)) {
+            if (snSet.has(sn)) {
                 duplicateError = {
                     rowNumber,
                     sn,
                 };
                 return;
             }
-            serials.add(sn);
+            if (sn.length != 10 || !isOnlyDigits(sn)) {
+                formatError = {
+                    rowNumber,
+                    sn,
+                };
+                return;
+            }
 
+            snSet.add(sn)
             // console.log("Données extraites ligne", rowNumber, marchand);
         })
 
+        if (formatError) {
+            return res.status(400).json({
+                message: `SN invalide à la ligne ${formatError.rowNumber} pour le SN ${formatError.sn}`,
+            });
+        }
         if (duplicateError) {
             return res.status(400).json({
                 message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le SN ${duplicateError.sn}`,
             });
         }
 
+        let statut = 'non enregistré'
+        const listeSn = [...snSet]
+        for (let sn of listeSn) {
+            const serial_number = await prisma.parc_tpe.findUnique({
+                where: {
+                    serial_number: sn
+                },
+                include: {
+                    statut_tpe: true
+                }
+            })
+            if (serial_number) {
+                statut = serial_number.statut_tpe.statut
+            }
+            const element = {
+                sn,
+                statut,
+            }
+            serials.push(element)
+        }
+        // const serialList = [...serials]
+        // console.log(serials)
         console.log(`Extraction complète par utilisateur ${userId} !`)
         return res.status(201).json({
             message: "Extraction complète",
@@ -293,11 +331,128 @@ const extractSn = async (req, res) => {
     }
 }
 
+const changeListeStatut = async (req, res) => {
+    try {
+        const {
+            statutId,
+            userId,
+            serials,
+        } = req.body
 
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        if (serials.length == 0) {
+            console.error('Liste vide !')
+            return res.status(400).json({ message: "Liste vide !" });
+        }
+        const dateAction = new Date()
+
+        const modification = await prisma.$transaction(async (tx) => {
+            // 1. Create only missing ones
+            await tx.parc_tpe.createMany({
+                data: serials.map(item => ({
+                    serial_number: item,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: parseInt(statutId),
+                })),
+                skipDuplicates: true
+            });
+
+            // 2. Update ALL (existing + newly created)
+            await tx.parc_tpe.updateMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: parseInt(statutId),
+                }
+            });
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            const allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: parseInt(statutId),
+                }))
+            });
+
+            return {
+                allTpes,
+            }
+        })
+
+        console.log('Liste de SN modifiée avec succès !')
+        res.status(201).json({
+            message: 'Liste de SN modifiée avec succès !',
+            data: modification,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la modification :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const getTpe = async (req, res) => {
+    try {
+        const {
+            id,
+        } = req.params
+
+        const tpe = await prisma.parc_tpe.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+            include: {
+                users_create_tpe: true,
+                users_update_tpe: true,
+                statut_tpe: true,
+                history_tpe: {
+                    include: {
+                        users: true,
+                        forms: true,
+                        stocks: true,
+                    },
+                },
+            },
+        })
+        res.status(200).json(tpe);
+    } catch (error) {
+        console.error("Erreur lors de la récupération du TPE :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
+    }
+}
 module.exports = {
     getParcTpe,
     getAllStatut,
     getTpeHistory,
     getTpeInfos,
     changeTpeStatut,
+    extractSn,
+    changeListeStatut,
+    getTpe,
 }

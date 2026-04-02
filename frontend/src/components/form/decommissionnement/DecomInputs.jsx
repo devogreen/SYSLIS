@@ -20,12 +20,14 @@ import { ProgressSpinner } from "primereact/progressspinner";
 import JSZip from "jszip";
 import { Decom } from "../../../backend/decom/decom.js";
 import { useParams, Link, useNavigate } from "react-router";
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 export default function DecomInputs() {
 
     const merchantsData = new Merchants()
     const userId = localStorage.getItem('id');
     const decomData = new Decom()
+    const gestionTpeData = new GestionTpe()
     const navigate = useNavigate()
 
     const LISTE_KEY = "listeDecom";
@@ -70,6 +72,10 @@ export default function DecomInputs() {
     const [loadingValidation, setLoadingValidation] = useState(false)
 
     const [isModalValidateOpen, setIsModalValidateOpen] = useState(false)
+
+    const [statutTpe, setStatutTpe] = useState('')
+    const [loadingFunction, setLoadingFunction] = useState(false)
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -96,20 +102,38 @@ export default function DecomInputs() {
         })
     }, [listeDecom, quantiteTotale, message])
 
-    const handleChangeSn = (value) => {
+    const handleChangeSn = async (value) => {
         setTerminalName('')
         setTerminalBanque('')
         setTerminalCaisse('')
+        setStatutTpe('')
         setTerminalSN(value)
-        const pointMarchand = merchantList.find((terminal) => {
-            return terminal.SERIAL_NUMBER == value
-        })
-        if (pointMarchand) {
-            setTerminalName(pointMarchand.POINT_MARCHAND)
-            setTerminalBanque(pointMarchand.BANQUE)
-            setTerminalCaisse(pointMarchand.TPE)
-            setIdGim(pointMarchand.Id_Terminal_GIM)
-            setIdEcobank(pointMarchand.Id_Terminal_CB)
+        try {
+            const pointMarchand = merchantList.find((terminal) => {
+                return terminal.SERIAL_NUMBER == value
+            })
+            if (pointMarchand) {
+                setTerminalName(pointMarchand.POINT_MARCHAND)
+                setTerminalBanque(pointMarchand.BANQUE)
+                setTerminalCaisse(pointMarchand.TPE)
+                setIdGim(pointMarchand.Id_Terminal_GIM)
+                setIdEcobank(pointMarchand.Id_Terminal_CB)
+            }
+            if (value.length == 10) {
+                setLoadingFunction(true)
+                const tpeData = await gestionTpeData.getTpeInfos(value)
+                // console.log(tpeData)
+                if (tpeData) {
+                    const statutTpe = tpeData.statut_tpe.statut
+                    setStatutTpe(statutTpe)
+                } else {
+                    setStatutTpe('non enregistré')
+                }
+            }
+        } catch (error) {
+            console.log('Error fetching data ', error)
+        } finally {
+            setLoadingFunction(false)
         }
     }
 
@@ -250,6 +274,7 @@ export default function DecomInputs() {
         setIsRAS(false)
         setIsProblem(false)
         setCommentaire('')
+        setStatutTpe('')
     }
 
     const handleDelete = (indexToRemove) => {
@@ -271,6 +296,7 @@ export default function DecomInputs() {
 
         setIsModalValidateOpen(true)
     }
+
     const handleValidate = async () => {
         setIsModalValidateOpen(false)
         setLoadingValidation(true)
@@ -375,6 +401,7 @@ export default function DecomInputs() {
                                                 </div>
                                                 <div>
                                                     <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
+                                                    <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
                                                     <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                                                         const value = e.target.value
                                                         // Allow only digits
@@ -569,7 +596,7 @@ export default function DecomInputs() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label>Commentaire</Label>
+                                                    <Label>Commentaire TPE</Label>
                                                     <TextArea
                                                         value={commentaire}
                                                         onChange={(value) => setCommentaire(value)}

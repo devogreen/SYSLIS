@@ -156,6 +156,10 @@ export default function DecomDetails() {
                     if (nomRoles.includes('decom')) {
                         setIsLivreur(true)
                     }
+                } else if (statut == 'clos' && verification && verification.type == 'cloture') {
+                    setStatutDecom('clos')
+                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-100 text-gray-400')
+                    setChecking(true)
                 }
 
                 if (statut == 'recu' || statut == 'clos') {

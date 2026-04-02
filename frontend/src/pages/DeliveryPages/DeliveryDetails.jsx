@@ -227,7 +227,7 @@ export default function DeliveryDetails() {
                 text: "Formulaire réceptionné avec succès",
                 icon: "success"
             });
-            console.log(response)
+            // console.log(response)
             navigate('/toutes-les-livraisons');
         } catch (error) {
             setLoadingReception(false)

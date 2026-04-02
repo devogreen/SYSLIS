@@ -46,6 +46,12 @@ export default function ManipulationTpeInputs() {
 
     const [selectedExcelFile, setSelectedExcelFile] = useState(null)
 
+    const [listeSn, setListeSn] = useState([])
+
+    const [isModalStatutsOpen, setIsModalStatutsOpen] = useState(false)
+
+    const [isModalConfirmMultipleOpen, setIsModalConfirmMultipleOpen] = useState(false)
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -85,7 +91,44 @@ export default function ManipulationTpeInputs() {
     });
 
     const handleExtract = async () => {
+        try {
+            setErrorAjout('')
+            setListeSn([])
 
+            if (!selectedExcelFile) {
+                Swal.fire({
+                    title: "Attention",
+                    text: "Veuillez sélectionner un fichier Excel !",
+                    icon: "warning"
+                })
+                return
+            }
+            setLoadingExtract(true)
+
+            const fd = new FormData()
+            fd.append('file', selectedExcelFile)
+            fd.append('userId', userId)
+
+            const response = await gestionTpeData.extractSn(fd)
+            const serials = response.data
+            console.log(serials)
+
+            setListeSn(serials)
+            Swal.fire({
+                title: "Succès",
+                text: `Données Excel extraites avec succès : ${serials.length} SN trouvés !`,
+                icon: "success"
+            })
+        } catch (error) {
+            console.error("Erreur lors de l'extraction des données Excel:", error);
+            Swal.fire({
+                title: "Attention",
+                text: error.message,
+                icon: "warning"
+            })
+        } finally {
+            setLoadingExtract(false)
+        }
     }
 
     const handleSn = async (value) => {
@@ -94,7 +137,7 @@ export default function ManipulationTpeInputs() {
             setTerminalSn(value)
             if (value.length == 10) {
                 const tpeData = await gestionTpeData.getTpeInfos(value)
-                console.log(tpeData)
+                // console.log(tpeData)
                 if (tpeData) {
                     const statutTpe = tpeData.statut_tpe.statut
                     setStatutTpe(statutTpe)
@@ -120,7 +163,7 @@ export default function ManipulationTpeInputs() {
         }
     }
 
-    const handleConfirm = () => {
+    const handleConfirmSingle = () => {
         if (!terminalSn || terminalSn.length < 10) {
             setErrorAjout('S/N invalide !')
             return
@@ -135,23 +178,60 @@ export default function ManipulationTpeInputs() {
         }
         setIsModalConfirmOpen(true)
     }
+    const handleConfirmMultiple = () => {
+        if (listeSn.length == 0) {
+            setErrorAjout('Liste de S/N invalide !')
+            return
+        }
+        if (!selectedStatut) {
+            setErrorAjout('Vous devez choisir un statut !')
+            return
+        }
+
+        setIsModalConfirmMultipleOpen(true)
+    }
 
     const handleValidate = async () => {
         setIsModalConfirmOpen(false)
+        setIsModalConfirmMultipleOpen(false)
         try {
             setLoadingValidation(true)
-            const payload = {
-                statutId: selectedStatut,
-                userId,
+            if (isSingle) {
+                const payload = {
+                    statutId: selectedStatut,
+                    userId,
+                }
+                const sn = terminalSn
+                await gestionTpeData.changeTpeStatut(sn, payload)
+                Swal.fire({
+                    title: "Succès",
+                    text: "Opération effectuée avec succès !",
+                    icon: "success"
+                })
+            } else if (isMultiple) {
+                const serials = listeSn.map((item) => {
+                    return item.sn
+                })
+                const payload = {
+                    statutId: selectedStatut,
+                    userId,
+                    serials,
+                }
+                await gestionTpeData.changeListeStatut(payload)
+                Swal.fire({
+                    title: "Succès",
+                    text: "Opération effectuée avec succès !",
+                    icon: "success"
+                })
+                navigate('/parc-tpe')
+            } else {
+                Swal.fire({
+                    title: "Attention",
+                    text: "Une erreur s'est produite !",
+                    icon: "warning"
+                })
+                navigate('/parc-tpe')
             }
-            const sn = terminalSn
-            await gestionTpeData.changeTpeStatut(sn, payload)
-            Swal.fire({
-                title: "Succès",
-                text: "Opération effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/parc-tpe')
         } catch (error) {
             console.log("Erreur : ", error)
             Swal.fire({
@@ -162,6 +242,11 @@ export default function ManipulationTpeInputs() {
             navigate('/parc-tpe')
         } finally {
             setLoadingValidation(false)
+            setTerminalSn('')
+            setSelectedExcelFile(null)
+            setListeSn([])
+            setStatutTpeId(null)
+            setStatutTpe('')
         }
     }
     return (
@@ -196,6 +281,7 @@ export default function ManipulationTpeInputs() {
                                                                         setIsSingle(false)
                                                                     } else {
                                                                         setIsSingle(true)
+                                                                        setIsMultiple(false)
                                                                     }
                                                                 }}
                                                                 label="Par S/N" />
@@ -208,6 +294,7 @@ export default function ManipulationTpeInputs() {
                                                                         setIsMultiple(false)
                                                                     } else {
                                                                         setIsMultiple(true)
+                                                                        setIsSingle(false)
                                                                     }
                                                                 }}
                                                                 label="Par fichier" />
@@ -244,12 +331,12 @@ export default function ManipulationTpeInputs() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                    
+
                                                     </>
                                                 )}
                                                 {isMultiple ? (
                                                     <>
-                                                        <div>
+                                                        <div className="space-y-2">
                                                             <div>
                                                                 <Label>Fichier Excel</Label>
                                                                 <div className="flex space-x-1.5">
@@ -286,6 +373,31 @@ export default function ManipulationTpeInputs() {
                                                                     )}
                                                                 </div>
                                                             </div>
+                                                            <div>
+                                                                {listeSn.length > 0 ? (
+                                                                    <>
+                                                                        <div className="">
+                                                                            <div className="w-full flex items-center">
+                                                                                <button className="w-1/5 flex items-center justify-center bg-blue-400 p-1 rounded text-xs"
+                                                                                    onClick={() => {
+                                                                                        setIsModalStatutsOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    Voir statuts
+                                                                                </button>
+                                                                            </div>
+                                                                            <div>
+                                                                                <span className="font-semibold text-xs text-green-700">
+                                                                                    {listeSn.length} S/N.
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -312,11 +424,28 @@ export default function ManipulationTpeInputs() {
                                                             ) : (
                                                                 <>
                                                                     <div className="w-full flex justify-center items-center">
-                                                                        <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                                            onClick={handleConfirm}
-                                                                        >
-                                                                            Valider
-                                                                        </button>
+                                                                        {isSingle ? (
+                                                                            <>
+                                                                                <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                                    onClick={handleConfirmSingle}
+                                                                                >
+                                                                                    Valider
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
+                                                                        {isMultiple ? (
+                                                                            <>
+                                                                                <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                                    onClick={handleConfirmMultiple}
+                                                                                >
+                                                                                    Valider
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
                                                                     </div>
                                                                 </>
                                                             )}
@@ -357,6 +486,69 @@ export default function ManipulationTpeInputs() {
                                     <span className="text-red-600 font-medium">{statutTpe}</span>
                                     <span><i className="pi pi-arrow-right"></i></span>
                                     <span className="font-bold">{nomStatut}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleValidate}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalStatutsOpen} onClose={() => setIsModalStatutsOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-6 pb-2">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Statuts</span>
+                    </div>
+                    <div>
+                        <div className="space-y-2 flex flex-col justify-center items-center w-full">
+                            <div className="text-md font-semibold text-center">
+                                <span>S/N extraits</span>
+                            </div>
+                            <div className="h-80 overflow-y-auto w-full">
+                                <table className="border w-full">
+                                    <tbody>
+                                        <tr className="border-2 border-black">
+                                            <th>Serial Number</th>
+                                            <th>Statut</th>
+                                        </tr>
+                                        {listeSn.map((item) => {
+                                            return (
+                                                <>
+                                                    <tr className="border border-black">
+                                                        <th className="text-sm font-normal">{item.sn}</th>
+                                                        <th className="text-sm font-normal">{item.statut}</th>
+                                                    </tr>
+                                                </>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalConfirmMultipleOpen} onClose={() => setIsModalConfirmMultipleOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-6">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Confirmation</span>
+                    </div>
+                    <div>
+                        <div className="space-y-2">
+                            <div className="text-xl font-semibold text-center">
+                                <span>{listeSn.length} TPEs</span>
+                            </div>
+                            <div className="text-center text-sm ">
+                                <div className="">
+                                    <span className="font-medium">Nouveau Statut : </span>
+                                    <span className="font-bold text-blue-600">{nomStatut}</span>
                                 </div>
                             </div>
                         </div>

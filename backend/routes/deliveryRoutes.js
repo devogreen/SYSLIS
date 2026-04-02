@@ -10,7 +10,7 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
-    updateRemplacement, returnRemplacement, generateRemplacementPDF, regLivraison, regReception,
+    updateRemplacement, returnRemplacement, generateRemplacementPDF,
 } = require("../controllers/Delivery/deliveryController")
 
 // router.post('/deliver', uploadDeliver.fields([
@@ -18,20 +18,18 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
 //     { name: "files", maxCount: 10 }
 // ]), deliver
 // );
-router.post('/regLivraison', uploadAll.fields([
+router.post('/deliver', uploadAll.fields([
     { name: 'signature' },
-]), regLivraison);
-router.post('/regReception', uploadAll.fields([
-    { name: 'signature' },
-]), regReception);
-router.post('/deliver', upload.single('signature_expediteur'), deliver);
+]), deliver);
 router.get("/getAllLivraisons", getAllLivraisons);
 router.get("/getOneLivraison/:id", getOneLivraison);
 router.put("/updateLivraison/:id", updateLivraison);
 router.get("/deleteLivraison/:id", deleteLivraison);
 router.get("/pdf/:id", generateLivraisonPDF);
 router.post("/deliverOld", deliverOld);
-router.post("/deliverStock", upload.single('signature_expediteur'), deliverStock);
+router.post("/deliverStock", uploadAll.fields([
+    { name: 'signature' },
+]), deliverStock);
 router.get("/getAllTypeLivraisonCommerciale", getAllTypeLivraisonCommerciale);
 router.get("/getAllStockDeliveries", getAllStockDeliveries);
 router.get("/getOneLivraisonDemande/:id", getOneLivraisonDemande);
@@ -43,10 +41,14 @@ router.put("/deleteTypeLivraison/:id", deleteTypeLivraison);
 router.put("/updateDeliveryStock/:id", updateDeliveryStock);
 router.post("/totalPdf", generateTotalLivraisonPDF);
 router.get("/getAllTypeParametrage", getAllTypeParametrage);
-router.post("/makeRemplacement", upload.single('signature_expediteur'), makeRemplacement);
+router.post("/makeRemplacement", uploadAll.fields([
+    { name: 'signature' },
+]), makeRemplacement);
 router.get("/getAllRemplacements", getAllRemplacements);
 router.get("/getOneRemplacement/:id", getOneRemplacement);
-router.post("/validateRemplacement", upload.single('signature'), validateRemplacement);
+router.post("/validateRemplacement", uploadAll.fields([
+    { name: 'signature' },
+]), validateRemplacement);
 router.post("/generateDeliveriesXLSX", generateDeliveriesXLSX);
 router.post("/generateRemplacementsXLSX", generateRemplacementsXLSX);
 router.put("/updateRemplacement/:id", updateRemplacement);

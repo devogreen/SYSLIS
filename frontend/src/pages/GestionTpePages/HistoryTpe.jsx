@@ -5,7 +5,7 @@ export default function HistoryTpe() {
     return (
         <>
             <div>
-                <PageBreadcrumb pageTitle="Parc TPE" />
+                <PageBreadcrumb pageTitle="Historique TPE" />
                 <div className="">
                     < HistoryTpeList/>
                 </div>
