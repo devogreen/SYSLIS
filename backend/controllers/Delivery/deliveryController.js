@@ -645,7 +645,8 @@ const getAllLivraisons = async (req, res) => {
       where: { deleted: false },
       orderBy: { date_livraison: 'desc' },
       include: {
-        validations: true
+        validations: true,
+        type_livraison_commerciale : true
       }
     });
 

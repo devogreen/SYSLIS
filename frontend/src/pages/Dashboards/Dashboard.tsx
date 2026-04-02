@@ -129,49 +129,62 @@ export default function Dashboard() {
       <div className="group p-8 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
 
         {/* HEADER */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-purple-800">📦 Types livrés</h3>
+        <div className="p-6 bg-purple-50 rounded-2xl shadow-md">
+          <div className="flex items-center mb-4">
+            {/* Titre */}
+            <span className="text-purple-800 font-bold text-lg mr-3">📦 Livraison TPE</span>
+            {/* Icône décorative */}
+            <div className="p-2 bg-purple-200 rounded-2xl">
+              <svg
+                className="w-6 h-6 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 7l9-4 9 4-9 4-9-4zm0 7l9 4 9-4M3 7v7m18-7v7"
+                />
+              </svg>
+            </div>
           </div>
-          {/* QR Codes dynamiques */}
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">Demandes QR reçues</p>
-            <p className="text-xl font-bold">
-              {stats?.qr_codes?.recue ?? 0}
-            </p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">TPE GIM livrés</p>
-            <p className="text-xl font-bold">
-              {stats?.livraisons?.livrees}
-            </p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">MAJ livrées</p>
-            <p className="text-xl font-bold">
-              {stats?.typesLivraisons?.["MAJ"] ?? 0}
-            </p>
-          </div>
-          {stats?.typesLivraisons &&
-            Object.entries(stats.typesLivraisons).map(([type, total]) => (
-              <div key={type} className="bg-white p-4 rounded-xl shadow">
-                <p className="text-gray-500">{type}</p>
-                <p className="text-xl font-bold">{total as number}</p>
-                <p className="text-gray-500">Livrés</p>
-              </div>
-            ))}
-          {/* <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">Chargeurs</p>
-            <p className="text-xl font-bold">
-              {stats?.chargeur}</p>
-          </div> */}
-          <div className="p-3 bg-purple-200 rounded-2xl">
-            <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4zm0 7l9 4 9-4M3 7v7m18-7v7" />
-            </svg>
+
+          {/* Cartes des stats */}
+          <div className="flex flex-wrap gap-4">
+            {/* QR Codes reçus */}
+            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+              <p className="text-gray-500 text-sm">Demandes QR reçues</p>
+              <p className="text-xl font-bold">{stats?.qr_codes?.recue ?? 0}</p>
+            </div>
+
+            {/* TPE GIM livrés */}
+            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+              <p className="text-gray-500 text-sm">TPE GIM livrés</p>
+              <p className="text-xl font-bold">{stats?.livraisons?.livrees}</p>
+            </div>
+
+            {/* MAJ livrées */}
+            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+              <p className="text-gray-500 text-sm">MAJ livrées</p>
+              <p className="text-xl font-bold">{stats?.typesLivraisons?.["MAJ"] ?? 0}</p>
+            </div>
+
+            {/* Types de livraisons dynamiques */}
+            {stats?.typesLivraisons &&
+              Object.entries(stats.typesLivraisons).map(([type, total]) => (
+                <div
+                  key={type}
+                  className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between"
+                >
+                  <p className="text-gray-500 text-sm">{type}</p>
+                  <p className="text-xl font-bold">{total as number}</p>
+                  <p className="text-gray-500 text-xs">Livrés</p>
+                </div>
+              ))}
           </div>
         </div>
-
         {/* GRID DES STATS */}
         {/* <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
 
@@ -218,7 +231,7 @@ export default function Dashboard() {
         </div> */}
       </div>
       {/* 🏗️ MAIN STATS GRID */}
-{stats ? (
+      {stats ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
           {/* DEMANDES */}
           <div className="group p-8 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
@@ -294,10 +307,9 @@ export default function Dashboard() {
       )}
 
       {/* 📈 CHARTS & TABLES */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h3 className="text-xl font-bold mb-6">📊 Livraisons par Statut</h3>
-          {/* <LivraisonsPieStats startDate={startDate} endDate={endDate} /> */}
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -313,18 +325,18 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* 📋 RECENT ACTIVITY */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl p-6">
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
             🚚 Dernières Livraisons <span className="text-sm opacity-70">({stats?.livraisons?.total || 0})</span>
-          </h3>
+          </h3> */}
           {/* <LivraisonsLivrees startDate={startDate} endDate={endDate} limit={5} /> */}
-        </div>
+        {/* </div> */}
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
+        {/* <div className="bg-white rounded-2xl shadow-xl p-6">
           <h3 className="text-xl font-bold mb-6">📦 Stocks Critiques</h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
@@ -337,7 +349,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

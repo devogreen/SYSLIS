@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from '../../components/form/date-picker';
-import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
+import { 
+  startOfWeek, endOfWeek, format, getWeek 
+} from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 type DateValue = string | Date | Date[];
@@ -11,7 +13,7 @@ interface Livraison {
   qte_totale_livraison: number;
   statut_livraison: string;
   nom_livreur?: string;
-  type_livraison_commerciale?: {
+  type_livraison_commerciale: {
     nom_type_livraison: string;
   };
   validations?: Array<{
@@ -23,6 +25,13 @@ interface Stats {
   attente: number;
   livrees: number;
   returns: number;
+}
+
+interface HierarchyNode {
+  count: number;
+  months?: Record<string, HierarchyNode>;
+  weeks?: Record<string, HierarchyNode>;
+  days?: Record<string, Livraison[]>;
 }
 
 export default function SousDashboardLivraison() {
@@ -43,8 +52,9 @@ export default function SousDashboardLivraison() {
 
   const [weeklyData, setWeeklyData] = useState<Record<string, Livraison[]>>({});
   const [typesData, setTypesData] = useState<Record<string, number>>({});
-  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hierarchyOpen, setHierarchyOpen] = useState<Record<string, boolean>>({});
+  const [livraisonsHierarchy, setLivraisonsHierarchy] = useState<Record<string, HierarchyNode>>({});
 
   const handleStartDateChange = (value: DateValue) => {
     if (Array.isArray(value)) {
@@ -66,6 +76,14 @@ export default function SousDashboardLivraison() {
     window.location.reload();
   };
 
+  // Toggle hierarchy level
+  const toggleHierarchy = (key: string) => {
+    setHierarchyOpen(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -73,27 +91,15 @@ export default function SousDashboardLivraison() {
         const formattedStartDate = getFormattedDate(startDate);
         const formattedEndDate = getFormattedDate(endDate);
 
-        // Stats globales
-        // const statsResponse = await fetch(`http://localhost:5500/api/delivery/statsLivraisons?startDate=${formattedStartDate}&endDate=${formattedEndDate}`);
-        // if (statsResponse.ok) {
-        //   const statsData = await statsResponse.json();
-        //   setStats(statsData);
-        // }
-
-        // Stats types
-        // const typesResponse = await fetch(
-        //   `http://localhost:5500/api/delivery/statsTypesLivraisons?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
-        // );
-        // if (typesResponse.ok) {
-        //   const typesStats = await typesResponse.json();
-        //   setTypesData(typesStats);
-        // }
-
         // Livraisons pour tableau
-        const livraisonsResponse = await fetch('http://localhost:5500/api/delivery/getAllLivraisons');
+        const livraisonsResponse = await fetch('http://localhost:5500/api/delivery/getAllLivraisons', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         if (livraisonsResponse.ok) {
           const allLivraisons: Livraison[] = await livraisonsResponse.json();
-          
+
           const filteredLivraisons = allLivraisons.filter((l: Livraison) => {
             const dateLivraison = new Date(l.date_livraison);
             return dateLivraison >= startDate && dateLivraison <= endDate;
@@ -107,16 +113,46 @@ export default function SousDashboardLivraison() {
           };
           setStats(computedStats);
 
-          const grouped = filteredLivraisons.reduce((acc: Record<string, Livraison[]>, livraison: Livraison) => {
-            const week = getWeek(new Date(livraison.date_livraison), { weekStartsOn: 1 }).toString();
-            if (!acc[week]) {
-              acc[week] = [];
-            }
-            acc[week].push(livraison);
-            return acc;
-          }, {});
+          // DEBUG: Log sample data structure for type_livraison_commerciale issue
+          if (filteredLivraisons.length > 0) {
+            console.log('Sample Livraison data:', filteredLivraisons[0]);
+            console.log('All available fields:', Object.keys(filteredLivraisons[0]));
+            console.log('type_livraison_commerciale:', filteredLivraisons[0].type_livraison_commerciale);
+          }
 
-          setWeeklyData(grouped);
+
+          // Group by hierarchy: year > month > week > day (TS ERROR FIXED)
+          const hierarchy: Record<string, HierarchyNode> = {};
+          filteredLivraisons.forEach((livraison) => {
+            const date = new Date(livraison.date_livraison);
+            const yearKey = format(date, 'yyyy');
+            const monthKey = format(date, 'MM-yyyy');
+            const weekKey = `W${getWeek(date, { weekStartsOn: 1 })}`;
+            const dayKey = format(date, 'dd-MM');
+
+            if (!hierarchy[yearKey]) {
+              hierarchy[yearKey] = { count: 0, months: {} };
+            }
+            hierarchy[yearKey].count += 1;
+
+            if (!hierarchy[yearKey].months![monthKey]) {
+              hierarchy[yearKey].months![monthKey] = { count: 0, weeks: {} };
+            }
+            hierarchy[yearKey].months![monthKey].count += 1;
+
+            if (!hierarchy[yearKey].months![monthKey].weeks![weekKey]) {
+              hierarchy[yearKey].months![monthKey].weeks![weekKey] = { count: 0, days: {} };
+            }
+            hierarchy[yearKey].months![monthKey].weeks![weekKey].count += 1;
+            
+            if (!hierarchy[yearKey].months![monthKey].weeks![weekKey].days![dayKey]) {
+              hierarchy[yearKey].months![monthKey].weeks![weekKey].days![dayKey] = [];
+            }
+            hierarchy[yearKey].months![monthKey].weeks![weekKey].days![dayKey].push(livraison);
+          });
+
+          setLivraisonsHierarchy(hierarchy);
+          setWeeklyData({});
         }
       } catch (error) {
         console.error('Erreur dashboard:', error);
@@ -127,10 +163,6 @@ export default function SousDashboardLivraison() {
 
     fetchData();
   }, [startDate, endDate]);
-
-  const toggleWeekDetails = (week: string) => {
-    setSelectedWeek(selectedWeek === week ? null : week);
-  };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -166,50 +198,6 @@ export default function SousDashboardLivraison() {
           <p className="text-center mt-4 text-blue-600 animate-pulse">Chargement des données...</p>
         )}
       </div>
-
-      {/* Cards Types Livraisons */}
-      {/* <div className="mb-8">
-        <h3 className="text-2xl font-bold mb-6 text-gray-800 flex items-center">
-          📦 Livraisons par Type
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {Object.entries(typesData).length > 0 ? (
-            Object.entries(typesData)
-              .sort(([,a], [,b]) => b - a)
-              .map(([typeName, count]) => (
-                <div key={typeName} className="group p-6 bg-white rounded-2xl shadow-lg border border-gray-200 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{typeName}</p>
-                      <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        {count}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl group-hover:scale-110 transition-transform">
-                      <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4l-8-4m-16 0l8 4m-8-4l8-4" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all" 
-                      style={{ width: `${Math.min((count / Math.max(...Object.values(typesData))) * 100, 100)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))
-          ) : (
-            <div className="col-span-full p-12 text-center bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-300">
-              <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              <h3 className="text-xl font-semibold text-gray-500 mb-2">Aucun type de livraison</h3>
-              <p className="text-gray-400">Aucune donnée disponible pour cette période</p>
-            </div>
-          )}
-        </div>
-      </div> */}
 
       {/* Stats Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -256,91 +244,129 @@ export default function SousDashboardLivraison() {
         </div>
       </div>
 
-      {/* Tableau Livraisons par Semaine */}
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h3 className="text-xl font-bold mb-4">📋 Livraisons par semaine</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-3 text-left font-semibold">Semaine</th>
-                <th className="p-3 text-left font-semibold">Nombre</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.keys(weeklyData).length > 0 ? (
-                Object.keys(weeklyData)
-                  .sort((a, b) => Number(b) - Number(a))
-                  .map((week) => (
-                    <React.Fragment key={week}>
-                      <tr 
-                        className="cursor-pointer hover:bg-gray-50 border-b"
-                        onClick={() => toggleWeekDetails(week)}
-                      >
-                        <td className="p-3 font-medium">
-                          {selectedWeek === week ? '▼' : '▶'} Semaine {week}
-                        </td>
-                        <td className="p-3 font-bold text-blue-600">
-                          {weeklyData[week].length}
-                        </td>
-                      </tr>
-                      {selectedWeek === week && (
-                        <tr>
-                          <td colSpan={2} className="p-4 bg-gray-50">
-                            <table className="w-full text-xs">
-                              <thead className="bg-gray-200">
-                                <tr>
-                                  <th className="p-2 border">Date</th>
-                                  <th className="p-2 border">Type</th>
-                                  <th className="p-2 border">Qté</th>
-                                  <th className="p-2 border">Statut</th>
-                                  <th className="p-2 border">Livreur</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {weeklyData[week].map((livraison) => (
-                                  <tr key={livraison.id_livraison}>
-                                    <td className="p-2 border">
-                                      {format(new Date(livraison.date_livraison), 'dd/MM', { locale: fr })}
-                                    </td>
-                                    <td className="p-2 border">
-                                      {livraison.type_livraison_commerciale?.nom_type_livraison || 'N/A'}
-                                    </td>
-                                    <td className="p-2 border font-bold">
-                                      {livraison.qte_totale_livraison}
-                                    </td>
-                                    <td className="p-2 border">
-                                      <span className={`px-2 py-1 rounded text-xs ${
-                                        livraison.statut_livraison === 'livre' ? 'bg-green-100 text-green-800' :
-                                        livraison.statut_livraison === 'en_cours' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-red-100 text-red-800'
-                                      }`}>
-                                        {livraison.statut_livraison}
-                                      </span>
-                                    </td>
-                                    <td className="p-2 border">
-                                      {livraison.nom_livreur || 'N/A'}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))
-              ) : (
-                <tr>
-                  <td colSpan={2} className="p-8 text-center text-gray-500 italic">
-                    📊 Aucune livraison pour cette période
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {/* Hierarchical Livraisons View: Year > Month > Week > Day (FULLY FIXED) */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+          📋 Hiérarchie Livraisons 
+          <span className="text-sm font-normal text-gray-500">(Année → Mois → Semaine → Jour)</span>
+        </h3>
+        <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+          {Object.entries(livraisonsHierarchy).length > 0 ? (
+            Object.entries(livraisonsHierarchy)
+              .sort(([a], [b]) => b.localeCompare(a))
+              .map(([yearKey, yearData]) => (
+                <div key={yearKey} className="border-l-4 border-blue-400 pl-4">
+                  <button
+                    className="w-full text-left p-4 hover:bg-gray-50 rounded-lg transition-all flex justify-between items-center cursor-pointer border-0 bg-transparent p-0"
+                    onClick={() => toggleHierarchy(`year-${yearKey}`)}
+                  >
+                    <span className="font-semibold text-lg">{yearKey}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-blue-600">{yearData.count} liv.</span>
+                      <span className={`text-xl transition-transform ${hierarchyOpen[`year-${yearKey}`] ? 'rotate-90' : ''}`}>
+                        ▼
+                      </span>
+                    </div>
+                  </button>
+                  {hierarchyOpen[`year-${yearKey}`] && (
+                    <div className="ml-4 mt-2 space-y-1">
+                      {Object.entries(yearData.months || {}).map(([monthKey, monthData]) => {
+                        const [monthNum, monthYear] = monthKey.split('-');
+                        const monthName = format(new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1), 'MMM yyyy', { locale: fr });
+                        return (
+                          <div key={monthKey} className="border-l-2 border-blue-300 pl-3">
+                            <button
+                              className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-all flex justify-between items-center text-sm cursor-pointer border-0 bg-transparent p-0"
+                              onClick={() => toggleHierarchy(`month-${yearKey}-${monthKey}`)}
+                            >
+                              <span>{monthName}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{monthData.count} liv.</span>
+                                <span className={`text-lg transition-transform ${hierarchyOpen[`month-${yearKey}-${monthKey}`] ? 'rotate-90' : ''}`}>
+                                  ►
+                                </span>
+                              </div>
+                            </button>
+                            {hierarchyOpen[`month-${yearKey}-${monthKey}`] && (
+                              <div className="ml-3 mt-1 space-y-1">
+                                {Object.entries(monthData.weeks || {})
+                                  .sort(([wa], [wb]) => parseInt(wa.replace('W','')) - parseInt(wb.replace('W','')))
+                                  .map(([weekKey, weekData]) => (
+                                    <div key={weekKey} className="border-l border-blue-200 pl-2">
+                                      <button
+                                        className="w-full text-left p-2 hover:bg-blue-50 rounded text-xs flex justify-between items-center cursor-pointer border-0 bg-transparent p-0"
+                                        onClick={() => toggleHierarchy(`week-${yearKey}-${monthKey}-${weekKey}`)}
+                                      >
+                                        <span>Semaine {weekKey}</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="font-semibold text-blue-700">{weekData.count} liv.</span>
+                                          <span className={`text-sm transition-transform ${hierarchyOpen[`week-${yearKey}-${monthKey}-${weekKey}`] ? 'rotate-90' : ''}`}>
+                                            ▶
+                                          </span>
+                                        </div>
+                                      </button>
+                                      {hierarchyOpen[`week-${yearKey}-${monthKey}-${weekKey}`] && (
+                                        <div className="ml-2 mt-1 space-y-1">
+                                          {Object.entries(weekData.days || {}).map(([dayKey, dayLivraisons]) => (
+                                            <div key={dayKey} className="bg-white border rounded-lg p-3 shadow-sm">
+                                              <div className="font-medium text-xs text-gray-700 mb-2">
+                                                {dayKey.replace('-', '/')} ({dayLivraisons.length} liv.)
+                                              </div>
+                                              <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                  <thead className="bg-gray-50">
+                                                    <tr>
+                                                      <th className="px-2 py-1 text-left font-semibold">ID</th>
+                                                      <th className="px-2 py-1 text-left font-semibold">Type</th>
+                                                      <th className="px-2 py-1 text-left font-semibold">Qté</th>
+                                                      <th className="px-2 py-1 text-left font-semibold">Nom livreur</th>
+                                                      <th className="px-2 py-1 text-left font-semibold">Statut</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {dayLivraisons.map((livraison) => (
+                                                      <tr key={livraison.id_livraison} className="border-b hover:bg-gray-50">
+                                                        <td className="px-2 py-1 font-mono text-xs">#{livraison.id_livraison}</td>
+                                                        <td className="px-2 py-1 text-xs">{livraison.type_livraison_commerciale.nom_type_livraison}</td>
+                                                        <td className="px-2 py-1 font-semibold text-xs">{livraison.qte_totale_livraison}</td>
+                                                        <td className="px-2 py-1 font-semibold text-xs">{livraison.nom_livreur}</td>
+                                                        <td className="px-2 py-1">
+                                                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                            livraison.statut_livraison === 'livre' ? 'bg-green-100 text-green-800' :
+                                                            livraison.statut_livraison === 'en_cours' || livraison.statut_livraison === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
+                                                            'bg-gray-100 text-gray-800'
+                                                          }`}>
+                                                            {livraison.statut_livraison}
+                                                          </span>
+                                                        </td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))
+          ) : (
+            <div className="p-12 text-center text-gray-500">
+              📊 Aucune livraison pour cette période
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+

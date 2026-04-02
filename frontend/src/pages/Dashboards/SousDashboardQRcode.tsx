@@ -19,14 +19,17 @@ interface DemandeQR {
 
 interface QRStats {
   total: number;
+  soumise: number;
+  generee: number;
+  imprimee: number;
   livree: number;
   recue: number;
-  en_cours: number;
 }
 
-interface DemandesResponse {
-  demandes: DemandeQR[];
-}
+
+// interface DemandesResponse {
+//   demandes: DemandeQR[];
+// }
 
 declare global {
   interface Window {
@@ -38,17 +41,18 @@ export default function SousDashboardQRcode() {
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
   // Lazy load service only when needed
-  const getDemandeQrService = () => {
-    if (!window.demandeQrService) {
-      window.demandeQrService = require('../../backend/demandeQr/DemandeQr').DemandeQr;
-    }
-    return new (window.demandeQrService as any)();
-  };
 
   const [startDate, setStartDate] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [endDate, setEndDate] = useState<Date>(endOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [stats, setStats] = useState<QRStats>({ total: 0, livree: 0, recue: 0, en_cours: 0 });
-  const [weeklyData, setWeeklyData] = useState<Record<string, DemandeQR[]>>({});
+  const [stats, setStats] = useState<QRStats>({ 
+    total: 0, 
+    soumise: 0, 
+    generee: 0, 
+    imprimee: 0, 
+    livree: 0, 
+    recue: 0 
+  });
+  const [recentDemandes, setRecentDemandes] = useState([]);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,40 +87,29 @@ export default function SousDashboardQRcode() {
         const statsResponse = await axios.get(
           `${urlBase}/api/stats/general?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
         );
-        const generalStats = statsResponse.data;
-        const qrStatsRaw = generalStats.qr_codes || {};
 
-        // Direct axios call to avoid class import issues
-        const demandesResponse = await axios.get(`${urlBase}/api/demandeQr/getAllDemandesQr`);
-        const demandesData = demandesResponse.data;
-        const allDemandes: DemandeQR[] = (demandesData as DemandesResponse).demandes || [];
-
-        // Filter by date range
-        const filteredDemandes = allDemandes.filter((demande: DemandeQR) => {
-          const dateCreated = new Date(demande.forms.created_at);
-          return dateCreated >= startDate && dateCreated <= endDate;
-        });
-
-        // Compute stats from filtered data (focus livree/recue)
+       
+// Use backend-provided qr_codes stats (matches Dashboard.tsx)
+        const qrData = statsResponse.data.qr_codes || {};
+        const total = Object.values(qrData as Record<string, number>).reduce((sum, val) => sum + (val || 0), 0);
+        
         const computedStats: QRStats = {
-          total: filteredDemandes.length,
-          livree: filteredDemandes.filter(d => d.statut === 'livree').length,
-          recue: filteredDemandes.filter(d => d.statut === 'recue').length,
-          en_cours: filteredDemandes.filter(d => ['soumise', 'generee', 'imprimee'].includes(d.statut)).length,
+          total,
+          soumise: qrData.soumise || 0,
+          generee: qrData.generee || 0,
+          imprimee: qrData.imprimee || 0,
+          livree: qrData.livree || 0,
+          recue: qrData.recue || 0
         };
         setStats(computedStats);
 
-        // Group by week
-        const grouped = filteredDemandes.reduce((acc: Record<string, DemandeQR[]>, demande: DemandeQR) => {
-          const week = getWeek(new Date(demande.forms.created_at), { weekStartsOn: 1 }).toString();
-          if (!acc[week]) {
-            acc[week] = [];
-          }
-          acc[week].push(demande);
-          return acc;
-        }, {});
-
-        setWeeklyData(grouped);
+        // Fetch recent QR demandes for table
+        try {
+          const qrListResponse = await axios.get(`${urlBase}/api/demandeQr/getAllDemandesQr`);
+          setRecentDemandes(qrListResponse.data);
+        } catch (error) {
+          console.error('Recent QR list error:', error);
+        }
       } catch (error) {
         console.error('Erreur dashboard QR:', error);
       } finally {
@@ -141,7 +134,7 @@ export default function SousDashboardQRcode() {
       </h1>
 
       {/* Date Picker */}
-      <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
+      {/* <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
         <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -161,130 +154,141 @@ export default function SousDashboardQRcode() {
         {loading && (
           <p className="text-center mt-4 text-blue-600 animate-pulse">Chargement des données QR...</p>
         )}
-      </div>
+      </div> */}
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+      {/* Status Cards - ALL STATUTS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
+        <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-700 opacity-80">Total</p>
+              <p className="text-sm font-medium text-blue-700">Total</p>
               <p className="text-4xl font-bold text-blue-600">{stats.total}</p>
             </div>
             <div className="p-3 bg-blue-200 rounded-full">
               <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2z" />
               </svg>
             </div>
           </div>
         </div>
 
-        <div className="group p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="group p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-l-4 border-gray-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-700 opacity-80">Livrées</p>
+              <p className="text-sm font-medium text-gray-700">📤 Soumises</p>
+              <p className="text-4xl font-bold text-gray-600">{stats.soumise || 0}</p>
+            </div>
+            <div className="p-3 bg-gray-200 rounded-full">
+              <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="group p-6 bg-gradient-to-br from-indigo-50 to-indigo-100 border-l-4 border-indigo-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-indigo-700">⚙️ Générées</p>
+              <p className="text-4xl font-bold text-indigo-600">{stats.generee || 0}</p>
+            </div>
+            <div className="p-3 bg-indigo-200 rounded-full">
+              <svg className="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4L5 20l4 4 4-4M7 20h10" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="group p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-orange-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-700">🖨️ Imprimées</p>
+              <p className="text-4xl font-bold text-orange-600">{stats.imprimee || 0}</p>
+            </div>
+            <div className="p-3 bg-orange-200 rounded-full">
+              <svg className="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v.01" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="group p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-700">✅ Livrées</p>
               <p className="text-4xl font-bold text-green-600">{stats.livree}</p>
             </div>
             <div className="p-3 bg-green-200 rounded-full">
-              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
           </div>
         </div>
-
-        <div className="group p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="group p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-purple-700 opacity-80">Reçues</p>
-              <p className="text-4xl font-bold text-purple-600">{stats.recue}</p>
+              <p className="text-sm font-medium text-green-700">✅ Reçues</p>
+              <p className="text-4xl font-bold text-green-600">{stats.recue}</p>
             </div>
-            <div className="p-3 bg-purple-200 rounded-full">
-              <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            <div className="p-3 bg-green-200 rounded-full">
+              <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Weekly Table */}
-      <div className="bg-white p-6 rounded-xl shadow-lg">
-        <h3 className="text-xl font-bold mb-4 flex items-center">
-          📋 Demandes QR par semaine (Livrées & Reçues)
-        </h3>
+      {/* Recent QR Demandes Table - Live DB Data */}
+      <div className="bg-white rounded-2xl shadow-xl p-6">
+        <h3 className="text-xl font-bold mb-6">📋 Dernières Demandes QR</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="p-3 text-left font-semibold">Semaine</th>
-                <th className="p-3 text-left font-semibold">Nombre</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qté QR</th>
               </tr>
             </thead>
-            <tbody>
-              {Object.keys(weeklyData).length > 0 ? (
-                Object.keys(weeklyData)
-                  .sort((a, b) => Number(b) - Number(a))
-                  .map((week) => (
-                    <React.Fragment key={week}>
-                      <tr 
-                        className="cursor-pointer hover:bg-gray-50 border-b"
-                        onClick={() => toggleWeekDetails(week)}
-                      >
-                        <td className="p-3 font-medium">
-                          {selectedWeek === week ? '▼' : '▶'} Semaine {week}
-                        </td>
-                        <td className="p-3 font-bold text-green-600">
-                          {weeklyData[week].length} ({weeklyData[week].filter(d => d.statut === 'livree').length} livrées, {weeklyData[week].filter(d => d.statut === 'recue').length} reçues)
-                        </td>
-                      </tr>
-                      {selectedWeek === week && (
-                        <tr>
-                          <td colSpan={2} className="p-4 bg-gray-50">
-                            <table className="w-full text-xs">
-                              <thead className="bg-gray-200">
-                                <tr>
-                                  <th className="p-2 border">Date</th>
-                                  <th className="p-2 border">Qté QR</th>
-                                  <th className="p-2 border">Marchands</th>
-                                  <th className="p-2 border">Statut</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {weeklyData[week]
-                                  .filter(d => ['livree', 'recue'].includes(d.statut))
-                                  .map((demande) => (
-                                    <tr key={demande.id} className="hover:bg-white">
-                                      <td className="p-2 border">
-                                        {format(new Date(demande.forms.created_at), 'dd/MM/yyyy', { locale: fr })}
-                                      </td>
-                                      <td className="p-2 border font-bold">
-                                        {demande.quantite_qr}
-                                      </td>
-                                      <td className="p-2 border">
-                                        {demande.quantite_marchand}
-                                      </td>
-                                      <td className="p-2 border">
-                                        <span className={`px-2 py-1 rounded text-xs ${
-                                          demande.statut === 'livree' ? 'bg-green-100 text-green-800' :
-                                          'bg-purple-100 text-purple-800'
-                                        }`}>
-                                          {demande.statut === 'livree' ? 'Livrée' : 'Reçue'}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))
-              ) : (
+            <tbody className="bg-white divide-y divide-gray-200">
+              {recentDemandes.slice(0, 5).map((demande: any) => {
+                const statusMap = {
+                  'soumise': { text: 'Soumise', color: 'bg-yellow-100 text-yellow-800' },
+                  'generee': { text: 'Générée', color: 'bg-blue-100 text-blue-800' },
+                  'imprimee': { text: 'Imprimée', color: 'bg-orange-100 text-orange-800' },
+                  'livree': { text: 'Livrée', color: 'bg-emerald-100 text-emerald-800' },
+                  'recue': { text: 'Reçue', color: 'bg-green-100 text-green-800' },
+                } as Record<string, { text: string; color: string }>;
+                const status = statusMap[demande.statut as string] || { text: demande.statut as string, color: 'bg-gray-100 text-gray-800' };
+                return (
+                  <tr key={demande.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      #{demande.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
+                        {status.text}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {demande.forms?.last_modified_at ? format(new Date(demande.forms.last_modified_at), 'yyyy-MM-dd') : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      {demande.quantite_qr} QR
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {recentDemandes.length === 0 && (
                 <tr>
-                  <td colSpan={2} className="p-8 text-center text-gray-500 italic">
-                    📊 Aucune demande QR livrée/reçue pour cette période
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic">
+                    Aucune demande QR récente
                   </td>
                 </tr>
               )}
