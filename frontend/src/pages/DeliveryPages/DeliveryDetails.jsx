@@ -71,6 +71,8 @@ export default function DeliveryDetails() {
 
     const [isReg, setIsReg] = useState(false)
 
+    const [dateLivraisonReg, setDateLivraisonReg] = useState(null)
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
@@ -119,6 +121,7 @@ export default function DeliveryDetails() {
                     if (livraisonForm) {
                         if (livraisonForm.is_reg) {
                             setIsReg(true)
+                            setDateLivraisonReg(livraisonForm.last_modified_at)
                         }
                     }
                     if (livraison_data.statut_livraison == 'livre') {
@@ -203,6 +206,7 @@ export default function DeliveryDetails() {
         try {
             setLoadingReception(true);
             setIsModalReceptionOpen(false)
+            setIsModalRegularisationReceptionOpen(false)
             const sign = signatureReception.toDataURL('image/png')
             const fd = new FormData();
             fd.append('livraison_id', livraisonID);
@@ -594,7 +598,7 @@ export default function DeliveryDetails() {
                                 onChange={(e) => setSelectedDateReception(e.value)}
                                 dateFormat="dd/mm/yy"
                                 placeholder="dd/mm/yyyy"
-                                minDate={new Date(dateLivraison)}
+                                minDate={new Date(dateLivraisonReg)}
                                 maxDate={new Date()}
                                 className="w-full"
                                 style={{fontSize:'2px'}}

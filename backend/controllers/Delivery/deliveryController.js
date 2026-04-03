@@ -48,30 +48,54 @@ const regReception = async (req, res) => {
       where: { id_livraison: parseInt(livraison_id) },
     });
 
-    if (!livraison) return res.status(404).json({ message: "Livraison introuvable." });
+    if (!livraison) {
+      console.error("Livraison introuvable !")
+      return res.status(404).json({ message: "Livraison introuvable." });
+    }
 
     if (livraison.statut_livraison === "livre") {
+      console.error("Livraison déjà validée !")
       return res.status(400).json({ message: "Livraison déjà validée." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Signature du récepteur requise." });
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
     }
 
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    // Gestion de l'upload Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
-    const signature = uploadResult.secure_url;
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+    const signatureCloud = uploadResult.secure_url;
 
+    if (!signatureCloud) {
+      console.error("Vous devez fournir la signature (cloudinary) !")
+      return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
+    }
+
+    if (!user_id) {
+      console.error("Utilisateur non authentifié !")
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
     });
 
     if (!user) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
+
+    const typeLivraison = await tx.type_livraison_commerciale.findUnique({
+      where: {
+        id_type_livraison: livraison.type_livraison_id
+      }
+    })
+    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
+
 
     const dateAction = new Date(date_reception)
 
@@ -95,7 +119,7 @@ const regReception = async (req, res) => {
           commentaire,
           user_id: user_id ? parseInt(user_id) : null,
           nom_recepteur: user.fullname,
-          signature,
+          signature: signatureCloud,
           form_id: receptionForm.id,
         },
       });
@@ -105,14 +129,17 @@ const regReception = async (req, res) => {
         data: { statut_livraison: "livre" },
       });
 
-      // ***************************************     GESTION STOCK CHARGEUR     *************************************
-
-      const typeLivraison = await tx.type_livraison_commerciale.findUnique({
-        where: {
-          id_type_livraison: livraison.type_livraison_id
-        }
+      await tx.form_signatures.create({
+        data: {
+          form_id: receptionForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: dateAction,
+          role: 'receveur',
+        },
       })
-      let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
+
+      // ***************************************     GESTION STOCK CHARGEUR     *************************************
 
       if (livraison.stock_id) {
         const stockChargeur = await tx.stocks.findUnique({
@@ -321,6 +348,7 @@ const deliver = async (req, res) => {
     const signature_expediteur = uploadResult.secure_url;
 
     if (!signature_expediteur) {
+      console.error("Vous devez fournir la signature (cloudinary) !")
       return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
     }
     const dateAction = new Date()
@@ -424,7 +452,7 @@ const deliver = async (req, res) => {
 
       return {
         livraisonForm,
-        nouvelleLivraison, 
+        nouvelleLivraison,
         allTpes,
       }
     })

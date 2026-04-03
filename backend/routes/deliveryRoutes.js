@@ -10,14 +10,9 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
-    updateRemplacement, returnRemplacement, generateRemplacementPDF,
+    updateRemplacement, returnRemplacement, generateRemplacementPDF, regLivraison, regReception,
 } = require("../controllers/Delivery/deliveryController")
 
-// router.post('/deliver', uploadDeliver.fields([
-//     { name: "signature_expediteur", maxCount: 1 },
-//     { name: "files", maxCount: 10 }
-// ]), deliver
-// );
 router.post('/deliver', uploadAll.fields([
     { name: 'signature' },
 ]), deliver);
@@ -54,5 +49,11 @@ router.post("/generateRemplacementsXLSX", generateRemplacementsXLSX);
 router.put("/updateRemplacement/:id", updateRemplacement);
 router.post("/returnRemplacement", returnRemplacement);
 router.get("/generateRemplacementPDF/:id", generateRemplacementPDF);
+router.post('/regLivraison', uploadAll.fields([
+    { name: 'signature' },
+]), regLivraison);
+router.post('/regReception', uploadAll.fields([
+    { name: 'signature' },
+]), regReception);
 
 module.exports = router

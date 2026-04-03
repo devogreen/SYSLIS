@@ -18,7 +18,22 @@ import Checkbox from "../form/input/Checkbox";
 
 import Swal from "sweetalert2";
 
+import { addLocale } from "primereact/api";
+import Label from "../form/Label";
+
 export default function AllDemandesQrList() {
+
+    addLocale('fr', {
+        firstDayOfWeek: 1,
+        showMonthAfterYear: false,
+        dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+        dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+        dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+        monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+        today: 'Aujourd\'hui',
+        clear: 'Effacer'
+    });
 
     const demandeData = new DemandeQr()
     const userData = new Users();
@@ -73,18 +88,40 @@ export default function AllDemandesQrList() {
 
     const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
 
+    const [datesDemande, setDatesDemande] = useState(
+        savedFilters?.datesDemande
+            ? savedFilters.datesDemande.map((d) => new Date(d))
+            : null
+    );
+
+    const [datesLivraison, setDatesLivraison] = useState(
+        savedFilters?.datesLivraison
+            ? savedFilters.datesLivraison.map((d) => new Date(d))
+            : null
+    );
+
+    const [datesReception, setDatesReception] = useState(
+        savedFilters?.datesReception
+            ? savedFilters.datesReception.map((d) => new Date(d))
+            : null
+    );
+
+    const [isNotReg, setIsNotReg] = useState(savedFilters?.isNotReg || false)
+
     useEffect(() => {
         saveFilters({
             globalFilter,
             selectedStatus,
             selectedType,
-            startDate,
-            endDate,
             selectedService,
             selectedModels,
             isReg,
+            datesDemande: datesDemande?.map(d => d?.toISOString()),
+            datesLivraison: datesLivraison?.map(d => d?.toISOString()),
+            datesReception: datesReception?.map(d => d?.toISOString()),
+            isNotReg,
         });
-    }, [globalFilter, selectedStatus, selectedType, startDate, endDate, selectedService, selectedModels, isReg]);
+    }, [globalFilter, selectedStatus, selectedType, selectedService, selectedModels, isReg, datesDemande, datesLivraison, datesReception, isNotReg]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -254,24 +291,48 @@ export default function AllDemandesQrList() {
     const handleClearFilters = () => {
         setGlobalFilter("");
         setSelectedStatus([]);
-        setStartDate(null);
-        setEndDate(null);
         setIsReg(false)
+        setDatesDemande(null)
+        setDatesLivraison(null)
+        setDatesReception(null)
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
-
     const filteredDemandes = demandes.filter((item) => {
         const form = item.forms
-        const itemDate = new Date(form.last_modified_at);
+
+        const dateDemande = new Date(form.last_modified_at);
+        const dayDemandePlus = datesDemande ? new Date(datesDemande[1]) : null;
+        dayDemandePlus?.setDate(dayDemandePlus.getDate() + 1);
+        const nextDayDemande = dayDemandePlus ? new Date(dayDemandePlus) : null;
+
+        const indexLivraison = item.livraison_qr.length - 1
+        const livraison = item.livraison_qr[indexLivraison]
+        const livraisonForm = livraison?.forms
+        const dateLivraison = new Date(livraisonForm?.last_modified_at);
+        const dayLivraisonPlus = datesLivraison ? new Date(datesLivraison[1]) : null;
+        dayLivraisonPlus?.setDate(dayLivraisonPlus.getDate() + 1);
+        const nextDayLivraison = dayLivraisonPlus ? new Date(dayLivraisonPlus) : null;
+
+        const indexReception = item.reception_qr.length - 1
+        const reception = item.reception_qr[indexReception]
+        const receptionForm = reception?.forms
+        const dateReception = new Date(receptionForm?.last_modified_at);
+        const dayReceptionPlus = datesReception ? new Date(datesReception[1]) : null;
+        dayReceptionPlus?.setDate(dayReceptionPlus.getDate() + 1);
+        const nextDayReception = dayReceptionPlus ? new Date(dayReceptionPlus) : null;
+        
+        
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
-        const matchesStartDate = startDate ? itemDate >= startDate : true;
-        const matchesEndDate = endDate ? itemDate <= endDate : true;
+        const matchesDatesDemande = datesDemande ? (datesDemande[0] <= dateDemande && nextDayDemande >= dateDemande) : true;
+        const matchesDatesLivraison = datesLivraison ? (datesLivraison[0] <= dateLivraison && nextDayLivraison >= dateLivraison) : true;
+        const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
         const matchesReg = isReg ? item.is_reg : true;
+        const matchesNotReg = isNotReg ? !form?.is_reg && !item.is_reg : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesStartDate && matchesEndDate && matchesReg && matchesGlobalFilter;
+        return matchesStatus && matchesReg && matchesDatesDemande && matchesDatesLivraison && matchesDatesReception && matchesNotReg && matchesGlobalFilter;
     });
 
     const totalQr = filteredDemandes.reduce((sum, item) => sum + Number(item.quantite_qr || 0), 0);
@@ -384,30 +445,53 @@ export default function AllDemandesQrList() {
                         />
                     </div>
                     <div className="flex justify-normal flex-wrap gap-3">
-                        <div className="flex gap-2">
-                            <DatePicker
-                                id="date-picker-debut"
-                                label="Date de début"
-                                placeholder={startDate ? formatDate(startDate) : 'Date de début'}
-                                value={startDate}
-                                onChange={(dates) => {
-                                    setStartDate(dates[0])
+                        <div>
+                            <Label>Dates Demande</Label>
+                            <Calendar
+                                value={datesDemande}
+                                onChange={(e) => {
+                                    setDatesDemande(e.value)
+                                    console.log(e.value)
                                 }}
-                                dateFormat="dd/mm/yy" />
-                            <DatePicker
-                                id="date-picker-fin"
-                                label="Date de fin"
-                                placeholder={endDate ? formatDate(endDate) : 'Date de fin'}
-                                value={endDate}
-                                onChange={(dates) => {
-                                    if (dates && dates[0]) {
-                                        let selectedDate = new Date(dates[0]);
-                                        let nextDay = new Date(selectedDate);
-                                        nextDay.setDate(selectedDate.getDate() + 1);
-                                        setEndDate(nextDay);
-                                    }
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
+                            />
+                        </div>
+                        <div>
+                            <Label>Dates Livraison</Label>
+                            <Calendar
+                                value={datesLivraison}
+                                onChange={(e) => {
+                                    setDatesLivraison(e.value)
+                                    console.log(e.value)
                                 }}
-                                dateFormat="dd/mm/yy" />
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
+                            />
+                        </div>
+                        <div>
+                            <Label>Dates Réception</Label>
+                            <Calendar
+                                value={datesReception}
+                                onChange={(e) => {
+                                    setDatesReception(e.value)
+                                    console.log(e.value)
+                                }}
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
+                            />
                         </div>
                     </div>
                     <div>
@@ -419,9 +503,23 @@ export default function AllDemandesQrList() {
                                         setIsReg(false)
                                     } else {
                                         setIsReg(true)
+                                        setIsNotReg(false)
                                     }
                                 }}
                                 label="Régularisations" />
+                        </div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isNotReg}
+                                onChange={(e) => {
+                                    if (isNotReg) {
+                                        setIsNotReg(false)
+                                    } else {
+                                        setIsNotReg(true)
+                                        setIsReg(false)
+                                    }
+                                }}
+                                label="Sans Régularisations" />
                         </div>
                     </div>
                 </div>
