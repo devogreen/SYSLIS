@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
 import DatePicker from '../../components/form/date-picker';
@@ -10,11 +9,12 @@ interface GeneralStats {
   typesLivraisons: any;
   livraisons: { total: number; attente: number; livrees: number; retours: number };
   demandes: Record<string, number>;
+  demandesValideesNonRecues?: number;
   stocks: { quantite_piece?: number; quantite_carton?: number; quantite_lot?: number };
   qr_codes: Record<string, number>;
+  remplacementsLivres?: number;
   livraisonsParType?: LivraisonType[];
 }
-
 
 
 export default function Dashboard() {
@@ -22,12 +22,14 @@ export default function Dashboard() {
   // const getFormattedDate = (date) => format(date, 'yyyy-MM-dd');
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
-
   const [startDate, setStartDate] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [endDate, setEndDate] = useState(endOfWeek(new Date(), { weekStartsOn: 1 }));
   const [stats, setStats] = useState<GeneralStats | null>(null);
   const [livraisonsParType, setLivraisonsParType] = useState<LivraisonType[]>([]);
   const [loading, setLoading] = useState(false);
+  // const [tpeStock, setTpeStock] = useState({ total_lot: 0, total_carton: 0, total_piece: 0, total: 0 });
+  const [tpeStock, setTpeStock] = useState({ total_lot: 0, total_carton: 0, total_piece: 0, total: 0 });
+  const [tpeStockId2, setTpeStockId2] = useState({ total_lot: 0, total_carton: 0, total_piece: 0, total: 0 });
 
 
 
@@ -38,6 +40,7 @@ export default function Dashboard() {
   const fetchStats = async () => {
     setLoading(true);
     try {
+      // Stats générales d'abord
       const url = `http://localhost:5500/api/stats/general?startDate=${getFormattedDate(startDate)}&endDate=${getFormattedDate(endDate)}`;
       const response = await fetch(url);
       if (response.ok) {
@@ -46,7 +49,27 @@ export default function Dashboard() {
       } else {
         console.error('Stats API error:', response.status);
       }
+
+      // Stock id_piece=2
+      const itemsRes = await fetch('http://localhost:5500/api/stock/getAllItems');
+      const stocksRes = await fetch('http://localhost:5500/api/stock/getAllStocks');
+      const items = await itemsRes.json();
+      const stocks = await stocksRes.json();
+
+      const tpeItem = items.find((item: any) => item.id_piece === 2);
+      const tpeStocks = stocks.filter((stock: any) => stock.piece_id === 2);
+
+      const totals = tpeStocks.reduce((acc: any, stock: any) => ({
+        total_lot: acc.total_lot + (stock.quantite_lot || 0),
+        total_carton: acc.total_carton + (stock.quantite_carton || 0),
+        total_piece: acc.total_piece + (stock.quantite_piece || 0)
+      }), { total_lot: 0, total_carton: 0, total_piece: 0 });
+
+      totals.total = totals.total_piece + totals.total_carton + totals.total_lot;
+      setTpeStock(totals);
+      setTpeStockId2(totals);
     } catch (error) {
+
       console.error('Stats fetch error:', error);
     } finally {
       setLoading(false);
@@ -54,6 +77,7 @@ export default function Dashboard() {
   };
 
   const refresh = () => window.location.reload();
+  // const stockTotal = stats?.stocks ? (stats.stocks.quantite_piece || 0) + (stats.stocks.quantite_carton || 0) + (stats.stocks.quantite_lot || 0) : 0;
 
   return (
     <div className="space-y-8 p-6">
@@ -156,19 +180,25 @@ export default function Dashboard() {
             {/* QR Codes reçus */}
             <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">Demandes QR reçues</p>
-              <p className="text-xl font-bold">{stats?.qr_codes?.recue ?? 0}</p>
+              <p className="text-xl font-bold ">{stats?.qr_codes?.recue ?? 0}</p>
             </div>
 
             {/* TPE GIM livrés */}
             <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">TPE GIM livrés</p>
-              <p className="text-xl font-bold">{stats?.livraisons?.livrees}</p>
+              <p className="text-xl font-bold ">{stats?.livraisons?.livrees}</p>
             </div>
 
             {/* MAJ livrées */}
             <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">MAJ livrées</p>
               <p className="text-xl font-bold">{stats?.typesLivraisons?.["MAJ"] ?? 0}</p>
+            </div>
+
+            {/* TPE remplacés livrés */}
+            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+              <p className="text-gray-500 text-sm">TPE remplacés livrés</p>
+              <p className="text-xl font-bold">{stats?.remplacementsLivres ?? 0}</p>
             </div>
 
             {/* Types de livraisons dynamiques */}
@@ -232,7 +262,7 @@ export default function Dashboard() {
       </div>
       {/* 🏗️ MAIN STATS GRID */}
       {stats ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-6">
           {/* DEMANDES */}
           <div className="group p-8 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
             <div className="flex items-start justify-between mb-4">
@@ -251,17 +281,19 @@ export default function Dashboard() {
             <div className="space-y-1 text-sm">
               <div>⏳ En cours: <span className="font-semibold">{stats.demandes?.en_cours || 0}</span></div>
               <div>✅ Valides: <span className="font-semibold text-green-600">{stats.demandes?.valide || 0}</span></div>
+              <div>📦 Non Receptionnés: <span className="font-semibold text-orange-600">{stats?.demandesValideesNonRecues ?? 0}</span></div>
             </div>
           </div>
 
-          {/* STOCKS */}
+          {/* STOCKS Terminal */}
           <div className="group p-8 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-orange-800">📦 Stocks</h3>
+                <h3 className="text-lg font-bold text-orange-800">📦Stock Terminal</h3>
                 <div className="text-3xl font-black text-orange-600 mt-2">
-                  {(stats.stocks?.quantite_piece || 0) + (stats.stocks?.quantite_carton || 0) + (stats.stocks?.quantite_lot || 0)}
+                  {tpeStock.total_piece.toLocaleString()}
                 </div>
+
               </div>
               <div className="p-3 bg-orange-200 rounded-2xl">
                 <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -270,87 +302,74 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="space-y-1 text-sm">
-              <div>🔧 Pièces: <span className="font-semibold">{stats.stocks?.quantite_piece || 0}</span></div>
-              <div>📦 Cartons: <span className="font-semibold">{stats.stocks?.quantite_carton || 0}</span></div>
+              <div>📦 Lots: <span className="font-semibold">{tpeStock.total_lot.toLocaleString()}</span></div>
+              <div>📦 Cartons: <span className="font-semibold">{tpeStock.total_carton.toLocaleString()}</span></div>
+              <div>🔧 Pièces: <span className="font-semibold">{tpeStock.total_piece.toLocaleString()}</span></div>
+              <div className="font-bold mt-2 text-sm">Total: {tpeStock.total_piece.toLocaleString()}</div>
+
             </div>
           </div>
 
-          {/* QR CODES */}
-          <div className="group p-8 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
+          {/*  STOCKS  */}
+          <div className="group p-8 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-lg font-bold text-purple-800">📱 QR Codes</h3>
-                <div className="text-3xl font-black text-purple-600 mt-2">
-                  {Object.values(stats.qr_codes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+                <h3 className="text-lg font-bold text-blue-800">📦 Stocks Pièces</h3>
+                <div className="text-3xl font-black text-blue-600 mt-2">
+                  {(stats?.stocks?.quantite_piece || 0) }
+                </div>
+                
+              </div>
+              <div className="p-3 bg-orange-200 rounded-2xl">
+                  <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4l-8-4m-16 0l8 4m-8-4l8-4" />
+                  </svg>
+              </div>
+              </div>
+              <div className="space-y-1 text-sm">
+                <div>📦 Lots: <span className="font-semibold">{stats.stocks?.quantite_lot || 0}</span></div>
+                <div>📦 Cartons: <span className="font-semibold">{stats.stocks?.quantite_carton || 0}</span></div>
+                <div>🔧 Pièces: <span className="font-semibold">{stats.stocks?.quantite_piece || 0}</span></div>
+              </div>
+          </div>
+
+            {/* QR CODES */}
+            <div className="group p-8 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-purple-800">📱 QR Codes</h3>
+                  <div className="text-3xl font-black text-purple-600 mt-2">
+                    {Object.values(stats.qr_codes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+                  </div>
+                </div>
+                <div className="p-3 bg-purple-200 rounded-2xl">
+                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                 </div>
               </div>
-              <div className="p-3 bg-purple-200 rounded-2xl">
-                <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+              <div className="space-y-1 text-sm">
+                <div>📤 Soumises: <span className="font-semibold">{stats.qr_codes?.soumise || 0}</span></div>
+                <div>✅ Reçues: <span className="font-semibold text-green-600">{stats.qr_codes?.recue || 0}</span></div>
               </div>
             </div>
-            <div className="space-y-1 text-sm">
-              <div>📤 Soumises: <span className="font-semibold">{stats.qr_codes?.soumise || 0}</span></div>
-              <div>✅ Reçues: <span className="font-semibold text-green-600">{stats.qr_codes?.recue || 0}</span></div>
-            </div>
           </div>
-        </div>
-      ) : (
+     ) : (
         <div className="col-span-full p-12 text-center bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-300">
           <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <h3 className="text-xl font-semibold text-gray-500 mb-2">Chargement des statistiques...</h3>
           <p className="text-gray-400">Vérifiez que le backend est démarré (port 5500)</p>
         </div>
-      )}
-
-      {/* 📈 CHARTS & TABLES */}
-      {/* <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h3 className="text-xl font-bold mb-6">📊 Livraisons par Statut</h3>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h3 className="text-xl font-bold mb-6">📋 Dernières Demandes</h3>
-          <div className="text-sm space-y-2">
-            <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
-              <span>En attente</span>
-              <span className="font-semibold">{stats?.demandes?.en_cours || 0}</span>
-            </div>
-            <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-              <span>Validées</span>
-              <span className="font-semibold text-blue-600">{stats?.demandes?.valide || 0}</span>
-            </div>
-          </div>
-        </div>
-      </div> */}
-
-      {/* 📋 RECENT ACTIVITY */}
-      {/* <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-xl p-6">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            🚚 Dernières Livraisons <span className="text-sm opacity-70">({stats?.livraisons?.total || 0})</span>
-          </h3> */}
-          {/* <LivraisonsLivrees startDate={startDate} endDate={endDate} limit={5} /> */}
-        {/* </div> */}
-
-        {/* <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h3 className="text-xl font-bold mb-6">📦 Stocks Critiques</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-              <span>Pièces total</span>
-              <span className="font-bold text-orange-600">{stats?.stocks?.quantite_piece || 0}</span>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-              <span>Cartons</span>
-              <span className="font-bold text-yellow-600">{stats?.stocks?.quantite_carton || 0}</span>
-            </div>
-          </div>
-        </div>
-      </div> */}
+         )}
     </div>
   );
 }
+
+
+
+
+
+
 

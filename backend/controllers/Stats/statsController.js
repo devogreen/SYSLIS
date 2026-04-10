@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 
-// Stats livreurs
+
 // 
 const nbdeliverycharger = async (req, res) => {
 
@@ -340,7 +340,7 @@ const statsreceveurs = async (req, res) => {
         return res.status(404).json({ message: "Aucune donnée" });
     }
 }
-
+// Filtrer id_pièce = 2 'terminal'
 
 // Nombre TPE livrés par TYPE par période
 
@@ -828,8 +828,9 @@ const getGeneralStats = async (req, res) => {
             retours: livraisons.filter(l => l.validations?.some(v => v.etat_validation === 'retourne')).length || 0
         };
 
-        // Demandes stats - safe query
+// Demandes stats - safe query
         let statsDemandes = [];
+        let demandesValideesNonRecues = 0;
         if (startDate && endDate) {
             try {
                 statsDemandes = await prisma.demandes.groupBy({
@@ -842,9 +843,36 @@ const getGeneralStats = async (req, res) => {
                     },
                     _count: { _all: true }
                 });
+
+                // NEW: Demandes validées non reçues
+                demandesValideesNonRecues = await prisma.demandes.count({
+                    where: {
+                        date_demande: {
+                            gte: new Date(startDate + 'T00:00:00'),
+                            lte: new Date(endDate + 'T23:59:59')
+                        },
+                        statut_demande: 'valide',
+                        demande_recue: false,
+                        is_deleted: false
+                    }
+                }).catch(err => {
+                    console.error('Demandes validees non recues count error:', err);
+                    return 0;
+                });
             } catch (err) {
                 console.error('Demandes groupBy error:', err);
             }
+        } else {
+            demandesValideesNonRecues = await prisma.demandes.count({
+                where: {
+                    statut_demande: 'valide',
+                    demande_recue: false,
+                    is_deleted: false
+                }
+            }).catch(err => {
+                console.error('Demandes validees non recues count error:', err);
+                return 0;
+            });
         }
 
         // Stocks summary - safe query
@@ -858,24 +886,42 @@ const getGeneralStats = async (req, res) => {
             console.error('Stocks aggregate error:', err);
         }
 
-        // QR Codes stats - fix filter (no forms.created_at in schema)
-        let statsQr = [];
+        // QR Codes stats - group by statut with date filter via forms.created_at
+        let statsQrMap = { soumise: 0, generee: 0, imprimee: 0, livree: 0, recue: 0 };
         if (startDate && endDate) {
             try {
-                statsQr = await prisma.demande_qr.findMany({
+                const qrStats = await prisma.demande_qr.groupBy({
+                    by: ['statut'],
                     where: {
-                        // Use direct date filter or skip if no date field
-                        // created_at: { gte: ..., lte: ... } // if exists
+                        forms: {
+                            created_at: {
+                                gte: new Date(startDate + 'T00:00:00'),
+                                lte: new Date(endDate + 'T23:59:59')
+                            }
+                        }
                     },
-                    select: { statut: true }
+                    _count: { id: true }
                 });
+                statsQrMap = qrStats.reduce((acc, curr) => ({
+                    ...acc,
+                    [curr.statut]: curr._count.id
+                }), statsQrMap);
             } catch (err) {
-                console.error('QR stats error:', err);
+                console.error('QR stats groupBy error:', err);
             }
         } else {
-            statsQr = await prisma.demande_qr.findMany({
-                select: { statut: true }
-            }).catch(() => []);
+            try {
+                const qrStats = await prisma.demande_qr.groupBy({
+                    by: ['statut'],
+                    _count: { id: true }
+                });
+                statsQrMap = qrStats.reduce((acc, curr) => ({
+                    ...acc,
+                    [curr.statut]: curr._count.id
+                }), statsQrMap);
+            } catch (err) {
+                console.error('QR stats groupBy error (no filter):', err);
+            }
         }
 
         const statsDemandesMap = statsDemandes.reduce((acc, curr) => ({ 
@@ -883,17 +929,42 @@ const getGeneralStats = async (req, res) => {
             [curr.statut_demande]: curr._count._all 
         }), {});
 
-        const statsQrMap = statsQr.reduce((acc, curr) => ({ 
-            ...acc, 
-            [curr.statut]: (acc[curr.statut] || 0) + 1 
-        }), {});
+        // Remplacements livrés stats (TPE remplacés dont statut = 'livre')
+        let remplacementsLivres = 0;
+        if (startDate && endDate) {
+            remplacementsLivres = await prisma.remplacements.count({
+                where: {
+                    statut: 'livre',
+                    deleted: false,
+                    date_remplacement: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    }
+                }
+            }).catch(err => {
+                console.error('Remplacements count error:', err);
+                return 0;
+            });
+        } else {
+            remplacementsLivres = await prisma.remplacements.count({
+                where: {
+                    statut: 'livre',
+                    deleted: false
+                }
+            }).catch(err => {
+                console.error('Remplacements count error:', err);
+                return 0;
+            });
+        }
 
         const stats = {
             typesLivraisons: statsTypesLivraisons,
             livraisons: statsLivraisons,
             demandes: statsDemandesMap,
+            demandesValideesNonRecues,
             stocks: statsStocks._sum,
-            qr_codes: statsQrMap
+            qr_codes: statsQrMap,
+            remplacementsLivres
         };
 
         res.json(stats);
@@ -965,5 +1036,5 @@ module.exports = {
     statsreceveurs,
     nbetpepartypeparperiod,
     getGeneralStats,
-    getLivraisonsParTypeLivre
+    getLivraisonsParTypeLivre,
 }

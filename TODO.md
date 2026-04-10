@@ -1,29 +1,21 @@
-# New Task: Create Remplacement Dashboard
+# Task: Fix "Cannot find name 'terminal'" TypeScript error in Dashboard.tsx
 
-## Current Task Plan:
-**File**: `frontend/src/pages/Dashboards/SousDashboardRemplacement.tsx`
+## Plan Breakdown & Progress
 
-**Backend APIs** (deliveryController.js):
-- `GET /api/delivery/getAllRemplacements` → all + validation_remplacement
-- `GET /api/delivery/getOneRemplacement/:id`
-- Prisma: `remplacements` (quantite, details_remplacement JSON, statut, date_remplacement, validation_remplacement[])
+### 1. ✅ [COMPLETE] Understand project and locate error
+- Searched for 'terminal' → Found in Dashboard.tsx
+- Read file → Confirmed undefined variable
 
-**Dashboard Features**:
-1. **Date picker** (filter `date_remplacement`)
-2. **Stats cards**: Total, en_attente, livre, retourne/refuse
-3. **Recent table**: ID, Old/New Model, Quantite, Statut, Date, Livreur
-4. **Expandable hierarchy** (Year/Month/Week if data volume high)
-5. **TS interfaces** + error handling
+### 2. ✅ [COMPLETE] Create TODO.md for tracking
 
-**Step Status**:
-- [ ] Step 1: Update TODO.md (current)
-- [ ] Step 2: Create complete dashboard component
-- [ ] Step 3: Test API integration + filtering
-- [ ] Step 4: VSCode validation
+### 3. ✅ [COMPLETE] Edit frontend/src/pages/Dashboards/Dashboard.tsx
+- Replace `terminal?.` → `stats?.stocks?.`
+- Fix Tailwind classes: `bleu` → `blue`
 
-## Previous Tasks ✅:
-**Livraison Dashboard**: monthKey fixed, hierarchy working, debug logs added
-**QR Dashboard**: All TS errors resolved (reduce, mapping, types)
+### 4. Test changes
+- Run `cd frontend && npm run dev`
+- Verify no TypeScript errors
+- Check "Stocks TERMINAL" card displays correctly
 
-**Test**: Refresh Remplacement page after creation → `http://localhost:5500/api/delivery/getAllRemplacements`
+### 5. ✅ [PENDING] Attempt completion
 

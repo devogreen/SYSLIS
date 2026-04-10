@@ -16,6 +16,22 @@ interface StockItem {
   quantite_piece?: number;
   code_stock?: string;
 }
+interface Demande {
+  id: number;
+  nom_demandeur?: string;
+  date_demande: string;
+  qte_total_demande: number;
+  motif_demande?: string;
+  statut_demande: 'en_cours' | 'valide' | 'partiel' | 'refuse';
+  service_demandeur?: number;
+}
+interface Stats {
+  total: number;
+  valide: number;
+  en_cours: number;
+  refuse: number;
+  // retourne: number;
+}
 
 interface StockSummary {
   nom_piece: string;
@@ -27,6 +43,13 @@ interface StockSummary {
   stocks: StockItem[];
 }
 
+interface GlobalStockTotals {
+  total_lot: number;
+  total_carton: number;
+  total_piece: number;
+  total: number;
+}
+
 export default function SousDashboardStocks() {
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -34,6 +57,10 @@ export default function SousDashboardStocks() {
   const [stocks, setStocks] = useState<StockItem[]>([]);
   const [stockSummary, setStockSummary] = useState<StockSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<Stats>({ total: 0, valide: 0, en_cours: 0, refuse: 0 });
+  const [allDemandes, setAllDemandes] = useState<Demande[]>([]);
+  const [globalStockTotals, setGlobalStockTotals] = useState<GlobalStockTotals>({ total_lot: 0, total_carton: 0, total_piece: 0, total: 0 });
+  
 
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
@@ -94,6 +121,15 @@ export default function SousDashboardStocks() {
       }, []).sort((a: StockSummary, b: StockSummary) => b.total - a.total);
 
       setStockSummary(summary);
+
+      // Compute global totals
+      const globalTotals: GlobalStockTotals = summary.reduce((acc: GlobalStockTotals, s: StockSummary) => ({
+        total_lot: acc.total_lot + s.total_lot,
+        total_carton: acc.total_carton + s.total_carton,
+        total_piece: acc.total_piece + s.total_piece,
+        total: acc.total + s.total
+      }), { total_lot: 0, total_carton: 0, total_piece: 0, total: 0 });
+      setGlobalStockTotals(globalTotals);
     } catch (error) {
       console.error('Erreur stock dashboard:', error);
     } finally {
@@ -108,6 +144,47 @@ export default function SousDashboardStocks() {
   const refresh = () => {
     fetchStockData();
   };
+
+   useEffect(() => {
+      const fetchData = async () => {
+        setLoading(true);
+        try {
+          const formattedStartDate = getFormattedDate(startDate);
+          const formattedEndDate = getFormattedDate(endDate);
+  
+          // Fetch all demandes
+          const response = await fetch('http://localhost:5500/api/demandes/getAllDemandes');
+          if (response.ok) {
+            const rawDemandes: Demande[] = await response.json();
+  
+            // Filter by date
+            const filteredDemandes = rawDemandes.filter((d: Demande) => {
+              const dateDemande = new Date(d.date_demande);
+              return dateDemande >= startDate && dateDemande <= endDate;
+            });
+  
+            // Compute stats
+            const computedStats: Stats = {
+              total: filteredDemandes.length,
+              valide: filteredDemandes.filter(d => d.statut_demande === 'valide').length,
+              en_cours: filteredDemandes.filter(d => d.statut_demande === 'en_cours').length,
+              refuse: filteredDemandes.filter(d => d.statut_demande === 'refuse').length,
+              // retourne: filteredDemandes.filter(d => d.statut_demande === 'retourne').length,
+            };
+            setStats(computedStats);
+  
+            setAllDemandes(filteredDemandes);
+          }
+        } catch (error) {
+          console.error('Erreur dashboard Demandes:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+  
+      fetchData();
+    }, [startDate, endDate]);
+  
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -158,7 +235,84 @@ export default function SousDashboardStocks() {
           </p>
         )}
       </div>
+      {/* DEMANDE EFFECTUEE */}
+      <div className="p-6 border-b border-gray-200">
+          <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+            Demandes Effectuées
+          </h3>
+        </div>
+        {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="p-6 bg-gradient-to-br from-indigo-50 to-indigo-100 border-l-4 border-indigo-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-indigo-700">Total</p>
+              <p className="text-4xl font-bold text-indigo-600">{stats.total}</p>
+            </div>
+            <div className="p-3 bg-indigo-200 rounded-full">
+              <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+          </div>
+        </div>
 
+        <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-700">Validées</p>
+              <p className="text-4xl font-bold text-green-600">{stats.valide}</p>
+            </div>
+            <div className="p-3 bg-green-200 rounded-full">
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-700">En cours</p>
+              <p className="text-4xl font-bold text-blue-600">{stats.en_cours}</p>
+            </div>
+            <div className="p-3 bg-blue-200 rounded-full">
+              <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-red-700">Refusées</p>
+              <p className="text-4xl font-bold text-red-600">{stats.refuse}</p>
+            </div>
+            <div className="p-3 bg-red-200 rounded-full">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* <div className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-orange-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-700">Retour</p>
+              <p className="text-4xl font-bold text-orange-600">{stats.retourne}</p>
+            </div>
+            <div className="p-3 bg-orange-200 rounded-full">
+              <svg className="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+        </div> */}
+      </div>
       {/* Stock Detail Table */}
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="p-6 border-b border-gray-200">
@@ -237,7 +391,7 @@ export default function SousDashboardStocks() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-right">
                       <span className="text-2xl font-black bg-gradient-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">
-                        {summary.total.toLocaleString()}
+                        {summary.total_piece.toLocaleString()}
                       </span>
                     </td>
                   </tr>

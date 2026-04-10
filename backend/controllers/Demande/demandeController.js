@@ -3481,7 +3481,7 @@ const receivePiece = async (req, res) => {
         item_id: parseInt(itemId),
         user_id: parseInt(user_id),
         demande_id: parseInt(demandeId),
-        date: new Date(),
+        created_at: new Date(),
         signature_recepteur: signature ? signature : '',
         nom_recepteur,
         commentaire,

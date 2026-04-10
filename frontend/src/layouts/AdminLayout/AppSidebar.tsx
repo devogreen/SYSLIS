@@ -32,8 +32,8 @@ const navItems: NavItem[] = [
     name: "Dashboard",
     subItems: [
       { name: "Semaine en cours", path: "/", pro: false },
-      { name: " Dashboard Livraison", path: "/sous-dashboard-livraison", pro: false },
-      { name: " Dashboard Remplacement", path: "/sous-dashboard-remplacement", pro: false },
+      { name: " Dashboard Livraison", path: "/sous-dashboard-livraison",  roles:[1],pro: false },
+      { name: " Dashboard Remplacement", path: "/sous-dashboard-remplacement",  roles:[1],pro: false },
       { name: " Dashboard QRcode", path: "/sous-dashboard-qrcode", pro: false },
       { name: " Dashboard MVT Stock", path: "/sous-dashboard-mvt-stock", pro: false },
       // { name: " Dashboard Stock", path: "/sous-dashboard-stock", pro: false },
