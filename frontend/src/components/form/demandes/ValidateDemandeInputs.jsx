@@ -169,6 +169,8 @@ export default function ValidateDemandeInputs() {
 
     const [isGestionStock, setIsGestionStock] = useState(false)
 
+    const isOnlyDigits = (str) => /^\d+$/.test(str);
+
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true)
@@ -488,11 +490,13 @@ export default function ValidateDemandeInputs() {
                                             )}
                                             <div>
                                                 <Label>Quantitée <span className="text-red-700">*</span></Label>
-                                                <Input type="number"
+                                                <Input
+                                                    type="text"
+                                                    id="input"
                                                     value={quantite}
                                                     onChange={(e) => {
-                                                        const value = Number(e.target.value)
-                                                        if (value >= 0) {
+                                                        if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                            const value = e.target.value
                                                             setQuantite(value)
                                                         }
                                                     }}

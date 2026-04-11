@@ -191,5 +191,15 @@ export class Demandes {
       throw error.response.data;
     }
   }
+
+  // Livraison de stock par pièce (unité)
+  async livraisonPiece(payload) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/livraisonPiece`, payload)
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
 }
 

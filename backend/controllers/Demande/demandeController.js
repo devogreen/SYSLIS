@@ -465,14 +465,16 @@ const faireDemande = async (req, res) => {
       }))
       : [];
 
+    const dateAction = new Date()
+
     const nouvelleDemande = await prisma.$transaction(async (tx) => {
 
       const demandeForm = await tx.forms.create({
         data: {
           type: 'demande_stock',
           created_by: utilisateur.id_user,
-          created_at: new Date(),
-          last_modified_at: new Date(),
+          created_at: dateAction,
+          last_modified_at: dateAction,
           nom_user: utilisateur.fullname,
           commentaire,
         }
@@ -480,7 +482,7 @@ const faireDemande = async (req, res) => {
       const demande = await tx.demandes.create({
         data: {
           nom_demandeur: nomUser,
-          date_demande: new Date(),
+          date_demande: dateAction,
           commentaire,
           qte_total_demande: parseInt(quantite),
           details_demande: JSON.stringify(details),
@@ -507,7 +509,7 @@ const faireDemande = async (req, res) => {
             demande_id: demande.id,
             type_formulaire: 'demande',
             role: 'demandeur',
-            created_at: new Date(),
+            created_at: dateAction,
           }))
         })
       }
@@ -565,33 +567,33 @@ const faireDemande = async (req, res) => {
 
     const sendMail = require("../../utils/emailSender");
 
-    if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
-      const subject = `MOUVEMENT DE STOCK DE ${nomPiece}`;
-      let html = `
-        <p>Bonjour,</p>
-        <p>Une nouvelle demande a été enregistrée.</p>
-        <ul>
-          <li><strong>Demande de :</strong> ${nomPiece}</li>
-          <li><strong>${details.typeDemande}</strong></li>
-          <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
-        </ul>
-        <ul>
-          <li><strong>Service demandeur:</strong> ${nomService}</li>
-          <li><strong>Nom demandeur:</strong> ${nomUser}</li>
-        </ul>
-        <br>
-        <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la demande à ce lien : 
-          <span>
-          <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-            Cliquez ici !
-          </a>
-          </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-        `;
+    const subject = `MOUVEMENT DE STOCK DE ${nomPiece}`;
+    let html = `
+      <p>Bonjour,</p>
+      <p>Une nouvelle demande a été enregistrée.</p>
+      <ul>
+        <li><strong>Demande de :</strong> ${nomPiece}</li>
+        <li><strong>${details.typeDemande}</strong></li>
+        <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
+      </ul>
+      <ul>
+        <li><strong>Service demandeur:</strong> ${nomService}</li>
+        <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+      </ul>
+      <br>
+      <p>Commentaire : ${commentaire_mail}<p>
+      <br>
+      <p>Retrouvez la demande à ce lien : 
+        <span>
+        <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+          Cliquez ici !
+        </a>
+        </span>
+      </p>
+      <br><br>
+      <p>Green - Pay vous remercie.</p>
+      `;
+    if (service_users && service_users.length > 0) {
       for (const service_user of service_users) {
         await sendMail({
           to: service_user.email,
@@ -599,6 +601,9 @@ const faireDemande = async (req, res) => {
           html,
         });
       }
+    }
+
+    if ((validateurs && validateurs.length > 0)) {
       for (const validateur of validateurs) {
         await sendMail({
           to: validateur.email,
@@ -628,6 +633,11 @@ const getAllDemandes = async (req, res) => {
       include: {
         forms: true,
         validation_demande: {
+          include: {
+            forms: true,
+          },
+        },
+        livraison_piece: {
           include: {
             forms: true,
           },
@@ -702,9 +712,13 @@ const validateDemande = async (req, res) => {
       where: { id: parseInt(demande_id) },
     });
 
-    if (!demande) return res.status(404).json({ message: "Demande introuvable." });
+    if (!demande) {
+      console.error('Demande introuvable !')
+      return res.status(404).json({ message: "Demande introuvable." });
+    }
 
     if (demande.statut_demande === "valide") {
+      console.error('Demande déjà validée !')
       return res.status(400).json({ message: "Demande déjà validée." });
     }
 
@@ -714,15 +728,22 @@ const validateDemande = async (req, res) => {
       return res.status(404).json({ message: "Signature introuvable !" });
     }
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+    if (!user_id) {
+      console.error('Utilisateur non authentifié !')
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
 
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
     });
 
     if (!user) {
+      console.error('Utilisateur introuvable !')
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
+
+
+    const dateAction = new Date()
 
     const validation = await prisma.$transaction(async (tx) => {
       const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
@@ -731,7 +752,7 @@ const validateDemande = async (req, res) => {
       const signatureCloud = uploadResult.secure_url;
 
       await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
+        where: { id: demande.id },
         data: {
           statut_demande: "valide",
         },
@@ -741,8 +762,8 @@ const validateDemande = async (req, res) => {
         data: {
           type: 'validation_stock',
           created_by: user.id_user,
-          created_at: new Date(),
-          last_modified_at: new Date(),
+          created_at: dateAction,
+          last_modified_at: dateAction,
           nom_user: user.fullname,
           commentaire,
         },
@@ -752,7 +773,7 @@ const validateDemande = async (req, res) => {
           form_id: validationForm.id,
           signature_url: signature.path,
           signed_by: user.id_user,
-          signed_at: new Date(),
+          signed_at: dateAction,
           role: 'validateur',
         },
       })
@@ -900,7 +921,8 @@ const validateDemande = async (req, res) => {
         });
       }
     }
-    
+
+    console.log("Demande validée avec succès !")
     return res.status(201).json({
       message: "Demande validée avec succès !",
       data: validation,
@@ -974,8 +996,12 @@ const livraisonDemande = async (req, res) => {
       }
     })
 
-    const mouvementStock = await prisma.$transaction(async (tx) => {
-      if (typeMouvement == 5) {
+    let mouvementStock = null
+
+    const dateAction = new Date()
+
+    if (typeMouvement == 5) {
+      mouvementStock = await prisma.$transaction(async (tx) => {
         initial = Number(detailsMouvement.stockInitialPiece)
         stock = Number(detailsMouvement.quantiteMouvement)
         final = Number(detailsMouvement.stockFinalPiece)
@@ -1002,282 +1028,8 @@ const livraisonDemande = async (req, res) => {
 
         const dataStock = {
           quantite_piece: final,
-          last_update: new Date(),
+          last_update: dateAction,
         }
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(),
-                created_by: user.id_user,
-                last_update: new Date(),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                // code_stock: stockDonneur.code_stock,
-                // piece_id: 1,
-                // service_id: 3,
-                // last_update: new Date(),
-              },
-              data: {
-                quantite_piece: finalDemandeur,
-                last_update: new Date(),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-      } else if (typeMouvement == 4) {
-        initial = Number(detailsMouvement.stockInitialCarton)
-        stock = Number(detailsMouvement.quantiteMouvementCarton)
-        final = Number(detailsMouvement.stockFinalCarton)
-
-        const listCarton = detailsMouvement.cartons
-
-        let serialNumbers = null
-        for (let id of listCarton) {
-          serialNumbers = await tx.serial_numbers.findMany({
-            where: {
-              carton_id: parseInt(id)
-            }
-          })
-        }
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 4,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_carton: final,
-          quantite_piece: finalPiece,
-          last_update: new Date(),
-        }
-
-        initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-
-          initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(),
-                created_by: user.id_user,
-                last_update: new Date(),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-                last_update: new Date(),
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                quantite_carton: finalDemandeur
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-
-          for (let id of listCarton) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-          }
-        } else {
-          for (let id of listCarton) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                carton_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      } else if (typeMouvement == 3) {
-        initial = Number(detailsMouvement.stockInitialPieceCarton)
-        stock = Number(detailsMouvement.quantiteMouvementPieceCarton)
-        final = Number(detailsMouvement.stockFinalPieceCarton)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 3,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_piece: finalPiece,
-          last_update: new Date(),
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        await tx.stock_carton.update({
-          where: { id: parseInt(detailsMouvement.selectedCarton) },
-          data: {
-            quantite_totale_piece: final
-          },
-        })
 
         const stockDonneur = await tx.stocks.update({
           where: {
@@ -1288,572 +1040,985 @@ const livraisonDemande = async (req, res) => {
 
         initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
         finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
+        const stockDemandeur = await tx.stocks.findFirst({
+          where: {
+            code_stock: stockDonneur.code_stock,
+            piece_id: 1,
+            service_id: 3,
+          }
+        })
+        let idStock = stockDemandeur ? stockDemandeur.id : null
+        if (!stockDemandeur) {
+          const stockDemandeur = await tx.stocks.create({
+            data: {
               code_stock: stockDonneur.code_stock,
               piece_id: 1,
+              model_id: modelPiece,
               service_id: 3,
+              quantite_lot: 0,
+              quantite_carton: 0,
+              quantite_piece: finalPieceDemandeur,
+              created_at: dateAction,
+              created_by: user.id_user,
+              last_update: dateAction,
+              updated_by: user.id_user,
             }
           })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(),
-                created_by: user.id_user,
-                last_update: new Date(),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-        if (final == 0) {
-          await tx.stock_carton.update({
-            where: { id: parseInt(detailsMouvement.selectedCarton) },
-            data: {
-              quantite_totale_piece: final,
-              is_deleted: true,
-            },
-          })
-          const quantiteCartonStock = selectedStock.quantite_carton
-          tx.stocks.update({
+          idStock = stockDemandeur.id
+        } else {
+          const updatedStockDemandeur = await tx.stocks.update({
             where: {
-              id: parseInt(stock_id),
+              id: idStock,
             },
             data: {
-              quantite_carton: quantiteCartonStock - 1
-            }
-          })
-        }
-
-        if (detailsMouvement.selectedLot) {
-          const finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-          let updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot)
+              quantite_piece: finalDemandeur,
+              last_update: dateAction,
             },
-            data: {
-              quantite_piece: finalPieceLot,
-            }
           })
-          if (final == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: updatedLot.quantite_carton - 1,
-              },
-            })
-          }
-          if (updatedLot.quantite_carton == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: 0,
-                is_deleted: true
-              }
-            })
-            const quantiteLotStock = selectedStock.quantite_lot
-            tx.stocks.update({
-              where: {
-                id: parseInt(stock_id),
-              },
-              data: {
-                quantite_lot: quantiteLotStock - 1
-              }
-            })
-          }
+          idStock = updatedStockDemandeur.id
         }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      } else if (typeMouvement == 2) {
-        initial = Number(detailsMouvement.stockInitialCartonLot)
-        stock = Number(detailsMouvement.quantiteMouvementCartonLot)
-        final = Number(detailsMouvement.stockFinalCartonLot)
-        finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-
-        const listCartonLot = detailsMouvement.cartons
-
-        let serialNumbers = null
-        for (let id of listCartonLot) {
-          serialNumbers = await tx.serial_numbers.findMany({
-            where: {
-              carton_id: parseInt(id)
-            }
-          })
-        }
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 2,
+        dataEntree = {
+          type: 'entree',
+          mouvement: 5,
           demande_id: demande.id,
-          stock_id: parseInt(stock_id),
+          stock_id: idStock,
           piece_id: parseInt(itemId),
           service_origine: servicePiece,
           service_destination: parseInt(demande.service_demandeur),
           model_id: modelPiece,
-          stock_initial: initial,
+          stock_initial: initialDemandeur,
           quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
+          stock_final: finalDemandeur,
+          quantite_totale_piece: finalPieceDemandeur,
           motif: demande.motif_demande,
           commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_carton: quantiteCartonStock - stock,
-          quantite_piece: finalPiece,
-          last_update: new Date(),
+          details_mouvement: JSON.stringify(detailsEntree),
         }
 
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
+        mouvement_stock_demandeur = await tx.mouvement_stock.create({
+          data: dataEntree,
         })
 
-        let updatedLot = await tx.stock_lot.update({
-          where: {
-            id: parseInt(detailsMouvement.selectedLot),
-          },
+        await tx.demandes.update({
+          where: { id: parseInt(demande_id) },
           data: {
-            quantite_carton: final,
-            quantite_piece: finalPieceLot,
+            stock_id: +stock_id,
+            demande_livree: true,
+            nomenclature,
+            type_demande: typeMouvement,
+            details_demande: JSON.stringify(detailsMouvement),
+            details_demandeur: JSON.stringify(detailsEntree),
           },
-        })
+        });
 
-        if (final == 0) {
-          updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot),
-            },
-            data: {
-              quantite_carton: final,
-              quantite_piece: finalPieceLot,
-              is_deleted: true,
-            },
-          })
-          const quantiteLotStock = selectedStock.quantite_lot
-          tx.stocks.update({
-            where: {
-              id: parseInt(stock_id),
-            },
-            data: {
-              quantite_lot: quantiteLotStock - 1
-            }
-          })
-        }
-
-        // const listCartonLot = detailsMouvement.cartons
-
-        initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(),
-                created_by: user.id_user,
-                last_update: new Date(),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-                lot_id: updatedLot.id,
-              },
-              data: {
-                service_id: serviceDemandeur,
-                lot_id: null
-              }
-            })
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
+        const livraisonForm = await tx.forms.create({
+          data: {
+            type: 'livraison_stock',
+            created_by: user.id_user,
+            created_at: dateAction,
+            last_modified_at: dateAction,
+            nom_user: user.fullname,
             commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
           }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        } else {
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                carton_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-      } else if (typeMouvement == 1) {
-        initial = Number(detailsMouvement.stockInitialLot)
-        stock = Number(detailsMouvement.quantiteMouvementLot)
-        final = Number(detailsMouvement.stockFinalLot)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 1,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
         })
 
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_lot: final,
-          quantite_carton: quantiteCartonStock - Number(detailsMouvement.quantiteMouvementCarton),
-          quantite_piece: finalPiece,
-          last_update: new Date(),
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        const listLot = detailsMouvement.listeLots
-
-        initialDemandeur = Number(detailsMouvement.stockInitialLotDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalLotDemandeur)
-        const finalCartonDemandeur = Number(detailsMouvement.quantiteMouvementCarton)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(),
-                created_by: user.id_user,
-                last_update: new Date(),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-                lot_id: updatedLot.id,
-              },
-              data: {
-                service_id: serviceDemandeur,
-                lot_id: null
-              }
-            })
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 1,
-            stock_id: idStock,
+        const livraison = await tx.livraison_piece.create({
+          data: {
             demande_id: demande.id,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
+            details_demande: JSON.stringify(detailsMouvement),
+            details_demandeur: JSON.stringify(detailsEntree),
+            form_id: livraisonForm.id,
+            stock_id: parseInt(stock_id),
           }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
+        })
 
-          for (let id of listLot) {
-            await tx.stock_lot.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-            await tx.stock_carton.updateMany({
-              where: {
-                lot_id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-          }
-        } else {
-          for (let id of listLot) {
-            await tx.stock_lot.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.stock_carton.updateMany({
-              where: {
-                lot_id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                lot_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-          // for (let id of listCartonLot) {
-          //   await tx.stock_carton.update({
-          //     where: {
-          //       id: parseInt(id),
-          //       lot_id: updatedLot.id,
-          //     },
-          //     data: {
-          //       is_deleted: true,
-          //     }
-          //   })
-          // }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      }
-      await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
-        data: {
-          stock_id: +stock_id,
-          demande_livree: true,
-          nomenclature,
-          type_demande: typeMouvement,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-        },
-      });
-
-      const livraisonForm = await tx.forms.create({
-        data: {
-          type: 'livraison_stock',
-          created_by: user.id_user,
-          created_at: new Date(),
-          last_modified_at: new Date(),
-          nom_user: user.fullname,
-          commentaire,
+        return {
+          livraisonForm,
+          livraison,
         }
       })
+    }
 
-      const livraison = await tx.livraison_piece.create({
-        data: {
-          demande_id: demande.id,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-          form_id: livraisonForm.id,
-          stock_id: parseInt(stock_id),
-        }
-      })
-      return {
-        livraisonForm,
-        livraison,
-      }
-      // {
-      //   timeout: 10000 // 10 seconds instead of 5
-      // }
-    })
+    // mouvementStock = await prisma.$transaction(async (tx) => {
+    //   if (typeMouvement == 5) {
+    //     initial = Number(detailsMouvement.stockInitialPiece)
+    //     stock = Number(detailsMouvement.quantiteMouvement)
+    //     final = Number(detailsMouvement.stockFinalPiece)
+    //     dataMouvement = {
+    //       type: 'sortie',
+    //       mouvement: 5,
+    //       demande_id: demande.id,
+    //       stock_id: parseInt(stock_id),
+    //       piece_id: parseInt(itemId),
+    //       service_origine: servicePiece,
+    //       service_destination: parseInt(demande.service_demandeur),
+    //       model_id: modelPiece,
+    //       stock_initial: initial,
+    //       quantite: stock,
+    //       stock_final: final,
+    //       quantite_totale_piece: final,
+    //       motif: demande.motif_demande,
+    //       commentaire,
+    //       details_mouvement: JSON.stringify(detailsMouvement),
+    //     }
+    //     mouvement_stock = await prisma.mouvement_stock.create({
+    //       data: dataMouvement,
+    //     })
 
+    //     const dataStock = {
+    //       quantite_piece: final,
+    //       last_update: new Date(),
+    //     }
 
+    //     const stockDonneur = await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
+    //       initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
+    //       finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
+    //       const stockDemandeur = await tx.stocks.findFirst({
+    //         where: {
+    //           code_stock: stockDonneur.code_stock,
+    //           piece_id: 1,
+    //           service_id: 3,
+    //         }
+    //       })
+    //       let idStock = stockDemandeur ? stockDemandeur.id : null
+    //       if (!stockDemandeur) {
+    //         const stockDemandeur = await tx.stocks.create({
+    //           data: {
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             model_id: modelPiece,
+    //             service_id: 3,
+    //             quantite_lot: 0,
+    //             quantite_carton: 0,
+    //             quantite_piece: finalPieceDemandeur,
+    //             created_at: new Date(),
+    //             created_by: user.id_user,
+    //             last_update: new Date(),
+    //             updated_by: user.id_user,
+    //           }
+    //         })
+    //         idStock = stockDemandeur.id
+    //       } else {
+    //         const updatedStockDemandeur = await tx.stocks.update({
+    //           where: {
+    //             id: idStock,
+    //             // code_stock: stockDonneur.code_stock,
+    //             // piece_id: 1,
+    //             // service_id: 3,
+    //             // last_update: new Date(),
+    //           },
+    //           data: {
+    //             quantite_piece: finalDemandeur,
+    //             last_update: new Date(),
+    //           },
+    //         })
+    //         idStock = updatedStockDemandeur.id
+    //       }
+    //       dataEntree = {
+    //         type: 'entree',
+    //         mouvement: 5,
+    //         demande_id: demande.id,
+    //         stock_id: idStock,
+    //         piece_id: parseInt(itemId),
+    //         service_origine: servicePiece,
+    //         service_destination: parseInt(demande.service_demandeur),
+    //         model_id: modelPiece,
+    //         stock_initial: initialDemandeur,
+    //         quantite: stock,
+    //         stock_final: finalDemandeur,
+    //         quantite_totale_piece: finalPieceDemandeur,
+    //         motif: demande.motif_demande,
+    //         commentaire,
+    //         details_mouvement: JSON.stringify(detailsEntree),
+    //       }
+
+    //       mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //         data: dataEntree,
+    //       })
+    //     }
+
+    //   } else if (typeMouvement == 4) {
+    //     initial = Number(detailsMouvement.stockInitialCarton)
+    //     stock = Number(detailsMouvement.quantiteMouvementCarton)
+    //     final = Number(detailsMouvement.stockFinalCarton)
+
+    //     const listCarton = detailsMouvement.cartons
+
+    //     let serialNumbers = null
+    //     for (let id of listCarton) {
+    //       serialNumbers = await tx.serial_numbers.findMany({
+    //         where: {
+    //           carton_id: parseInt(id)
+    //         }
+    //       })
+    //     }
+    //     detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
+
+    //     dataMouvement = {
+    //       type: 'sortie',
+    //       mouvement: 4,
+    //       demande_id: demande.id,
+    //       stock_id: parseInt(stock_id),
+    //       piece_id: parseInt(itemId),
+    //       service_origine: servicePiece,
+    //       service_destination: parseInt(demande.service_demandeur),
+    //       model_id: modelPiece,
+    //       stock_initial: initial,
+    //       quantite: stock,
+    //       stock_final: final,
+    //       quantite_totale_piece: finalPiece,
+    //       motif: demande.motif_demande,
+    //       commentaire,
+    //       details_mouvement: JSON.stringify(detailsMouvement),
+    //     }
+    //     mouvement_stock = await tx.mouvement_stock.create({
+    //       data: dataMouvement,
+    //     })
+
+    //     const dataStock = {
+    //       quantite_carton: final,
+    //       quantite_piece: finalPiece,
+    //       last_update: new Date(),
+    //     }
+
+    //     initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
+    //     finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
+
+    //     const stockDonneur = await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
+
+    //       initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
+    //       finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
+    //       const stockDemandeur = await tx.stocks.findFirst({
+    //         where: {
+    //           code_stock: stockDonneur.code_stock,
+    //           piece_id: 1,
+    //           service_id: 3,
+    //         }
+    //       })
+    //       let idStock = stockDemandeur ? stockDemandeur.id : null
+    //       if (!stockDemandeur) {
+    //         const stockDemandeur = await tx.stocks.create({
+    //           data: {
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             model_id: modelPiece,
+    //             service_id: 3,
+    //             quantite_lot: 0,
+    //             quantite_carton: finalDemandeur,
+    //             quantite_piece: finalPieceDemandeur,
+    //             created_at: new Date(),
+    //             created_by: user.id_user,
+    //             last_update: new Date(),
+    //             updated_by: user.id_user,
+    //           }
+    //         })
+    //         idStock = stockDemandeur.id
+    //       } else {
+    //         const updatedStockDemandeur = await tx.stocks.update({
+    //           where: {
+    //             id: idStock,
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             service_id: 3,
+    //             last_update: new Date(),
+    //           },
+    //           data: {
+    //             quantite_piece: finalPieceDemandeur,
+    //             quantite_carton: finalDemandeur
+    //           },
+    //         })
+    //         idStock = updatedStockDemandeur.id
+    //       }
+    //       dataEntree = {
+    //         type: 'entree',
+    //         mouvement: 4,
+    //         demande_id: demande.id,
+    //         stock_id: idStock,
+    //         piece_id: parseInt(itemId),
+    //         service_origine: servicePiece,
+    //         service_destination: parseInt(demande.service_demandeur),
+    //         model_id: modelPiece,
+    //         stock_initial: initialDemandeur,
+    //         quantite: stock,
+    //         stock_final: finalDemandeur,
+    //         quantite_totale_piece: finalPieceDemandeur,
+    //         motif: demande.motif_demande,
+    //         commentaire,
+    //         details_mouvement: JSON.stringify(detailsEntree),
+    //       }
+
+    //       mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //         data: dataEntree,
+    //       })
+
+    //       for (let id of listCarton) {
+    //         await tx.stock_carton.update({
+    //           where: {
+    //             id: parseInt(id)
+    //           },
+    //           data: {
+    //             stock_id: idStock,
+    //             service_id: serviceDemandeur,
+    //           }
+    //         })
+    //       }
+    //     } else {
+    //       for (let id of listCarton) {
+    //         await tx.stock_carton.update({
+    //           where: {
+    //             id: parseInt(id)
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //         await tx.serial_numbers.updateMany({
+    //           where: {
+    //             carton_id: parseInt(id),
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //       }
+    //     }
+
+    //     // mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //     //   data: dataEntree,
+    //     // })
+    //   } else if (typeMouvement == 3) {
+    //     initial = Number(detailsMouvement.stockInitialPieceCarton)
+    //     stock = Number(detailsMouvement.quantiteMouvementPieceCarton)
+    //     final = Number(detailsMouvement.stockFinalPieceCarton)
+    //     dataMouvement = {
+    //       type: 'sortie',
+    //       mouvement: 3,
+    //       demande_id: demande.id,
+    //       stock_id: parseInt(stock_id),
+    //       piece_id: parseInt(itemId),
+    //       service_origine: servicePiece,
+    //       service_destination: parseInt(demande.service_demandeur),
+    //       model_id: modelPiece,
+    //       stock_initial: initial,
+    //       quantite: stock,
+    //       stock_final: final,
+    //       quantite_totale_piece: finalPiece,
+    //       motif: demande.motif_demande,
+    //       commentaire,
+    //       details_mouvement: JSON.stringify(detailsMouvement),
+    //     }
+    //     mouvement_stock = await tx.mouvement_stock.create({
+    //       data: dataMouvement,
+    //     })
+
+    //     const dataStock = {
+    //       quantite_piece: finalPiece,
+    //       last_update: new Date(),
+    //     }
+
+    //     await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     await tx.stock_carton.update({
+    //       where: { id: parseInt(detailsMouvement.selectedCarton) },
+    //       data: {
+    //         quantite_totale_piece: final
+    //       },
+    //     })
+
+    //     const stockDonneur = await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
+    //     finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
+
+    //     if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
+    //       const stockDemandeur = await tx.stocks.findFirst({
+    //         where: {
+    //           code_stock: stockDonneur.code_stock,
+    //           piece_id: 1,
+    //           service_id: 3,
+    //         }
+    //       })
+    //       let idStock = stockDemandeur ? stockDemandeur.id : null
+    //       if (!stockDemandeur) {
+    //         const stockDemandeur = await tx.stocks.create({
+    //           data: {
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             model_id: modelPiece,
+    //             service_id: 3,
+    //             quantite_lot: 0,
+    //             quantite_carton: 0,
+    //             quantite_piece: finalPieceDemandeur,
+    //             created_at: new Date(),
+    //             created_by: user.id_user,
+    //             last_update: new Date(),
+    //             updated_by: user.id_user,
+    //           }
+    //         })
+    //         idStock = stockDemandeur.id
+    //       } else {
+    //         const updatedStockDemandeur = await tx.stocks.update({
+    //           where: {
+    //             id: idStock,
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             service_id: 3,
+    //           },
+    //           data: {
+    //             quantite_piece: finalPieceDemandeur,
+    //             last_update: new Date(),
+    //           },
+    //         })
+    //         idStock = updatedStockDemandeur.id
+    //       }
+
+    //       dataEntree = {
+    //         type: 'entree',
+    //         mouvement: 5,
+    //         demande_id: demande.id,
+    //         stock_id: idStock,
+    //         piece_id: parseInt(itemId),
+    //         service_origine: servicePiece,
+    //         service_destination: parseInt(demande.service_demandeur),
+    //         model_id: modelPiece,
+    //         stock_initial: initialDemandeur,
+    //         quantite: stock,
+    //         stock_final: finalDemandeur,
+    //         quantite_totale_piece: finalPieceDemandeur,
+    //         motif: demande.motif_demande,
+    //         commentaire,
+    //         details_mouvement: JSON.stringify(detailsEntree),
+    //       }
+    //       mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //         data: dataEntree,
+    //       })
+    //     }
+
+    //     if (final == 0) {
+    //       await tx.stock_carton.update({
+    //         where: { id: parseInt(detailsMouvement.selectedCarton) },
+    //         data: {
+    //           quantite_totale_piece: final,
+    //           is_deleted: true,
+    //         },
+    //       })
+    //       const quantiteCartonStock = selectedStock.quantite_carton
+    //       tx.stocks.update({
+    //         where: {
+    //           id: parseInt(stock_id),
+    //         },
+    //         data: {
+    //           quantite_carton: quantiteCartonStock - 1
+    //         }
+    //       })
+    //     }
+
+    //     if (detailsMouvement.selectedLot) {
+    //       const finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
+    //       let updatedLot = await tx.stock_lot.update({
+    //         where: {
+    //           id: parseInt(detailsMouvement.selectedLot)
+    //         },
+    //         data: {
+    //           quantite_piece: finalPieceLot,
+    //         }
+    //       })
+    //       if (final == 0) {
+    //         updatedLot = await tx.stock_lot.update({
+    //           where: {
+    //             id: parseInt(detailsMouvement.selectedLot)
+    //           },
+    //           data: {
+    //             quantite_piece: finalPieceLot,
+    //             quantite_carton: updatedLot.quantite_carton - 1,
+    //           },
+    //         })
+    //       }
+    //       if (updatedLot.quantite_carton == 0) {
+    //         updatedLot = await tx.stock_lot.update({
+    //           where: {
+    //             id: parseInt(detailsMouvement.selectedLot)
+    //           },
+    //           data: {
+    //             quantite_piece: finalPieceLot,
+    //             quantite_carton: 0,
+    //             is_deleted: true
+    //           }
+    //         })
+    //         const quantiteLotStock = selectedStock.quantite_lot
+    //         tx.stocks.update({
+    //           where: {
+    //             id: parseInt(stock_id),
+    //           },
+    //           data: {
+    //             quantite_lot: quantiteLotStock - 1
+    //           }
+    //         })
+    //       }
+    //     }
+
+    //     // mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //     //   data: dataEntree,
+    //     // })
+    //   } else if (typeMouvement == 2) {
+    //     initial = Number(detailsMouvement.stockInitialCartonLot)
+    //     stock = Number(detailsMouvement.quantiteMouvementCartonLot)
+    //     final = Number(detailsMouvement.stockFinalCartonLot)
+    //     finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
+
+    //     const listCartonLot = detailsMouvement.cartons
+
+    //     let serialNumbers = null
+    //     for (let id of listCartonLot) {
+    //       serialNumbers = await tx.serial_numbers.findMany({
+    //         where: {
+    //           carton_id: parseInt(id)
+    //         }
+    //       })
+    //     }
+    //     detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
+
+    //     dataMouvement = {
+    //       type: 'sortie',
+    //       mouvement: 2,
+    //       demande_id: demande.id,
+    //       stock_id: parseInt(stock_id),
+    //       piece_id: parseInt(itemId),
+    //       service_origine: servicePiece,
+    //       service_destination: parseInt(demande.service_demandeur),
+    //       model_id: modelPiece,
+    //       stock_initial: initial,
+    //       quantite: stock,
+    //       stock_final: final,
+    //       quantite_totale_piece: finalPiece,
+    //       motif: demande.motif_demande,
+    //       commentaire,
+    //       details_mouvement: JSON.stringify(detailsMouvement),
+    //     }
+    //     mouvement_stock = await tx.mouvement_stock.create({
+    //       data: dataMouvement,
+    //     })
+
+    //     const quantiteCartonStock = selectedStock.quantite_carton
+    //     const dataStock = {
+    //       quantite_carton: quantiteCartonStock - stock,
+    //       quantite_piece: finalPiece,
+    //       last_update: new Date(),
+    //     }
+
+    //     await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     let updatedLot = await tx.stock_lot.update({
+    //       where: {
+    //         id: parseInt(detailsMouvement.selectedLot),
+    //       },
+    //       data: {
+    //         quantite_carton: final,
+    //         quantite_piece: finalPieceLot,
+    //       },
+    //     })
+
+    //     if (final == 0) {
+    //       updatedLot = await tx.stock_lot.update({
+    //         where: {
+    //           id: parseInt(detailsMouvement.selectedLot),
+    //         },
+    //         data: {
+    //           quantite_carton: final,
+    //           quantite_piece: finalPieceLot,
+    //           is_deleted: true,
+    //         },
+    //       })
+    //       const quantiteLotStock = selectedStock.quantite_lot
+    //       tx.stocks.update({
+    //         where: {
+    //           id: parseInt(stock_id),
+    //         },
+    //         data: {
+    //           quantite_lot: quantiteLotStock - 1
+    //         }
+    //       })
+    //     }
+
+    //     // const listCartonLot = detailsMouvement.cartons
+
+    //     initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
+    //     finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
+
+    //     const stockDonneur = await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
+    //       const stockDemandeur = await tx.stocks.findFirst({
+    //         where: {
+    //           code_stock: stockDonneur.code_stock,
+    //           piece_id: 1,
+    //           service_id: 3,
+    //         }
+    //       })
+    //       let idStock = stockDemandeur ? stockDemandeur.id : null
+    //       if (!stockDemandeur) {
+    //         const stockDemandeur = await tx.stocks.create({
+    //           data: {
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             model_id: modelPiece,
+    //             service_id: 3,
+    //             quantite_lot: 0,
+    //             quantite_carton: finalDemandeur,
+    //             quantite_piece: finalPieceDemandeur,
+    //             created_at: new Date(),
+    //             created_by: user.id_user,
+    //             last_update: new Date(),
+    //             updated_by: user.id_user,
+    //           }
+    //         })
+    //         idStock = stockDemandeur.id
+    //       } else {
+    //         const updatedStockDemandeur = await tx.stocks.update({
+    //           where: {
+    //             id: idStock,
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             service_id: 3,
+    //           },
+    //           data: {
+    //             quantite_carton: finalDemandeur,
+    //             quantite_piece: finalPieceDemandeur,
+    //             last_update: new Date(),
+    //           },
+    //         })
+    //         idStock = updatedStockDemandeur.id
+    //       }
+
+    //       for (let id of listCartonLot) {
+    //         await tx.stock_carton.update({
+    //           where: {
+    //             id: parseInt(id),
+    //             lot_id: updatedLot.id,
+    //           },
+    //           data: {
+    //             service_id: serviceDemandeur,
+    //             lot_id: null
+    //           }
+    //         })
+    //       }
+
+    //       dataEntree = {
+    //         type: 'entree',
+    //         mouvement: 4,
+    //         demande_id: demande.id,
+    //         stock_id: idStock,
+    //         piece_id: parseInt(itemId),
+    //         service_origine: servicePiece,
+    //         service_destination: parseInt(demande.service_demandeur),
+    //         model_id: modelPiece,
+    //         stock_initial: initialDemandeur,
+    //         quantite: stock,
+    //         stock_final: finalDemandeur,
+    //         quantite_totale_piece: finalPieceDemandeur,
+    //         motif: demande.motif_demande,
+    //         commentaire,
+    //         details_mouvement: JSON.stringify(detailsEntree),
+    //       }
+    //       mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //         data: dataEntree,
+    //       })
+    //     } else {
+    //       for (let id of listCartonLot) {
+    //         await tx.stock_carton.update({
+    //           where: {
+    //             id: parseInt(id),
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //         await tx.serial_numbers.updateMany({
+    //           where: {
+    //             carton_id: parseInt(id),
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //       }
+    //     }
+
+    //     // mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //     //   data: dataEntree,
+    //     // })
+
+    //   } else if (typeMouvement == 1) {
+    //     initial = Number(detailsMouvement.stockInitialLot)
+    //     stock = Number(detailsMouvement.quantiteMouvementLot)
+    //     final = Number(detailsMouvement.stockFinalLot)
+    //     dataMouvement = {
+    //       type: 'sortie',
+    //       mouvement: 1,
+    //       demande_id: demande.id,
+    //       stock_id: parseInt(stock_id),
+    //       piece_id: parseInt(itemId),
+    //       service_origine: servicePiece,
+    //       service_destination: parseInt(demande.service_demandeur),
+    //       model_id: modelPiece,
+    //       stock_initial: initial,
+    //       quantite: stock,
+    //       stock_final: final,
+    //       quantite_totale_piece: finalPiece,
+    //       motif: demande.motif_demande,
+    //       commentaire,
+    //       details_mouvement: JSON.stringify(detailsMouvement),
+    //     }
+    //     mouvement_stock = await tx.mouvement_stock.create({
+    //       data: dataMouvement,
+    //     })
+
+    //     const quantiteCartonStock = selectedStock.quantite_carton
+    //     const dataStock = {
+    //       quantite_lot: final,
+    //       quantite_carton: quantiteCartonStock - Number(detailsMouvement.quantiteMouvementCarton),
+    //       quantite_piece: finalPiece,
+    //       last_update: new Date(),
+    //     }
+
+    //     await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     const listLot = detailsMouvement.listeLots
+
+    //     initialDemandeur = Number(detailsMouvement.stockInitialLotDemandeur)
+    //     finalDemandeur = Number(detailsMouvement.stockFinalLotDemandeur)
+    //     const finalCartonDemandeur = Number(detailsMouvement.quantiteMouvementCarton)
+
+    //     const stockDonneur = await tx.stocks.update({
+    //       where: {
+    //         id: parseInt(stock_id),
+    //       },
+    //       data: dataStock,
+    //     })
+
+    //     if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
+    //       const stockDemandeur = await tx.stocks.findFirst({
+    //         where: {
+    //           code_stock: stockDonneur.code_stock,
+    //           piece_id: 1,
+    //           service_id: 3,
+    //         }
+    //       })
+    //       let idStock = stockDemandeur ? stockDemandeur.id : null
+    //       if (!stockDemandeur) {
+    //         const stockDemandeur = await tx.stocks.create({
+    //           data: {
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             model_id: modelPiece,
+    //             service_id: 3,
+    //             quantite_lot: finalDemandeur,
+    //             quantite_carton: finalCartonDemandeur,
+    //             quantite_piece: finalPieceDemandeur,
+    //             created_at: new Date(),
+    //             created_by: user.id_user,
+    //             last_update: new Date(),
+    //             updated_by: user.id_user,
+    //           }
+    //         })
+    //         idStock = stockDemandeur.id
+    //       } else {
+    //         const updatedStockDemandeur = await tx.stocks.update({
+    //           where: {
+    //             id: idStock,
+    //             code_stock: stockDonneur.code_stock,
+    //             piece_id: 1,
+    //             service_id: 3,
+    //           },
+    //           data: {
+    //             quantite_lot: finalDemandeur,
+    //             quantite_carton: finalCartonDemandeur,
+    //             quantite_piece: finalPieceDemandeur,
+    //             last_update: new Date(),
+    //           },
+    //         })
+    //         idStock = updatedStockDemandeur.id
+    //       }
+
+    //       for (let id of listCartonLot) {
+    //         await tx.stock_carton.update({
+    //           where: {
+    //             id: parseInt(id),
+    //             lot_id: updatedLot.id,
+    //           },
+    //           data: {
+    //             service_id: serviceDemandeur,
+    //             lot_id: null
+    //           }
+    //         })
+    //       }
+
+    //       dataEntree = {
+    //         type: 'entree',
+    //         mouvement: 1,
+    //         stock_id: idStock,
+    //         demande_id: demande.id,
+    //         piece_id: parseInt(itemId),
+    //         service_origine: servicePiece,
+    //         service_destination: parseInt(demande.service_demandeur),
+    //         model_id: modelPiece,
+    //         stock_initial: initialDemandeur,
+    //         quantite: stock,
+    //         stock_final: finalDemandeur,
+    //         quantite_totale_piece: finalPieceDemandeur,
+    //         motif: demande.motif_demande,
+    //         commentaire,
+    //         details_mouvement: JSON.stringify(detailsEntree),
+    //       }
+    //       mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //         data: dataEntree,
+    //       })
+
+    //       for (let id of listLot) {
+    //         await tx.stock_lot.update({
+    //           where: {
+    //             id: parseInt(id)
+    //           },
+    //           data: {
+    //             stock_id: idStock,
+    //             service_id: serviceDemandeur,
+    //           }
+    //         })
+    //         await tx.stock_carton.updateMany({
+    //           where: {
+    //             lot_id: parseInt(id)
+    //           },
+    //           data: {
+    //             stock_id: idStock,
+    //             service_id: serviceDemandeur,
+    //           }
+    //         })
+    //       }
+    //     } else {
+    //       for (let id of listLot) {
+    //         await tx.stock_lot.update({
+    //           where: {
+    //             id: parseInt(id)
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //         await tx.stock_carton.updateMany({
+    //           where: {
+    //             lot_id: parseInt(id)
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //         await tx.serial_numbers.updateMany({
+    //           where: {
+    //             lot_id: parseInt(id),
+    //           },
+    //           data: {
+    //             is_deleted: true,
+    //           }
+    //         })
+    //       }
+    //       // for (let id of listCartonLot) {
+    //       //   await tx.stock_carton.update({
+    //       //     where: {
+    //       //       id: parseInt(id),
+    //       //       lot_id: updatedLot.id,
+    //       //     },
+    //       //     data: {
+    //       //       is_deleted: true,
+    //       //     }
+    //       //   })
+    //       // }
+    //     }
+
+    //     // mouvement_stock_demandeur = await tx.mouvement_stock.create({
+    //     //   data: dataEntree,
+    //     // })
+    //   }
+    //   await tx.demandes.update({
+    //     where: { id: parseInt(demande_id) },
+    //     data: {
+    //       stock_id: +stock_id,
+    //       demande_livree: true,
+    //       nomenclature,
+    //       type_demande: typeMouvement,
+    //       details_demande: JSON.stringify(detailsMouvement),
+    //       details_demandeur: JSON.stringify(detailsEntree),
+    //     },
+    //   });
+
+    //   const livraisonForm = await tx.forms.create({
+    //     data: {
+    //       type: 'livraison_stock',
+    //       created_by: user.id_user,
+    //       created_at: new Date(),
+    //       last_modified_at: new Date(),
+    //       nom_user: user.fullname,
+    //       commentaire,
+    //     }
+    //   })
+
+    //   const livraison = await tx.livraison_piece.create({
+    //     data: {
+    //       demande_id: demande.id,
+    //       details_demande: JSON.stringify(detailsMouvement),
+    //       details_demandeur: JSON.stringify(detailsEntree),
+    //       form_id: livraisonForm.id,
+    //       stock_id: parseInt(stock_id),
+    //     }
+    //   })
+    //   return {
+    //     livraisonForm,
+    //     livraison,
+    //   }
+    //   // {
+    //   //   timeout: 10000 // 10 seconds instead of 5
+    //   // }
+    // })
+
+    
     /************************************     GESTION MAILS     **************************************/
 
     const piece = await prisma.items.findUnique({
@@ -1951,6 +2116,225 @@ const livraisonDemande = async (req, res) => {
     return res.status(500).json({ message: "Erreur serveur." });
   }
 };
+
+const livraisonPiece = async (req, res) => {
+  try {
+    const {
+      demande_id,
+      user_id,
+      commentaire,
+      stock_id,
+      nomenclature,
+      detailsDemande,
+      detailsDemandeur,
+      itemId,
+    } = req.body;
+    const demande = await prisma.demandes.findUnique({
+      where: { id: parseInt(demande_id) },
+    });
+
+    if (!demande) {
+      console.error(`Demande avec ID ${demande_id} non trouvée.`);
+      return res.status(404).json({ message: "Demande introuvable." });
+    }
+
+    if (demande.demande_livree == true) {
+      console.error(`Demande avec ID ${demande_id} a déjà été livrée.`);
+      return res.status(400).json({ message: "Demande déjà livrée." });
+    }
+
+    if (!user_id) {
+      console.error("ID utilisateur non fourni.");
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
+
+    const user = await prisma.users.findUnique({
+      where: { id_user: parseInt(user_id) },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    const detailsMouvement = typeof detailsDemande === "string" ? JSON.parse(detailsDemande) : detailsDemande;
+    const detailsEntree = typeof detailsDemandeur === "string" ? JSON.parse(detailsDemandeur) : detailsDemandeur;
+    const typeMouvement = detailsMouvement.typeMouvement
+    let dataMouvement = null
+    let initial = 0
+    let stock = 0
+    let final = 0
+    let finalPiece = Number(detailsMouvement.stockFinalPiece)
+    let finalPieceLot = 0
+    let mouvement_stock = null
+    const modelPiece = parseInt(detailsMouvement.model)
+    const servicePiece = parseInt(detailsMouvement.service)
+    const pieceId = itemId
+
+    let dataEntree = null
+    let initialDemandeur = 0
+    let finalDemandeur = 0
+    const finalPieceDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
+    let mouvement_stock_demandeur = null
+    const serviceDemandeur = demande.service_demandeur
+
+    let updatedQuantiteDemandeur = null
+
+    const selectedStock = await prisma.stocks.findUnique({
+      where: {
+        id: parseInt(stock_id)
+      }
+    })
+
+    const dateAction = new Date();
+
+    const mouvementStock = await prisma.$transaction(async (tx) => {
+      initial = Number(detailsMouvement.stockInitialPiece)
+      stock = Number(detailsMouvement.quantiteMouvement)
+      final = Number(detailsMouvement.stockFinalPiece)
+      dataMouvement = {
+        type: 'sortie',
+        mouvement: 5,
+        demande_id: demande.id,
+        stock_id: parseInt(stock_id),
+        piece_id: parseInt(itemId),
+        service_origine: servicePiece,
+        service_destination: parseInt(demande.service_demandeur),
+        model_id: modelPiece,
+        stock_initial: initial,
+        quantite: stock,
+        stock_final: final,
+        quantite_totale_piece: final,
+        motif: demande.motif_demande,
+        commentaire,
+        details_mouvement: JSON.stringify(detailsMouvement),
+      }
+      mouvement_stock = await prisma.mouvement_stock.create({
+        data: dataMouvement,
+      })
+
+      const dataStock = {
+        quantite_piece: final,
+        last_update: dateAction,
+      }
+
+      const stockDonneur = await tx.stocks.update({
+        where: {
+          id: parseInt(stock_id),
+        },
+        data: dataStock,
+      })
+
+      initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
+      finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
+      const stockDemandeur = await tx.stocks.findFirst({
+        where: {
+          code_stock: stockDonneur.code_stock,
+          piece_id: 1,
+          service_id: 3,
+        }
+      })
+      let idStock = stockDemandeur ? stockDemandeur.id : null
+      if (!stockDemandeur) {
+        const stockDemandeur = await tx.stocks.create({
+          data: {
+            code_stock: stockDonneur.code_stock,
+            piece_id: 1,
+            model_id: modelPiece,
+            service_id: 3,
+            quantite_lot: 0,
+            quantite_carton: 0,
+            quantite_piece: finalPieceDemandeur,
+            created_at: dateAction,
+            created_by: user.id_user,
+            last_update: dateAction,
+            updated_by: user.id_user,
+          }
+        })
+        idStock = stockDemandeur.id
+      } else {
+        const updatedStockDemandeur = await tx.stocks.update({
+          where: {
+            id: idStock,
+          },
+          data: {
+            quantite_piece: finalDemandeur,
+            last_update: dateAction,
+          },
+        })
+        idStock = updatedStockDemandeur.id
+      }
+      dataEntree = {
+        type: 'entree',
+        mouvement: 5,
+        demande_id: demande.id,
+        stock_id: idStock,
+        piece_id: parseInt(itemId),
+        service_origine: servicePiece,
+        service_destination: parseInt(demande.service_demandeur),
+        model_id: modelPiece,
+        stock_initial: initialDemandeur,
+        quantite: stock,
+        stock_final: finalDemandeur,
+        quantite_totale_piece: finalPieceDemandeur,
+        motif: demande.motif_demande,
+        commentaire,
+        details_mouvement: JSON.stringify(detailsEntree),
+      }
+
+      mouvement_stock_demandeur = await tx.mouvement_stock.create({
+        data: dataEntree,
+      })
+
+      await tx.demandes.update({
+        where: { id: parseInt(demande_id) },
+        data: {
+          stock_id: +stock_id,
+          demande_livree: true,
+          nomenclature,
+          type_demande: typeMouvement,
+          details_demande: JSON.stringify(detailsMouvement),
+          details_demandeur: JSON.stringify(detailsEntree),
+        },
+      });
+
+      const livraisonForm = await tx.forms.create({
+        data: {
+          type: 'livraison_stock',
+          created_by: user.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: user.fullname,
+          commentaire,
+        }
+      })
+
+      const livraison = await tx.livraison_piece.create({
+        data: {
+          demande_id: demande.id,
+          details_demande: JSON.stringify(detailsMouvement),
+          details_demandeur: JSON.stringify(detailsEntree),
+          form_id: livraisonForm.id,
+          stock_id: parseInt(stock_id),
+        }
+      })
+
+      return {
+        livraisonForm,
+        livraison,
+      }
+    })
+
+    console.log('Livraison de stock éffectuée avec succès !')
+    return res.status(201).json({
+      message: 'Livraison de stock éffectuée avec succès !',
+      data: mouvementStock,
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur serveur." });
+  }
+}
 
 const returnDemande = async (req, res) => {
   const {
@@ -2273,6 +2657,7 @@ const updateDemande = async (req, res) => {
       : [];
 
     if (!piece) {
+      console.error("Pièce introuvable pour l'ID :", details.selectedPiece);
       return res.status(404).json({ message: "Pièce introuvable !" })
     }
 
@@ -2284,46 +2669,90 @@ const updateDemande = async (req, res) => {
     });
 
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé pour l'ID :", userId);
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    const data = {
-      nom_demandeur: nomUser,
-      date_demande: new Date(),
-      commentaire,
-      qte_total_demande: +quantite,
-      details_demande: JSON.stringify(details),
-      statut_demande: 'en_cours',
-      user_id: parseInt(userId),
-      item_id: piece.id_piece,
-      id_demandeur: parseInt(selectedUser),
-      motif_demande: motif,
-      service_demandeur: parseInt(serviceUser),
-      champs_autre: JSON.stringify(autres)
-    }
-    const updatedDemande = await prisma.demandes.update({
+    const demande = await prisma.demandes.findUnique({
       where: {
-        id: parseInt(id),
-      },
-      data,
+        id: parseInt(id)
+      }
     })
-
-    if (files_content.length > 0) {
-      await prisma.fichiers.createMany({
-        data: files_content.map(fichier => ({
-          path: fichier.path,
-          filename: fichier.name,
-          originalName: fichier.name,
-          mimeType: fichier.type,
-          size: fichier.size,
-          uploaded_by: +userId,
-          demande_id: updatedDemande.id,
-          type_formulaire: 'demande',
-          role: 'demandeur',
-          created_at: new Date(),
-        }))
-      })
+    if (!demande) {
+      console.error("Demande non trouvée pour l'ID :", id);
+      return res.status(404).json({ message: "Demande non trouvée" });
     }
+
+    const demandeForm = await prisma.forms.findUnique({
+      where: {
+        id: demande.form_id
+      }
+    })
+    if (!demandeForm) {
+      console.error("Formulaire de demande non trouvé pour l'ID :", demande.form_id);
+    }
+
+    const dateAction = new Date();
+
+    const updateDemande = await prisma.$transaction(async (tx) => {
+      // Update du formulaire lié à la demande s'il existe
+      const updatedForm = await tx.forms.update({
+        where: {
+          id: demande.form_id,
+        },
+        data: {
+          nom_user: nomUser,
+          last_modified_at: dateAction,
+          updated_at: dateAction,
+          updated_by: parseInt(userId),
+        }
+      });
+
+      // Update de la demande
+      const updatedDemande = await tx.demandes.update({
+        where: {
+          id: demande.id,
+        },
+        data: {
+          nom_demandeur: nomUser,
+          date_demande: dateAction,
+          commentaire,
+          qte_total_demande: +quantite,
+          details_demande: JSON.stringify(details),
+          statut_demande: 'en_cours',
+          user_id: parseInt(userId),
+          item_id: piece.id_piece,
+          id_demandeur: parseInt(selectedUser),
+          motif_demande: motif,
+          service_demandeur: parseInt(serviceUser),
+          champs_autre: JSON.stringify(autres)
+        }
+      });
+
+      // Ajout de nouveaux fichiers liés à la demande
+      if (files_content.length > 0) {
+        await tx.fichiers.createMany({
+          data: files_content.map(fichier => ({
+            path: fichier.path,
+            filename: fichier.name,
+            originalName: fichier.name,
+            mimeType: fichier.type,
+            size: fichier.size,
+            uploaded_by: +userId,
+            form_id: demandeForm.id,
+            demande_id: demande.id,
+            type_formulaire: 'demande',
+            role: 'demandeur',
+            created_at: dateAction,
+          }))
+        })
+      }
+
+      return {
+        updatedForm,
+        updatedDemande,
+      }
+    })
 
 
     /************************** GESTION DES MAILS ********************************/
@@ -2369,37 +2798,38 @@ const updateDemande = async (req, res) => {
     let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
     const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${updatedDemande.id}`;
+    let demandeLink = `${url}/demande-details/${demande.id}`;
 
     const sendMail = require("../../utils/emailSender");
 
-    if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
-      const subject = `MODIFICATION DEMANDE POUR ${motif}`;
-      let html = `
-        <p>Bonjour,</p>
-        <p>La demande ${updatedDemande.id} a été modifiée.</p>
-        <ul>
-          <li><strong>Demande de :</strong> ${nomPiece}</li>
-          <li><strong>${details.typeDemande}</strong></li>
-          <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
-        </ul>
-        <ul>
-          <li><strong>Service demandeur:</strong> ${nomService}</li>
-          <li><strong>Nom demandeur:</strong> ${nomUser}</li>
-        </ul>
-        <br>
-        <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la demande à ce lien : 
-          <span>
-          <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-            Cliquez ici !
-          </a>
-          </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-        `;
+    const subject = `MODIFICATION DEMANDE POUR ${motif}`;
+    let html = `
+      <p>Bonjour,</p>
+      <p>La demande ${demande.id} a été modifiée.</p>
+      <ul>
+        <li><strong>Demande de :</strong> ${nomPiece}</li>
+        <li><strong>${details.typeDemande}</strong></li>
+        <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
+      </ul>
+      <ul>
+        <li><strong>Service demandeur:</strong> ${nomService}</li>
+        <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+      </ul>
+      <br>
+      <p>Commentaire : ${commentaire_mail}<p>
+      <br>
+      <p>Retrouvez la demande à ce lien : 
+        <span>
+        <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+          Cliquez ici !
+        </a>
+        </span>
+      </p>
+      <br><br>
+      <p>Green - Pay vous remercie.</p>
+      `;
+
+    if (service_users && service_users.length > 0) {
       for (const service_user of service_users) {
         await sendMail({
           to: service_user.email,
@@ -2407,6 +2837,9 @@ const updateDemande = async (req, res) => {
           html,
         });
       }
+    }
+
+    if ((validateurs && validateurs.length > 0)) {
       for (const validateur of validateurs) {
         await sendMail({
           to: validateur.email,
@@ -2416,9 +2849,10 @@ const updateDemande = async (req, res) => {
       }
     }
 
+    console.log("Demande de stock modifiée avec succès !");
     res.status(201).json({
       message: "Demande modifiée avec succès",
-      demandes: updatedDemande
+      data: updateDemande
     });
 
   } catch (error) {
@@ -4618,4 +5052,5 @@ module.exports = {
   regValidateDemande,
   regLivraisonDemande,
   regReceptionDemande,
+  livraisonPiece,
 }

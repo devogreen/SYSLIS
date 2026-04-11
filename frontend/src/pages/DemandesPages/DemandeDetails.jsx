@@ -257,7 +257,7 @@ export default function DemandeDetails() {
                                 setIsLivreur(true)
                             }
                         } else {
-                            const livraisonForm = livraison.forms
+                            const livraisonForm = livraison ? livraison.forms : null
                             if (livraisonForm) {
                                 setDateLivraison(livraisonForm.last_modified_at)
                             }

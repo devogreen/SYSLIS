@@ -87,6 +87,8 @@ export default function ModifyDemandeInputs() {
 
   const [selectedFiles, setSelectedFiles] = useState([])
 
+  const isOnlyDigits = (str) => /^\d+$/.test(str);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
@@ -700,12 +702,12 @@ export default function ModifyDemandeInputs() {
                                 <div>
                                   <Label>Quantité demandée</Label>
                                   <Input
-                                    type="number"
+                                    type="text"
                                     id="input"
                                     value={quantite}
                                     onChange={(e) => {
-                                      const value = Number(e.target.value)
-                                      if (value >= 0) {
+                                      if(isOnlyDigits(e.target.value) || e.target.value === '') {
+                                        const value = e.target.value
                                         setQuantite(value)
                                       }
                                     }}

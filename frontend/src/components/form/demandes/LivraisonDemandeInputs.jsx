@@ -169,6 +169,8 @@ export default function LivraisonDemandeInputs() {
 
     const [selectedDateLivraison, setSelectedDateLivraison] = useState(null)
 
+    const isOnlyDigits = (str) => /^\d+$/.test(str);
+
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true)
@@ -186,6 +188,7 @@ export default function LivraisonDemandeInputs() {
                 const validation = demande_data.validation_demande[index]
                 setCommentaireValidation(validation.commentaire)
                 setQuantiteValidee(validation.quantite_validee)
+
 
                 const validationForm = validation.forms
                 const dateValidation = new Date(validationForm.last_modified_at)
@@ -970,7 +973,7 @@ export default function LivraisonDemandeInputs() {
         // fd.append('motif', motif)
         // fd.append('serviceDemandeur', serviceUser)
         // fd.append('champsAutre', otherFields)
-        
+
         try {
             const payload = {
                 demande_id: idDemande,
@@ -984,7 +987,7 @@ export default function LivraisonDemandeInputs() {
                 date_livraison: new Date(selectedDateLivraison),
             }
             setLoadingValidation(true)
-            if(isReg) {
+            if (isReg) {
                 await demandeData.regLivraisonDemande(payload)
             } else {
                 await demandeData.livraisonDemande(payload)
@@ -1429,10 +1432,13 @@ export default function LivraisonDemandeInputs() {
                                                                 </div>
                                                                 <div>
                                                                     <Label>Quantité</Label>
-                                                                    <Input type="number" id="input" value={newStockPiece}
+                                                                    <Input
+                                                                        type="text"
+                                                                        id="input"
+                                                                        value={newStockPiece}
                                                                         onChange={(e) => {
-                                                                            const value = Number(e.target.value)
-                                                                            if (value >= 0) {
+                                                                            if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                const value = e.target.value
                                                                                 setNewStockPiece(value)
                                                                             }
                                                                         }}

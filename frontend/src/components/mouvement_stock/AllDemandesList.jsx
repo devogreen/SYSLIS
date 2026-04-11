@@ -319,18 +319,6 @@ export default function AllDemandesList() {
             </span>
         )
     }
-    const dateLivraisonTemplate = (demandeForms) => {
-        let date = 'N/A'
-        let livraison = livraisonsPieces.find((item) => {
-            return item.demande_id == demandeForms.id
-        })
-        if (livraison) {
-            date = formatDate(livraison.Livraisons.date_livraison)
-        }
-        return (<span className="text-gray-500 text-theme-sm dark:text-gray-400">{date}</span>)
-
-
-    }
     const statutReceptionTemplate = (demandeForms) => {
         let statutClass = 'text-xs'
         let statut = 'N/A'
@@ -356,6 +344,43 @@ export default function AllDemandesList() {
             return (<span className="text-xs">N/A</span>)
         }
     }
+    const quantiteValideeTemplate = (demandeForms) => {
+        const indexValidation = demandeForms.validation_demande.length - 1
+        const validation = demandeForms.validation_demande[indexValidation]
+        let quantite = 'N/A'
+        if (validation && demandeForms.statut_demande == 'valide') {
+            quantite = validation.quantite_validee
+        }
+        return (
+            <span style={{fontSize:'11px'}} className="font-semibold text-xs dark:text-gray-400">{quantite}</span>
+        )
+    }
+    const statutLivraisonTemplate = (demandeForms) => {
+        let statutClass = 'text-xs'
+        let statut = 'N/A'
+        const indexLivraison = demandeForms.livraison_piece.length - 1
+        const livraison = demandeForms.livraison_piece[indexLivraison]
+        if (demandeForms.statut_demande == 'valide' && !demandeForms.demande_livree) {
+            statut = 'en cours'
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-orange-300'
+        } else if (demandeForms.demande_livree == true) {
+            statut = 'livrée';
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-green-300'
+        }
+        return (
+            <span className={statutClass}>{statut}</span>
+        )
+    }
+    const dateLivraisonTemplate = (demandeForms) => {
+        let date = 'N/A'
+        const indexLivraison = demandeForms.livraison_piece.length - 1
+        const livraison = demandeForms.livraison_piece[indexLivraison]
+        const livraisonForm = livraison ? livraison.forms : null
+        if (livraisonForm && demandeForms.demande_livree == true) {
+            date = formatDate(livraisonForm.last_modified_at)
+        }
+        return (<span className="font-semibold text-xs dark:text-gray-400">{date}</span>)
+    }
 
     const handleClearFilters = () => {
         setGlobalFilter("");
@@ -370,6 +395,7 @@ export default function AllDemandesList() {
         setIsReg(false)
         sessionStorage.removeItem(FILTERS_KEY);
     }
+
     const filteredDemandeForms = demandeForms.filter((item) => {
         let itemDate = new Date(item.date_demande);
         let validation
@@ -557,10 +583,11 @@ export default function AllDemandesList() {
                         <Column field="qte_total_demande" header="Quantité" sortable></Column>
                         <Column field="date_demande" header="Date d'émission" body={demandeDateTemplate} sortable></Column>
                         <Column field="statut_demande" header="Statut Validation" body={statutTemplate}></Column>
+                        <Column header="Quantité Validée" body={quantiteValideeTemplate}></Column>
                         <Column header="Date Validation" body={dateValidationTemplate}></Column>
                         {/* <Column header="Date Livraison" body={dateLivraisonTemplate}></Column> */}
-                        <Column header="Statut Reception" body={statutReceptionTemplate}></Column>
-                        <Column header="Date Reception" body={dateReceptionTemplate}></Column>
+                        <Column header="Statut Livraison" body={statutLivraisonTemplate}></Column>
+                        <Column header="Date Livraison" body={dateLivraisonTemplate}></Column>
                         <Column header="Actions" body={actionTemplate}></Column>
                     </DataTable>
                 </div>

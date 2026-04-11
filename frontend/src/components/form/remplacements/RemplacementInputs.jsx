@@ -470,7 +470,7 @@ export default function RemplacementInputs() {
     fd.append('detailsParametrage', JSON.stringify(detailsParametrage))
     if (sign) {
       const blob = await fetch(sign).then(res => res.blob());
-      fd.append('signature_expediteur', blob, 'signature.png');
+      fd.append('signature', blob, 'signature.png');
     }
 
     try {

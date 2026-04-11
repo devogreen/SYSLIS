@@ -4,7 +4,7 @@ import urlBase from '../const';
 export class FilesHandler {
     async downloadFile(fileId) {
         try {
-            const response = await axios.get(`${urlBase}/api/demandes/downloadFile/${fileId}`,
+            const response = await axios.get(`${urlBase}/api/files/downloadFile/${fileId}`,
                 {
                     responseType: "blob",
                 }
