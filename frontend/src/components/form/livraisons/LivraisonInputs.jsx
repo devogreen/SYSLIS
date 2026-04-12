@@ -274,6 +274,7 @@ export default function LivraisonInputs() {
     setOrangeChecked(false)
     setMTNChecked(false)
     setMOOVChecked(false)
+    setRneChecked(false)
     setTerminalSN(value)
     setStatutTpe('')
     try {

@@ -209,4 +209,13 @@ export class DemandeQr {
             throw error.response.data;
         }
     }
+
+    async getAllMarchandsQr() {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/getAllMarchandsQr`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

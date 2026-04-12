@@ -59,10 +59,12 @@ const navItems: NavItem[] = [
    {
     name: "Gestion des QRcodes",
     icon: <QrCodeIcon />,
+    roles:[15, 16, 17, 18, 19, 20, 21, 22],
     subItems: [
       // { name: "REG Demande QRC", path: "/regularisation-demande-qr",roles:[21], pro: false },
       { name: "Nouvelle Demande QRC", path: "/demande-qr",roles:[15], pro: false },
       { name: "Toutes les demandes QRC", path: "/toutes-les-demandes-qr",roles:[15, 16, 17, 18, 19, 20, 21, 22], pro: false},
+      { name: "Tous les Marchands QRC", path: "/tous-les-marchands-qr",roles:[15, 16, 17, 18, 19, 20, 21, 22], pro: false},
     ],
     
   },

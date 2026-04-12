@@ -146,7 +146,6 @@ export class Demandes {
     }
   };
 
-<<<<<<< HEAD
   async regularisationDemande(formData) {
     try {
       const response = await axios.post(`${urlBase}/api/demandes/regularisationDemande`, formData, {
@@ -204,7 +203,5 @@ export class Demandes {
       throw error.response.data;
     }
   }
-=======
->>>>>>> origin/dashboard-livraison-correction
 }
 

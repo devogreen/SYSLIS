@@ -191,6 +191,8 @@ import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
 // @ts-ignore
 import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
 // @ts-ignore
+import AllMarchandsQr from "./pages/DemandesQrPages/AllMarchandsQr"
+// @ts-ignore
 import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
 // @ts-ignore
 import SousDashboardLivraison from "./pages/Dashboards/SousDashboardLivraison"
@@ -257,6 +259,7 @@ export default function App() {
               <Route path="/toutes-les-demandes-qr" element={<AllDemandesQr />} />
               <Route path="/demande-qr-details/:id" element={<DemandeQrDetails />} />
               <Route path="/modifier-demande-qr/:id" element={<ModifyDemandeQrForm />} />
+              <Route path="/tous-les-marchands-qr" element={<AllMarchandsQr />} />
 
               {/* Stock */}
               <Route path="/voir-items" element={<AllItems />} />
