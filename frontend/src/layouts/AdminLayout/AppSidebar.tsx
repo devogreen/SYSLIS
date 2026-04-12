@@ -35,7 +35,11 @@ const navItems: NavItem[] = [
     name: "Dashboard",
     subItems: [
       { name: "Semaine en cours", path: "/", pro: false },
-      { name: "Dashboard Livraison", path: "/", pro: false },
+      { name: " Dashboard Livraison", path: "/sous-dashboard-livraison",  roles:[1],pro: false },
+      { name: " Dashboard Remplacement", path: "/sous-dashboard-remplacement",  roles:[1],pro: false },
+      { name: " Dashboard QRcode", path: "/sous-dashboard-qrcode", pro: false },
+      { name: " Dashboard MVT Stock", path: "/sous-dashboard-mvt-stock", pro: false },
+      // { name: " Dashboard Stock", path: "/sous-dashboard-stock", pro: false },
       // { name: "Données Générales", path:"/donnees-generales", pro: false},
       // { name: "Statistiques livraisons", path: "/statistiques-livraisons", pro: false },
       // { name: "Stock chargeur", path: "/gestion-stock-chargeur", pro: false },
@@ -125,9 +129,7 @@ const navItems: NavItem[] = [
 ];
 
 
-const othersItems: NavItem[] = [
-  
-];
+const othersItems: NavItem[] = [];
 
 const AppSidebar: React.FC = () => {
 

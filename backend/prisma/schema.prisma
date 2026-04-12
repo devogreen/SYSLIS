@@ -13,7 +13,7 @@ model Livraisons {
   user_id                 Int
   quantite_livraison      Int
   nom_livreur             String?                     @db.VarChar(255)
-  commentaire_livraison   String?                     @db.LongText
+  commentaire_livraison   String?                     @db.VarChar(255)
   signature_expediteur    String?                     @db.VarChar(255)
   files                   String?                     @db.LongText
   type                    Livraisons_type
@@ -310,8 +310,6 @@ model roles {
   livraison     livraison[]
   remplacements remplacements[]
   user_roles    user_roles[]
-
-  @@index([nom_role], map: "nom_role")
 }
 
 model services {
@@ -1073,6 +1071,18 @@ enum demande_qr_statut {
   recue
 }
 
+enum form_decom_statut {
+  en_cours
+  retourne
+  recu
+  clos
+}
+
+enum reception_decom_type {
+  validation
+  retour
+}
+
 enum form_signatures_role {
   livreur
   receveur
@@ -1124,11 +1134,6 @@ enum forms_decom_statut {
   retourne
   recu
   clos
-}
-
-enum reception_decom_type {
-  validation
-  retour
 }
 
 enum sn_decom_statut {

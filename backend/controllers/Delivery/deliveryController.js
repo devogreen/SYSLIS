@@ -823,7 +823,8 @@ const getAllLivraisons = async (req, res) => {
       orderBy: { date_livraison: 'desc' },
       include: {
         forms: true,
-        validations: true
+        validations: true,
+        type_livraison_commerciale : true
       }
     });
 
@@ -3596,6 +3597,94 @@ const generateRemplacementPDF = async (req, res) => {
     return res.status(500).json({ message: "Erreur lors de la génération du PDF" });
   }
 };
+// Récupérer les livraisons d’une semaine
+const getLivraisonsByWeek = async (req, res) => {
+  try {
+    const { week, year } = req.query;
+
+    const startDate = startOfWeek(new Date(year, 0, 1), { weekStartsOn: 1 });
+    startDate.setDate(startDate.getDate() + (week - 1) * 7);
+
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        date_livraison: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    res.json(livraisons);
+  } catch (error) {
+    res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// Récupérer les statistiques globales des livraisons (en attente, livrées, retours)
+
+const getLivraisonsInRange = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        date_livraison: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      include: {
+        type_livraison_commerciale: true,
+      },
+      orderBy: {
+        date_livraison: 'desc',
+      },
+    });
+
+    res.json(livraisons);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+// Cartes statistiques des livraisons
+const getStatsLivraisons = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const start = startDate ? new Date(startDate) : new Date('2020-01-01');
+    const end = endDate ? new Date(endDate) : new Date();
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        deleted: false,
+        date_livraison: {
+          gte: start,
+          lte: end
+        }
+      }
+    });
+
+    const stats = {
+      attente: livraisons.filter(l => l.statut_livraison === 'en_cours' || l.statut_livraison === 'en_attente').length,
+      livrees: livraisons.filter(l => l.statut_livraison === 'livre').length,
+      returns: livraisons.filter(l => l.statut_livraison === 'retour').length,
+      total: livraisons.length
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Erreur stats:', error);
+    res.status(500).json({ message: 'Erreur serveur stats', error: error.message });
+  } finally {
+    await prisma.$disconnect();
+  }
+
+
+}
 
 
 module.exports = {
@@ -3629,4 +3718,7 @@ module.exports = {
   updateRemplacement,
   returnRemplacement,
   generateRemplacementPDF,
+  getLivraisonsByWeek,
+  getLivraisonsInRange,
+  getStatsLivraisons,
 }

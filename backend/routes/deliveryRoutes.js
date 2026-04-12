@@ -10,7 +10,11 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     getOneLivraisonDemande, receiveStock, addDeliveryType, getOneTypeLivraison, updateTypeLivraison,
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
+<<<<<<< HEAD
     updateRemplacement, returnRemplacement, generateRemplacementPDF, regLivraison, regReception,
+=======
+    updateRemplacement, returnRemplacement, generateRemplacementPDF,deliverregularisation,regularisationReception,getLivraisonsInRange,getStatsLivraisons,
+>>>>>>> origin/dashboard-livraison-correction
 } = require("../controllers/Delivery/deliveryController")
 
 router.post('/deliver', uploadAll.fields([
@@ -49,11 +53,17 @@ router.post("/generateRemplacementsXLSX", generateRemplacementsXLSX);
 router.put("/updateRemplacement/:id", updateRemplacement);
 router.post("/returnRemplacement", returnRemplacement);
 router.get("/generateRemplacementPDF/:id", generateRemplacementPDF);
+<<<<<<< HEAD
 router.post('/regLivraison', uploadAll.fields([
     { name: 'signature' },
 ]), regLivraison);
 router.post('/regReception', uploadAll.fields([
     { name: 'signature' },
 ]), regReception);
+=======
+// router.get("/livraisons-stats",getStatsLivraisons);
+// router.get("/statsLivraisons", require("../controllers/Delivery/statsLivraisonsController").getStatsLivraisons);
+router.get('/livraisons-in-range', getLivraisonsInRange);
+>>>>>>> origin/dashboard-livraison-correction
 
 module.exports = router

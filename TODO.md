@@ -1,14 +1,21 @@
-# Plan: Ajout notification pour demandes validées
+# Task: Fix "Cannot find name 'terminal'" TypeScript error in Dashboard.tsx
 
-## Étapes à suivre:
+## Plan Breakdown & Progress
 
-### 1. Backend - Ajouter une route API pour récupérer les demandes validées
-- [x] Modifier backend/controllers/Demande/demandeController.js pour ajouter la fonction getDemandesValidees
-- [x] Modifier backend/routes/demandesRoutes.js pour ajouter la route
+### 1. ✅ [COMPLETE] Understand project and locate error
+- Searched for 'terminal' → Found in Dashboard.tsx
+- Read file → Confirmed undefined variable
 
-### 2. Frontend - Ajouter la méthode API
-- [x] Modifier frontend/src/backend/demandes/Demandes.js pour ajouter getDemandesValidees()
+### 2. ✅ [COMPLETE] Create TODO.md for tracking
 
-### 3. Frontend - Modifier le composant NotificationDropdown
-- [x] Modifier frontend/src/components/header/headerAdmin/NotificationDropdown.tsx pour afficher les demandes validées en plus des demandes en attente
+### 3. ✅ [COMPLETE] Edit frontend/src/pages/Dashboards/Dashboard.tsx
+- Replace `terminal?.` → `stats?.stocks?.`
+- Fix Tailwind classes: `bleu` → `blue`
+
+### 4. Test changes
+- Run `cd frontend && npm run dev`
+- Verify no TypeScript errors
+- Check "Stocks TERMINAL" card displays correctly
+
+### 5. ✅ [PENDING] Attempt completion
 

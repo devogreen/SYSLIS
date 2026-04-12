@@ -127,23 +127,26 @@ export class Demandes {
   // Récupérer les demandes en attente (statut: en_cours)
   async getDemandesEnAttente() {
     try {
-      const response = await axios.get(`${urlBase}/api/demandes/getDemandesEnAttente`)
-      return response.data;
+      const response = await axios.get(`${urlBase}/api/demandes/getDemandesEnAttente`);
+      return response?.data || [];
     } catch (error) {
-      throw error.response.data
+      console.error('getDemandesEnAttente error:', error);
+      return [];
     }
   };
 
   // Récupérer les demandes validées (statut: valide)
   async getDemandesValidees() {
     try {
-      const response = await axios.get(`${urlBase}/api/demandes/getDemandesValidees`)
-      return response.data;
+      const response = await axios.get(`${urlBase}/api/demandes/getDemandesValidees`);
+      return response?.data || [];
     } catch (error) {
-      throw error.response.data
+      console.error('getDemandesValidees error:', error);
+      return [];
     }
   };
 
+<<<<<<< HEAD
   async regularisationDemande(formData) {
     try {
       const response = await axios.post(`${urlBase}/api/demandes/regularisationDemande`, formData, {
@@ -201,5 +204,7 @@ export class Demandes {
       throw error.response.data;
     }
   }
+=======
+>>>>>>> origin/dashboard-livraison-correction
 }
 

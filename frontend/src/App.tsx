@@ -192,6 +192,11 @@ import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
 import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
 // @ts-ignore
 import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
+// @ts-ignore
+import SousDashboardLivraison from "./pages/Dashboards/SousDashboardLivraison"
+import SousDashboardRemplacement from "./pages/Dashboards/SousDashboardRemplacement";
+import SousDashboardQRcode from "./pages/Dashboards/SousDashboardQRcode";
+import SousDashboardStocks from "./pages/Dashboards/SousDashboardStocks";
 
 // @ts-ignore
 import DecomForm from "./pages/Forms/DecomForms/DecomForm"
@@ -222,6 +227,11 @@ export default function App() {
 
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
+              <Route path="/sous-dashboard-livraison" element={<SousDashboardLivraison />} />
+              {/* <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardDemande />} /> */}
+              <Route path="/sous-dashboard-remplacement" element={<SousDashboardRemplacement />} />
+              <Route path="/sous-dashboard-qrcode" element={<SousDashboardQRcode />} />
+              <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardStocks />} />
               {/* Others Page */}
               <Route path="/profile" element={<UserProfiles />} />
               <Route path="/calendar" element={<Calendar />} />
