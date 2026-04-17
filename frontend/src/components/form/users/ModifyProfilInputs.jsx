@@ -305,7 +305,7 @@ export default function ModifyProfilInputs() {
                     <div className="w-full text-center">
                         <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Modification profil</span>
                     </div>
-                    <div className="space-y-4">
+                    <div className="space-y-4 max-h-60 overflow-y-auto">
                         <div className="grid grid-cols-2 border px-1">
                             <span className="text-sm flex items-center">Nom complet : </span>
                             <span className="font-medium text-gray-600">{fullName}</span>

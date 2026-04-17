@@ -82,7 +82,7 @@ export default function AllParcTpeList() {
                 setLoadingData(true)
                 const allTpe = await parcData.getParcTpe()
                 setParcListe(allTpe)
-    
+
                 const statuts = await parcData.getAllStatut()
                 const statutsOptions = statuts.map((item) => ({
                     value: item.id,
@@ -113,9 +113,21 @@ export default function AllParcTpeList() {
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
-    const formatDate = (date) => {
-        const d = new Date(date);
-        return d.toLocaleDateString('fr-FR'); // or use any locale you want
+    // const formatDate = (date) => {
+    //     const d = new Date(date);
+    //     return d.toLocaleDateString('fr-FR'); // or use any locale you want
+    // };
+
+    const formatDate = (isoDate) => {
+        const date = new Date(isoDate);
+        return date.toLocaleString("fr-FR", {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        });
     };
 
     const snTemplate = (tpe) => {
@@ -132,22 +144,34 @@ export default function AllParcTpeList() {
         const statutTpe = tpe.statut_tpe.statut
         if (statutTpe == 'stock') {
             statut = 'stock';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-50 text-blue-300'
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-cyan-400'
         } else if (statutTpe == 'back_office') {
             statut = 'back office';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-100 text-blue-500'
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-blue-500'
         } else if (statutTpe == 'decom') {
             statut = 'décom';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-200 text-gray-500'
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-gray-500'
         } else if (statutTpe == 'parametrage') {
             statut = 'parametrage';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-200 text-blue-500'
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-green-500'
         } else if (statutTpe == 'rebut') {
             statut = 'rebut';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-red-100 text-red-500'
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-red-500'
+        } else if (statutTpe == 'back_office_livre') {
+            statut = 'back office livré';
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-blue-700'
+        } else if (statutTpe == 'back_office_remplace') {
+            statut = 'back office remplacé';
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-blue-400'
+        } else if (statutTpe == 'attente_decom') {
+            statut = 'attente decom';
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-gray-300'
+        } else if (statutTpe == 'diagnostic') {
+            statut = 'diagnostic';
+            statutClass = 'text-center text-xs font-semibold rounded-xl text-orange-400'
         } else {
-            statut = {statutTpe}
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibol'
+            statut = { statutTpe }
+            statutClass = 'text-center text-xs font-semibol'
         }
         return (
             <div>
@@ -173,19 +197,19 @@ export default function AllParcTpeList() {
     }
 
     const actionTemplate = (tpe) => {
-            const linkSee = `/historique-tpe/${tpe.id}`
-    
-            return (
-                <>
-                    <div>
-                        <span>
-                            <Link to={linkSee}>
-                                <button className="mx-1">
-                                    <i className="pi pi-eye" style={{ fontSize: '13px' }}></i>
-                                </button>
-                            </Link>
-                        </span>
-                        {/* {demande.statut == 'recue' ? (
+        const linkSee = `/historique-tpe/${tpe.id}`
+
+        return (
+            <>
+                <div>
+                    <span>
+                        <Link to={linkSee}>
+                            <button className="mx-1">
+                                <i className="pi pi-eye" style={{ fontSize: '13px' }}></i>
+                            </button>
+                        </Link>
+                    </span>
+                    {/* {demande.statut == 'recue' ? (
                             <>
                                 <span>
                                     {printingId === demande.id ? (
@@ -200,10 +224,10 @@ export default function AllParcTpeList() {
                         ) : (
                             <></>
                         )} */}
-                    </div>
-                </>
-            )
-        }
+                </div>
+            </>
+        )
+    }
 
     const filteredTpe = parcListe.filter((item) => {
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_id) : true;

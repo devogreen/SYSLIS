@@ -213,6 +213,7 @@ export default function DemandeDetails() {
                     const selectedStock = stock_data.find((item) => {
                         return item.id == demandeData.stock_id
                     })
+                    console.log(stock_data)
                     const stocks = stock_data.filter((item) => {
                         return item.piece_id == demandeData.item_id &&
                             item.is_deleted == false &&
@@ -220,11 +221,14 @@ export default function DemandeDetails() {
                             (item.service_id == details.selectedServicePiece || item.service_id == details.service) &&
                             item.quantite_piece > 0
                     })
+                    console.log("Stocks trouvés : ", stocks)
+                    console.log("Demande data : ", demandeData)
                     setStocksPiece(stocks)
                     if (roles_id.includes(7) && stocks.length == 0) {
                         setIsGestionStock(true)
                     }
 
+                    console.log(demandeData)
 
                     const indexLivraison = demandeData.livraison_piece.length - 1
                     const livraison = demandeData.livraison_piece[indexLivraison]
@@ -253,7 +257,7 @@ export default function DemandeDetails() {
                         const validation = demandeData.validation_demande[index]
                         setQuantiteValidee(validation.quantite_validee)
                         if (!demandeData.demande_livree) {
-                            if (ownersId.includes(+user_id)) {
+                            if (ownersId.includes(+user_id) && stocks.length > 0) {
                                 setIsLivreur(true)
                             }
                         } else {
@@ -391,6 +395,8 @@ export default function DemandeDetails() {
                         return item.role == 'demandeur'
                     })
                     setDemandeurFiles(dFiles)
+
+                    setCommentaireLivraison(livraison?.forms.commentaire)
 
                 } catch (error) {
                     console.log("Error fetchind data ", error)
@@ -733,7 +739,7 @@ export default function DemandeDetails() {
 
     return (
         <>
-            <PageBreadcrumb pageTitle="Mouvement de stock" />
+            <PageBreadcrumb pageTitle={`Mouvement de stock ${id}`} />
             <div>
                 {loading ?
                     (
@@ -989,6 +995,19 @@ export default function DemandeDetails() {
                                                         <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                     </div>
                                                     <p className='text-sm text-blue-500 text-left'>{commentaireValidateur}</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                        {commentaireLivraison ? (
+                                            <>
+                                                <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                    <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                        <span className='text-sm mr-2'>Commentaire livraison</span>
+                                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                    </div>
+                                                    <p className='text-sm text-blue-500 text-left'>{commentaireLivraison}</p>
                                                 </div>
                                             </>
                                         ) : (

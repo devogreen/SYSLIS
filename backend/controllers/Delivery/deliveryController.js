@@ -322,6 +322,7 @@ const deliver = async (req, res) => {
     });
 
     if (!typeLivraison) {
+      console.error("Type de livraison non trouvé !")
       return res.status(404).json({ message: "Type de livraison non trouvé" });
     }
 
@@ -332,6 +333,7 @@ const deliver = async (req, res) => {
       }
     });
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
@@ -398,7 +400,7 @@ const deliver = async (req, res) => {
 
       let = allTpes = null
 
-      if (nouvelleLivraison.type_livraison_id != 5 || nouvelleLivraison.type_livraison_id != 7 || nouvelleLivraison.type_livraison_id != 8) {
+      if (nouvelleLivraison.type_livraison_id != 5 && nouvelleLivraison.type_livraison_id != 7 && nouvelleLivraison.type_livraison_id != 8) {
         // Récupérer les SN de la liste
         const serials = produits.map(item => item.serialNumber);
 
@@ -409,7 +411,7 @@ const deliver = async (req, res) => {
             created_by: utilisateur.id_user,
             created_at: dateAction,
             last_modified_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
           })),
           skipDuplicates: true
         });
@@ -423,7 +425,7 @@ const deliver = async (req, res) => {
             updated_by: utilisateur.id_user,
             updated_at: dateAction,
             last_modified_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
           }
         });
 
@@ -444,7 +446,7 @@ const deliver = async (req, res) => {
             id_tpe: tpe.id,
             created_by: utilisateur.id_user,
             created_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
             form_id: livraisonForm.id,
           }))
         });
@@ -870,6 +872,7 @@ const updateLivraison = async (req, res) => {
     service_recepteur,
     role_recepteur,
     selected_model,
+    selectedStock,
   } = req.body;
 
   try {
@@ -886,6 +889,7 @@ const updateLivraison = async (req, res) => {
     })
 
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
@@ -896,7 +900,22 @@ const updateLivraison = async (req, res) => {
     });
 
     if (!typeLivraison) {
+      console.error("Type de livraison non trouvé !")
       return res.status(404).json({ message: "Type de livraison non trouvé" });
+    }
+
+    const existingLivraison = await prisma.livraison.findUnique({
+      where: { id_livraison: parseInt(id) },
+    });
+
+    if (!existingLivraison) {
+      console.error("Livraison non trouvée !")
+      return res.status(404).json({ message: "Livraison non trouvée" });
+    }
+
+    if (existingLivraison.statut_livraison === "livre"){
+      console.error("Impossible de modifier une livraison déjà validée !")
+      return res.status(400).json({ message: "Impossible de modifier une livraison déjà validée." });
     }
 
     const dateAction = new Date()
@@ -908,13 +927,14 @@ const updateLivraison = async (req, res) => {
         commentaire,
         statut_livraison: 'en_cours',
         type_livraison_id: parseInt(type_livraison_id),
-        date_livraison: new Date(),
+        date_livraison: dateAction,
         qte_totale_livraison: produits.length,
         user_id: utilisateur ? utilisateur.id_user : null,
         nom_livreur: utilisateur.fullname,
         service_id: parseInt(service_recepteur),
         role_id: parseInt(role_recepteur),
         model_id: selected_model ? parseInt(selected_model) : null,
+        stock_id: selectedStock ? +selectedStock : null,
       };
 
       // Mise à jour de la livraison
@@ -923,9 +943,24 @@ const updateLivraison = async (req, res) => {
         data: dataToUpdate
       });
 
+      const updatedForm = await tx.forms.update({
+        where: {
+          id: updated.form_id        
+        },
+        data: {
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          updated_by: utilisateur.id_user,
+          nom_user: utilisateur.fullname,
+          commentaire,
+        }
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
       let = allTpes = null
 
-      if (updated.type_livraison_id != 5 || updated.type_livraison_id != 7 || updated.type_livraison_id != 8) {
+      if (updated.type_livraison_id != 5 && updated.type_livraison_id != 7 && updated.type_livraison_id != 8) {
         // Récupérer les SN de la liste
         const serials = produits.map(item => item.serialNumber);
 
@@ -936,7 +971,7 @@ const updateLivraison = async (req, res) => {
             created_by: utilisateur.id_user,
             created_at: dateAction,
             last_modified_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
           })),
           skipDuplicates: true
         });
@@ -950,7 +985,7 @@ const updateLivraison = async (req, res) => {
             updated_by: utilisateur.id_user,
             updated_at: dateAction,
             last_modified_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
           }
         });
 
@@ -971,13 +1006,15 @@ const updateLivraison = async (req, res) => {
             id_tpe: tpe.id,
             created_by: utilisateur.id_user,
             created_at: dateAction,
-            statut_id: 2,
+            statut_id: 6,
+            form_id: updatedForm.id,
           }))
         });
       }
 
       return {
         updated,
+        updatedForm,
         allTpes,
       }
     })
@@ -2327,7 +2364,7 @@ const makeRemplacement = async (req, res) => {
           created_by: utilisateur.id_user,
           created_at: dateAction,
           last_modified_at: dateAction,
-          statut_id: 2,
+          statut_id: 7,
         })),
         skipDuplicates: true
       });
@@ -2341,7 +2378,7 @@ const makeRemplacement = async (req, res) => {
           updated_by: utilisateur.id_user,
           updated_at: dateAction,
           last_modified_at: dateAction,
-          statut_id: 2,
+          statut_id: 7,
         }
       });
 
@@ -2362,7 +2399,7 @@ const makeRemplacement = async (req, res) => {
           id_tpe: tpe.id,
           created_by: utilisateur.id_user,
           created_at: dateAction,
-          statut_id: 2,
+          statut_id: 7,
           form_id: remplacementForm.id,
         }))
       });

@@ -440,9 +440,17 @@ const getOneUser = async (req, res) =>{
         const user = await prisma.users.findUnique({
             where: { id_user: parseInt(id) },
             include: {
-                user_roles: true,
-                user_services: true,
-            }
+                user_roles: {
+                    include: {
+                        roles: true,
+                    },
+                },
+                user_services: {
+                    include: {
+                        services: true,
+                    },
+                },
+            },
         });
 
         if(!user){

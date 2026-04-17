@@ -71,7 +71,7 @@ const navItems: NavItem[] = [
   {
     icon: <StockBox />,
     name: "Gestion des Stocks",
-    roles:[7],
+    roles:[3, 4, 7, 11, 12],
     subItems: [
       // { name: "Ajouter Element Stock", path: "/ajouter-stock", pro: false },
       { name: "Nouvelle Demande Stock", path:"/nouvelle-demande", roles:[3], pro: false},
@@ -112,18 +112,19 @@ const navItems: NavItem[] = [
   {
     icon: <BaseLinePhoneIcon />,
     name: "Gestion Parc TPE",
+    roles: [27, 28],
     subItems: [
-      { name: "Voir Parc", path: "/parc-tpe", pro: false},
-      { name: "Manipulation TPE", path: "/manipulation-tpe", pro: false},
+      { name: "Voir Parc", path: "/parc-tpe", roles: [27, 28], pro: false},
+      { name: "Manipulation TPE", path: "/manipulation-tpe", roles: [27], pro: false},
     ],
   },
   {
     icon: <RefreshTimeIcon />,
     name: "Gestion Régularisation",
-    roles:[21],
+    roles:[1, 3, 21],
     subItems: [
-      { name: "REG Livraison", path: "/regularisation-livraison", pro: false},
-      { name: "REG Demande Stock", path: "/regularisation-demande", pro: false},
+      { name: "REG Livraison", path: "/regularisation-livraison", roles:[1], pro: false},
+      { name: "REG Demande Stock", path: "/regularisation-demande", roles:[3], pro: false},
       { name: "REG Demande QRC", path: "/regularisation-demande-qr",roles:[21], pro: false },
     ],
   },

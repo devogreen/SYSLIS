@@ -37,6 +37,16 @@ export default function LivraisonInputs() {
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
 
+  const LISTE_KEY = "listeLivraison";
+  const saveListe = (liste) => {
+    sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+  };
+  const loadListe = () => {
+    const stored = sessionStorage.getItem(LISTE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  };
+  const savedListe = loadListe()
+
   const [isOrangeChecked, setOrangeChecked] = useState(false);
   const [isMTNChecked, setMTNChecked] = useState(false);
   const [isMOOVChecked, setMOOVChecked] = useState(false);
@@ -49,11 +59,11 @@ export default function LivraisonInputs() {
   const [loadingDelivery, setLoadingDelivery] = useState(false);
   const [typeLivraison, setTypeLivraison] = useState('');
   const [livraisonID, setLivraisonID] = useState(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(savedListe?.message || '');
   const [mobileMoney, setMobileMoney] = useState([]);
 
-  const [produitsLivreTable, setProduitsLivresTable] = useState([]);
-  const [produitsLivre, setProduitsLivres] = useState([]);
+  const [produitsLivreTable, setProduitsLivresTable] = useState(savedListe?.produitsLivreTable || []);
+  const [produitsLivre, setProduitsLivres] = useState(savedListe?.produitsLivre || []);
 
   const [error, setError] = useState(null);
   const [errorFrom, setErrorForm] = useState(null);
@@ -79,7 +89,7 @@ export default function LivraisonInputs() {
 
   const [serviceId, setServiceId] = useState(null)
 
-  const [quantiteLivraison, setQuantiteLivraison] = useState(0)
+  const [quantiteLivraison, setQuantiteLivraison] = useState(savedListe?.quantiteLivraison || 0)
 
   const [optionsModels, setOptionsModels] = useState([])
   const [listModels, setListModels] = useState([])
@@ -121,7 +131,6 @@ export default function LivraisonInputs() {
         setTerminals(data)
 
         let type_delivery_data = await productDeliveries.getAllTypeLivraisonCommerciale()
-        console.log(type_delivery_data)
         let type_delivery = type_delivery_data.filter((type) => {
           return type.is_deleted == false
         })
@@ -176,6 +185,15 @@ export default function LivraisonInputs() {
       }
     }; fetchTerminalInfos();
   }, [])
+
+  useEffect(() => {
+    saveListe({
+      produitsLivreTable,
+      produitsLivre,
+      quantiteLivraison,
+      message,
+    })
+  }, [produitsLivreTable, produitsLivre, quantiteLivraison, message])
 
   const filteredPointMarchand = terminalSN ?
     terminals.filter((terminal) =>
@@ -282,7 +300,7 @@ export default function LivraisonInputs() {
         return terminal.SERIAL_NUMBER == value
       })
       if (pointMarchand) {
-        console.log('Point marchand trouvé : ', pointMarchand)
+        // console.log('Point marchand trouvé : ', pointMarchand)
         setTerminalName(pointMarchand.POINT_MARCHAND)
         setTerminalBanque(pointMarchand.BANQUE)
         setTerminalCaisse(pointMarchand.TPE)
@@ -311,20 +329,29 @@ export default function LivraisonInputs() {
     }
   }
 
-  const handleConfirm = () => {
-
+  const checkValidate = () => {
     if (!livraisonID) {
       setErrorAjout("Vous devez choisir le type de livraison !");
-      return;
+      return false;
     }
     if (!selectedModel) {
       setErrorAjout("Vous devez choisir le model du TPE !");
-      return;
+      return false;
     }
     if (!serviceId) {
       setErrorAjout("Vous devez choisir le service réceptionneur !");
+      return false;
+    }
+
+    return true
+  }
+
+  const handleConfirm = () => {
+
+    if(!checkValidate()){
       return;
     }
+
     if (terminalSN.length < 10 || !terminalName || !terminalCaisse) {
       setErrorAjout("S/N invalide !");
       return;
@@ -397,6 +424,8 @@ export default function LivraisonInputs() {
     setProduitsLivresTable((prev) => [...prev, newProduit]);
     setProduitsLivres((prev) => [...prev, newProduit]);
     setQuantiteLivraison((prev) => prev + 1);
+
+    saveListe({ produitsLivreTable, produitsLivre, quantiteLivraison })
 
     // Optional: Reset form fields
     setTerminalSN('');
@@ -480,6 +509,8 @@ export default function LivraisonInputs() {
     } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
+      setQuantiteLivraison(0)
+      setMessage('')
       setLoadingDelivery(false)
     }
   }
@@ -495,6 +526,16 @@ export default function LivraisonInputs() {
   };
 
   const handleValidate = () => {
+
+    if (!checkValidate()) {
+      Swal.fire({
+        title: "Error",
+        text: "Les champs requis ne sont pas tous remplis.",
+        icon: "error"
+      });
+      return;
+    }
+
     if (produitsLivre.length == 0) {
       Swal.fire({
         title: "Error",

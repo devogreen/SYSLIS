@@ -410,8 +410,9 @@ export default function ModifyDemandeInputs() {
       setError("Quantité initiale invalide !")
     }
 
-    if (quantite <= 0) {
+    if (quantite <= 0 || isNaN(quantite) || quantite === '') {
       setError("Quantité demandée invalide !")
+      return
     }
 
     setValidationModalOpen(true)

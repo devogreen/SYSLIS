@@ -137,41 +137,48 @@ const createValidation = async (req, res) => {
             id: livraison.stock_id,
           },
         })
-        const quantiteChargeur = stockChargeur.quantite_piece
-        await tx.stocks.update({
+        const piece = await tx.items.findUnique({
           where: {
-            id: stockChargeur.id,
+            id_piece: stockChargeur.piece_id,
           },
-          data: {
-            quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
-            last_update: new Date(),
-          }
         })
-        const mouvementDetails = {
-          typeMouvement: 5,
-          stockInitialPiece: quantiteChargeur,
-          quantiteMouvement: livraison.qte_totale_livraison,
-          stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+        if(piece && piece.nom_piece.toLowerCase().includes("chargeur")){
+          const quantiteChargeur = stockChargeur.quantite_piece
+          await tx.stocks.update({
+            where: {
+              id: stockChargeur.id,
+            },
+            data: {
+              quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
+              last_update: dateAction,
+            }
+          })
+          const mouvementDetails = {
+            typeMouvement: 5,
+            stockInitialPiece: quantiteChargeur,
+            quantiteMouvement: livraison.qte_totale_livraison,
+            stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+          }
+          await tx.mouvement_stock.create({
+            data: {
+              type: 'sortie',
+              mouvement: 5,
+              formulaire_id: livraison.id_livraison,
+              stock_id: stockChargeur.id,
+              piece_id: stockChargeur.piece_id,
+              service_origine: 3,
+              service_destination: livraison.service_id,
+              model_id: stockChargeur.model_id,
+              stock_initial: quantiteChargeur,
+              quantite: livraison.qte_totale_livraison,
+              stock_final: quantiteChargeur - livraison.qte_totale_livraison,
+              quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
+              motif: livraisonTypeName,
+              commentaire: livraison.commentaire,
+              details_mouvement: JSON.stringify(mouvementDetails),
+            }
+          })
         }
-        await tx.mouvement_stock.create({
-          data: {
-            type: 'sortie',
-            mouvement: 5,
-            formulaire_id: livraison.id_livraison,
-            stock_id: stockChargeur.id,
-            piece_id: 1,
-            service_origine: 3,
-            service_destination: livraison.service_id,
-            model_id: 1,
-            stock_initial: quantiteChargeur,
-            quantite: livraison.qte_totale_livraison,
-            stock_final: quantiteChargeur - livraison.qte_totale_livraison,
-            quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
-            motif: livraisonTypeName,
-            commentaire: livraison.commentaire,
-            details_mouvement: JSON.stringify(mouvementDetails),
-          }
-        })
       }
 
       return {

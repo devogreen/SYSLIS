@@ -316,7 +316,7 @@ export default function ValidateDemandeInputs() {
                 return false
             }
         }
-        if (quantite == 0) {
+        if (quantite == 0 || isNaN(quantite) || quantite == "") {
             setError("Quantité validée invalide !")
             return false
         }

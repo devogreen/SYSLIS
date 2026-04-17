@@ -162,12 +162,7 @@ export default function DemandeInputs() {
         const services_data = await userData.getAllServices()
         setServicesUsers(services_data)
         // setServicesPiece(services_data)
-        const options_services = services_data.map((item) => ({
-          value: item.id,
-          label: item.nom_service.toUpperCase()
-        }))
-        setOptionsServicesUsers(options_services)
-
+        
         const users_data = await userData.getAllUsers()
         setUserList(users_data)
         const options_users = users_data.map((item) => ({
@@ -175,7 +170,7 @@ export default function DemandeInputs() {
           label: item.fullname,
         }))
         setOptionsUsers(options_users)
-
+        
         const stocks_data_all = await stockData.getAllStocks()
         const stocks_data = stocks_data_all.filter((item) => {
           return item.is_deleted == false
@@ -191,16 +186,25 @@ export default function DemandeInputs() {
             label: `${item.code_stock} - ${nomService}`
           })
         })
-
+        
         setOptionsStocks(options_stocks)
-
+        
         // const models_data = await stockData.getAllModels()
         // setModels(models_data)
-
+        
         const user = await userData.getOneUser(userId)
+        console.log(user)
         setNomUser(user.fullname)
-        setServiceUser(user.user_services[0].service_id)
-
+        if(user.user_services.length > 1) {
+          const options_services = user.user_services.map((item) => ({
+            value: item.services.id,
+            label: item.services.nom_service.toUpperCase()
+          }))
+          setOptionsServicesUsers(options_services)
+        } else {
+          setServiceUser(user.user_services[0].service_id)
+        }
+        
       } catch (error) {
         console.log(error)
         setErrorForm('Une erreur est survenue lors de la génération du formulaire.')
@@ -425,8 +429,9 @@ export default function DemandeInputs() {
       setError("Quantité initiale invalide !")
     }
 
-    if (quantite <= 0) {
+    if (quantite <= 0 || isNaN(quantite) || quantite == "") {
       setError("Quantité demandée invalide !")
+      return
     }
 
     setValidationModalOpen(true)
@@ -573,16 +578,22 @@ export default function DemandeInputs() {
                           </>
                         )}
                       </div>
+                      {optionsServicesUsers && optionsServicesUsers.length > 0  ? (
+                        <>
+                          <div>
+                            <Label>Service Demandeur <span className="text-red-700">*</span></Label>
+                            <Select
+                              options={optionsServicesUsers}
+                              placeholder="Choisir une option"
+                              onChange={handleSelectServiceUser}
+                              className="dark:bg-dark-900"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <></>
+                      )}
                       {/* <div>
-                        <Label>Service Demandeur <span className="text-red-700">*</span></Label>
-                        <Select
-                          options={optionsServicesUsers}
-                          placeholder="Choisir une option"
-                          onChange={handleSelectServiceUser}
-                          className="dark:bg-dark-900"
-                        />
-                      </div>
-                      <div>
                         <Label>Demandeur <span className="text-red-700">*</span></Label>
                         <Select
                           options={optionsUsers}

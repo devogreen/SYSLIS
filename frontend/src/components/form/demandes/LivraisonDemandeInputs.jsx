@@ -179,6 +179,8 @@ export default function LivraisonDemandeInputs() {
                 const demande_data = await demandeData.getOneDemande(idDemande)
                 const detailsDemande = JSON.parse(demande_data.details_demande)
 
+                console.log("Demande data: ", demande_data)
+
                 const demandeForm = demande_data.forms
                 if (demandeForm) {
                     setIsReg(demandeForm.is_reg)
@@ -253,8 +255,10 @@ export default function LivraisonDemandeInputs() {
                     return item.is_deleted == false &&
                         item.piece_id == demande_data.item_id &&
                         item.quantite_piece > 0 &&
-                        item.created_by == +userId
+                        item.created_by == +userId &&
+                        item.service_id == detailsDemande.selectedServicePiece
                 })
+                console.log("Stocks data: ", stocks_data)
                 setStocks(stocks_data)
                 const options_stocks = stocks_data.map((item) => {
                     const serviceStock = services_data.find((s) => {
@@ -978,7 +982,7 @@ export default function LivraisonDemandeInputs() {
             const payload = {
                 demande_id: idDemande,
                 user_id: userId,
-                commentaire: message,
+                commentaire,
                 stock_id: selectedStock,
                 nomenclature,
                 detailsDemande: JSON.stringify(detailsDemande),
@@ -1382,10 +1386,13 @@ export default function LivraisonDemandeInputs() {
                                                                     )}
                                                                     <div>
                                                                         <Label>Quantité pièce</Label>
-                                                                        <Input type="number" id="input" value={newStockPiece}
+                                                                        <Input
+                                                                            type="text"
+                                                                            id="input"
+                                                                            value={newStockPiece}
                                                                             onChange={(e) => {
-                                                                                const value = Number(e.target.value)
-                                                                                if (value >= 0) {
+                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                    const value = e.target.value
                                                                                     setNewStockPiece(value)
                                                                                 }
                                                                             }}
@@ -1460,6 +1467,15 @@ export default function LivraisonDemandeInputs() {
                                                         const value = e.target.value
                                                         setNomenclature(value)
                                                     }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label>Commentaire</Label>
+                                                <TextArea
+                                                    type="text"
+                                                    placeholder="Ajoutez un commentaire"
+                                                    value={commentaire}
+                                                    onChange={(value) => setCommentaire(value)}
                                                 />
                                             </div>
                                             <div>

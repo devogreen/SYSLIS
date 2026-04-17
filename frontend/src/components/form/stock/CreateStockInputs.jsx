@@ -130,6 +130,8 @@ export default function CreateStockInputs() {
 
     const [isDemande, setIsDemande] = useState(false)
 
+    const isOnlyDigits = (str) => /^\d+$/.test(str);
+
     useEffect(() => {
         const fetchPieces = async () => {
             setLoading(true)
@@ -489,40 +491,41 @@ export default function CreateStockInputs() {
 
     // FONCTIONS POUR MOUVEMENT PAR LOT
     const handleEntreeParLot = () => {
+        const newStockLotInt = parseInt(newStockLot)
         if (!checkValidate()) {
             return
         }
-        if (newStockLot == 0) {
+        if (newStockLotInt == 0 || isNaN(newStockLotInt) || newStockLotInt == "") {
             setError("Quantité lot invalide !")
             return
         }
-        if (quantiteCartonLot == 0) {
+        if (quantiteCartonLot == 0 || isNaN(quantiteCartonLot) || quantiteCartonLot == "") {
             setError("Quantite carton invalide !")
             return
         }
-        if (quantitePieceCarton == 0) {
+        if (quantitePieceCarton == 0 || isNaN(quantitePieceCarton) || quantitePieceCarton == "") {
             setError("Quantite pièce invalide !")
             return
         }
         const details = {
             typeMouvement: 1,
             stockInitialLot: 0,
-            quantiteMouvementLot: newStockLot,
-            stockFinalLot: newStockLot,
+            quantiteMouvementLot: newStockLotInt,
+            stockFinalLot: newStockLotInt,
             stockInitialPiece: 0,
-            quantiteMouvementPiece: newStockLot * quantiteCartonLot * quantitePieceCarton,
-            stockFinalPiece: newStockLot * quantiteCartonLot * quantitePieceCarton,
-            quantitePieceCarton: quantitePieceCarton,
+            quantiteMouvementPiece: Number(newStockLotInt * quantiteCartonLot * quantitePieceCarton),
+            stockFinalPiece: Number(newStockLotInt * quantiteCartonLot * quantitePieceCarton),
+            quantitePieceCarton: Number(quantitePieceCarton),
             stockInitialCarton: 0,
-            quantiteMouvementCarton: newStockLot * quantiteCartonLot,
-            stockFinalCarton: newStockLot * quantiteCartonLot,
-            quantiteCartonLot,
-            quantitePieceLot: quantitePieceCarton * quantiteCartonLot,
+            quantiteMouvementCarton: Number(newStockLotInt * quantiteCartonLot),
+            stockFinalCarton: Number(newStockLotInt * quantiteCartonLot),
+            quantiteCartonLot: Number(quantiteCartonLot),
+            quantitePieceLot: Number(quantitePieceCarton * quantiteCartonLot),
         }
         setDetailsMouvement(details)
-        setFinalStockLot(quantiteLot + newStockLot)
-        setFinalStockCarton(quantiteCarton + (newStockLot * quantiteCartonLot))
-        setFinaleStockPiece(quantitePiece + (newStockLot * quantiteCartonLot * quantitePieceCarton))
+        setFinalStockLot(quantiteLot + newStockLotInt)
+        setFinalStockCarton(quantiteCarton + (newStockLotInt * quantiteCartonLot))
+        setFinaleStockPiece(quantitePiece + (newStockLotInt * quantiteCartonLot * quantitePieceCarton))
         setEntreeParLotModalOpen(true)
         setError('')
         setIsEntree(true)
@@ -618,6 +621,7 @@ export default function CreateStockInputs() {
 
     // FONCTIONS POUR MOUVEMENT PAR CARTONS LOT
     const handleEntreeParCartonLot = () => {
+        const newStockCartonInt = parseInt(newStockCarton)
         if (!checkValidate()) {
             return
         }
@@ -625,19 +629,19 @@ export default function CreateStockInputs() {
             setError('Vous devez choisir le lot !')
             return
         }
-        if (newStockCarton == 0) {
+        if (newStockCartonInt == 0 || isNaN(newStockCartonInt) || newStockCartonInt == "") {
             setError('Quantité invalide !')
             return
         }
-        if ((newStockCarton + stockCartonLot) > quantiteCartonLot) {
+        if ((newStockCartonInt + stockCartonLot) > quantiteCartonLot) {
             setError('Quantité excessive !')
             return
         }
 
-        setFinalStockCartonLot(newStockCarton + stockCartonLot)
-        setFinalStockCarton(quantiteCarton + newStockCarton)
-        setFinaleStockPiece(quantitePiece + (newStockCarton * quantitePieceCarton))
-        setFinalStockPieceLot(stockPieceLot + (newStockCarton * quantitePieceCarton))
+        setFinalStockCartonLot(newStockCartonInt + stockCartonLot)
+        setFinalStockCarton(quantiteCarton + newStockCartonInt)
+        setFinaleStockPiece(quantitePiece + (newStockCartonInt * quantitePieceCarton))
+        setFinalStockPieceLot(stockPieceLot + (newStockCartonInt * quantitePieceCarton))
         setEntreeParCartonLotModalOpen(true)
         setError('')
         setIsEntree(true)
@@ -736,6 +740,7 @@ export default function CreateStockInputs() {
 
     // FONCTIONS POUR MOUVEMENT PAR PIECES CARTON
     const handleEntreeParPieceCarton = () => {
+        const newStockPieceInt = parseInt(newStockPiece)
         if (!checkValidate()) {
             return
         }
@@ -743,18 +748,18 @@ export default function CreateStockInputs() {
             setError('Vous devez choisir le carton !')
             return
         }
-        if (newStockPiece == 0) {
+        if (newStockPieceInt == 0 || isNaN(newStockPieceInt) || newStockPieceInt == "") {
             setError('Quantité invalide !')
             return
         }
-        if ((newStockPiece + stockPieceCarton) > quantitePieceCarton) {
+        if ((newStockPieceInt + stockPieceCarton) > quantitePieceCarton) {
             setError('Quantité excessive !')
             return
         }
 
-        setFinalStockPieceCarton(newStockPiece + stockPieceCarton)
-        setFinaleStockPiece(quantitePiece + newStockPiece)
-        if (selectedLot) { setFinalStockPieceLot(newStockPiece + stockPieceLot) }
+        setFinalStockPieceCarton(newStockPieceInt + stockPieceCarton)
+        setFinaleStockPiece(quantitePiece + newStockPieceInt)
+        if (selectedLot) { setFinalStockPieceLot(newStockPieceInt + stockPieceLot) }
         setEntreeParPieceCartonModalOpen(true)
         setError('')
         setIsEntree(true)
@@ -841,31 +846,32 @@ export default function CreateStockInputs() {
 
     // FONCTIONS POUR MOUVEMENT PAR CARTON
     const handleEntreeParCarton = () => {
-
+        const newStockCartonInt = parseInt(newStockCarton)
+        const quantitePieceCartonInt = parseInt(quantitePieceCarton)
         if (!checkValidate()) {
             return
         }
-        if (newStockCarton == 0) {
+        if (newStockCartonInt == 0 || isNaN(newStockCartonInt) || newStockCartonInt == "") {
             setError("Quantité carton invalide !")
             return
         }
-        if (quantitePieceCarton == 0) {
+        if (quantitePieceCartonInt == 0 || isNaN(quantitePieceCartonInt) || quantitePieceCartonInt == "") {
             setError("Quantite pièce invalide !")
             return
         }
         const details = {
             typeMouvement: 4,
             stockInitialCarton: 0,
-            quantiteMouvementCarton: newStockCarton,
-            stockFinalCarton: newStockCarton,
+            quantiteMouvementCarton: newStockCartonInt,
+            stockFinalCarton: newStockCartonInt,
             stockInitialPiece: 0,
-            quantiteMouvementPiece: quantitePieceCarton * newStockCarton,
-            stockFinalPiece: quantitePieceCarton * newStockCarton,
-            quantitePieceCarton,
+            quantiteMouvementPiece: Number(quantitePieceCartonInt * newStockCartonInt),
+            stockFinalPiece: Number(quantitePieceCartonInt * newStockCartonInt),
+            quantitePieceCarton: Number(quantitePieceCartonInt),
         }
         setDetailsMouvement(details)
-        setFinalStockCarton(quantiteCarton + newStockCarton)
-        setFinaleStockPiece(quantitePiece + (newStockCarton * quantitePieceCarton))
+        setFinalStockCarton(quantiteCarton + newStockCartonInt)
+        setFinaleStockPiece(quantitePiece + (newStockCartonInt * quantitePieceCartonInt))
         setEntreeParCartonModalOpen(true)
         setError('')
         setIsEntree(true)
@@ -953,22 +959,22 @@ export default function CreateStockInputs() {
 
     // FONCTIONS POUR MOUVEMENT STOCK PAR PIECE
     const handleEntreeParPiece = () => {
-
+        const stockPiece = parseInt(newStockPiece)
         if (!checkValidate()) {
             return
         }
-        if (newStockPiece == 0) {
+        if (stockPiece == 0 || isNaN(stockPiece) || stockPiece == "") {
             setError("Quantité invalide !")
             return
         }
         const details = {
             typeMouvement: 5,
             stockInitialPiece: 0,
-            quantiteMouvement: newStockPiece,
-            stockFinalPiece: newStockPiece,
+            quantiteMouvement: stockPiece,
+            stockFinalPiece: stockPiece,
         }
         setDetailsMouvement(details)
-        setFinaleStockPiece(quantitePiece + newStockPiece)
+        setFinaleStockPiece(quantitePiece + stockPiece)
         setEntreeParPieceModalOpen(true)
         setError('')
         setIsEntree(true)
@@ -1426,10 +1432,13 @@ export default function CreateStockInputs() {
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <div>
                                                                             <Label>Quantité Lot</Label>
-                                                                            <Input type="number" id="input" value={newStockLot}
+                                                                            <Input
+                                                                                type="text"
+                                                                                id="input"
+                                                                                value={newStockLot}
                                                                                 onChange={(e) => {
-                                                                                    const value = Number(e.target.value)
-                                                                                    if (value >= 0) {
+                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                        const value = e.target.value
                                                                                         setNewStockLot(value)
                                                                                     }
                                                                                 }}
@@ -1437,10 +1446,13 @@ export default function CreateStockInputs() {
                                                                         </div>
                                                                         <div>
                                                                             <Label>Quantité Carton/Lot</Label>
-                                                                            <Input type="number" id="input" value={quantiteCartonLot}
+                                                                            <Input
+                                                                                type="text"
+                                                                                id="input"
+                                                                                value={quantiteCartonLot}
                                                                                 onChange={(e) => {
-                                                                                    const value = Number(e.target.value)
-                                                                                    if (value >= 0) {
+                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                        const value = e.target.value
                                                                                         setQuantiteCartonLot(value)
                                                                                     }
                                                                                 }}
@@ -1449,10 +1461,13 @@ export default function CreateStockInputs() {
                                                                     </div>
                                                                     <div>
                                                                         <Label>Quantité Pièce/Carton</Label>
-                                                                        <Input type="number" id="input" value={quantitePieceCarton}
+                                                                        <Input
+                                                                            type="text"
+                                                                            id="input"
+                                                                            value={quantitePieceCarton}
                                                                             onChange={(e) => {
-                                                                                const value = Number(e.target.value)
-                                                                                if (value >= 0) {
+                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                    const value = e.target.value
                                                                                     setQuantitePieceCarton(value)
                                                                                 }
                                                                             }}
@@ -1555,10 +1570,13 @@ export default function CreateStockInputs() {
                                                                         </div>
                                                                         <div>
                                                                             <Label>Quantité Carton</Label>
-                                                                            <Input type="number" id="input" value={newStockCarton}
+                                                                            <Input
+                                                                                type="text"
+                                                                                id="input"
+                                                                                value={newStockCarton}
                                                                                 onChange={(e) => {
-                                                                                    const value = Number(e.target.value)
-                                                                                    if (value >= 0) {
+                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                        const value = e.target.value
                                                                                         setNewStockCarton(value)
                                                                                     }
                                                                                 }}
@@ -1567,11 +1585,16 @@ export default function CreateStockInputs() {
                                                                     </div>
                                                                     <div>
                                                                         <Label>Quantité Pièce/Carton</Label>
-                                                                        <Input type="number" id="input" value={quantitePieceCarton}
+                                                                        <Input
+                                                                            type="text"
+                                                                            id="input"
+                                                                            value={quantitePieceCarton}
                                                                             onChange={(e) => {
-                                                                                const value = Number(e.target.value)
-                                                                                if (value >= 0) {
-                                                                                    setQuantitePieceCarton(value)
+                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                    const value = e.target.value
+                                                                                    if (value >= 0) {
+                                                                                        setQuantitePieceCarton(value)
+                                                                                    }
                                                                                 }
                                                                             }}
                                                                         />
@@ -1687,11 +1710,16 @@ export default function CreateStockInputs() {
                                                             </div>
                                                             <div>
                                                                 <Label>Quantité pièce</Label>
-                                                                <Input type="number" id="input" value={newStockPiece}
+                                                                <Input
+                                                                    type="text"
+                                                                    id="input"
+                                                                    value={newStockPiece}
                                                                     onChange={(e) => {
-                                                                        const value = Number(e.target.value)
-                                                                        if (value >= 0) {
-                                                                            setNewStockPiece(value)
+                                                                        if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                            const value = e.target.value
+                                                                            if (value >= 0) {
+                                                                                setNewStockPiece(value)
+                                                                            }
                                                                         }
                                                                     }}
                                                                 />
@@ -1763,10 +1791,13 @@ export default function CreateStockInputs() {
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <div>
                                                                             <Label>Stock Carton</Label>
-                                                                            <Input type="number" id="input" value={newStockCarton}
+                                                                            <Input
+                                                                                type="text"
+                                                                                id="input"
+                                                                                value={newStockCarton}
                                                                                 onChange={(e) => {
-                                                                                    const value = Number(e.target.value)
-                                                                                    if (value >= 0) {
+                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                        const value = e.target.value
                                                                                         setNewStockCarton(value)
                                                                                     }
                                                                                 }}
@@ -1774,10 +1805,13 @@ export default function CreateStockInputs() {
                                                                         </div>
                                                                         <div>
                                                                             <Label>Quantité Pièce/Carton</Label>
-                                                                            <Input type="number" id="input" value={quantitePieceCarton}
+                                                                            <Input
+                                                                                type="text"
+                                                                                id="input"
+                                                                                value={quantitePieceCarton}
                                                                                 onChange={(e) => {
-                                                                                    const value = Number(e.target.value)
-                                                                                    if (value >= 0) {
+                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                        const value = e.target.value
                                                                                         setQuantitePieceCarton(value)
                                                                                     }
                                                                                 }}
@@ -1859,10 +1893,13 @@ export default function CreateStockInputs() {
                                                         </div>
                                                         <div>
                                                             <Label>Quantité</Label>
-                                                            <Input type="number" id="input" value={newStockPiece}
+                                                            <Input
+                                                                type="text"
+                                                                id="input"
+                                                                value={newStockPiece}
                                                                 onChange={(e) => {
-                                                                    const value = Number(e.target.value)
-                                                                    if (value >= 0) {
+                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                        const value = e.target.value
                                                                         setNewStockPiece(value)
                                                                     }
                                                                 }}

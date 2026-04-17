@@ -16,11 +16,11 @@ export default function AllUsers() {
     const [userRoles, setUserRoles] = useState([])
     const [services, setServices] = useState([])
     const [userServices, setUserServices] = useState([])
-    
 
-    useEffect( ()=>{
-        const fetchUsers = async () =>{
-            try{
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
                 setLoadingUsers(true);
                 let user_data = await usersData.getAllUsers();
                 setUsers(user_data);
@@ -36,23 +36,23 @@ export default function AllUsers() {
 
                 let userServices_data = await usersData.getAllUserServices();
                 setUserServices(userServices_data);
-                
-            } catch(error){
+
+            } catch (error) {
                 console.log("Error fetch users : ", error)
-            } finally{
+            } finally {
                 setLoadingUsers(false);
             }
         }
 
         fetchUsers();
-    },[])
+    }, [])
 
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR');
     };
 
-    const nomTemplate = (user) =>{
+    const nomTemplate = (user) => {
         const nom = user.username
         const nomFinal = nom.split(".").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 
@@ -64,7 +64,7 @@ export default function AllUsers() {
             </>
         )
     }
-    const emailTemplate = (user) =>{
+    const emailTemplate = (user) => {
         const email = user.email
 
         return (
@@ -75,68 +75,72 @@ export default function AllUsers() {
             </>
         )
     }
-    const serviceTemplate = (user) =>{
-        const service_list = userServices.map((userServices =>{
-            if(userServices.user_id == user.id_user){
+    const serviceTemplate = (user) => {
+        const service_list = userServices.map((userServices => {
+            if (userServices.user_id == user.id_user) {
                 return userServices.service_id
             }
             return []
         }))
 
-        const user_services = services.filter((service =>{
+        const user_services = services.filter((service => {
             return service_list.includes(service.id)
         }))
 
         return (
-            <>
-                {user_services.map((service =>{
+            <>  
+                <div className="max-h-40 overflow-y-auto">
+                    {user_services.map((service => {
 
-                    const nomService = service.nom_service
-                    let serviceTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-semibold'
-                    return (
-                        <>  
-                            <div className="flex-col">
-                                <span className={serviceTag}>{nomService}</span>
-                            </div>
-                        </>
-                    )
-                }))}
+                        const nomService = service.nom_service
+                        let serviceTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-semibold'
+                        return (
+                            <>
+                                <div className="flex-col">
+                                    <span className={serviceTag}>{nomService}</span>
+                                </div>
+                            </>
+                        )
+                    }))}
+                </div>
             </>
         )
     }
-    const roleTemplate = (user) =>{
-        const role_list = userRoles.map((userRoles =>{
-            if(userRoles.user_id == user.id_user){
+    const roleTemplate = (user) => {
+        const role_list = userRoles.map((userRoles => {
+            if (userRoles.user_id == user.id_user) {
                 return userRoles.role_id
             }
             return []
         }))
 
-        const user_roles = roles.filter((role =>{
+        const user_roles = roles.filter((role => {
             return role_list.includes(role.id_role)
         }))
 
         return (
             <>
-                {user_roles.map((role =>{
+                <div className="max-h-40 overflow-y-auto">
+                    {user_roles.map((role => {
 
-                    const nomRole = role.nom_role.split("_").join(" ");
-                    let roleTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-bold'
-                    return (
-                        <>  
-                            <div className="flex-col">
-                                <span className={roleTag}>{nomRole}</span>
-                            </div>
-                        </>
-                    )
-                }))}
+                        const nomRole = role.nom_role.split("_").join(" ");
+                        let roleTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-bold'
+                        return (
+                            <>
+                                <div className="flex-col">
+                                    <span className={roleTag}>{nomRole}</span>
+                                </div>
+                            </>
+                        )
+                    }))}
+                </div>
             </>
         )
     }
-    const dateTemplate = (user) =>{
+    const dateTemplate = (user) => {
         const date = user.created_at
 
-        return(
+        return (
             <>
                 <span className="text-sm font-normal text-gray-600">
                     {formatDate(date)}
@@ -144,10 +148,10 @@ export default function AllUsers() {
             </>
         )
     }
-    const actionsTemplate = (user) =>{
+    const actionsTemplate = (user) => {
         let linkModify = `/modifier-profil/${user.id_user}`
 
-        return(
+        return (
             <>
                 <span className="flex items-center">
                     <Link to={linkModify}>
@@ -172,16 +176,16 @@ export default function AllUsers() {
                         tableStyle={{ minWidth: '50rem' }}
                         emptyMessage="Aucun utilisateur trouvé"
                         className="p-datatable-sm">
-                        
+
                         <Column field="id_user" header="ID" sortable></Column>
                         <Column field="username" header="Nom & Prénom" body={nomTemplate} sortable></Column>
                         <Column field="email" header="Email" body={emailTemplate} sortable></Column>
                         <Column header="Services" body={serviceTemplate}></Column>
                         <Column header="Rôles" body={roleTemplate}></Column>
-                        <Column  field="created_at" header="Date création" body={dateTemplate} sortable></Column>
+                        <Column field="created_at" header="Date création" body={dateTemplate} sortable></Column>
                         <Column header="Actions" body={actionsTemplate}></Column>
 
-                        
+
                     </DataTable>
                 </div>
 
