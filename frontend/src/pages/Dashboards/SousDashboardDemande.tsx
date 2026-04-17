@@ -1,6 +1,8 @@
+// @ts-ignore
 import React, { useState, useEffect } from 'react';
 import DatePicker from '../../components/form/date-picker';
 import { startOfWeek, endOfWeek, format } from 'date-fns';
+// @ts-ignore
 import { fr } from 'date-fns/locale';
 
 type DateValue = string | Date | Date[];
@@ -78,7 +80,9 @@ export default function SousDashboardDemande() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // @ts-ignore
         const formattedStartDate = getFormattedDate(startDate);
+        // @ts-ignore
         const formattedEndDate = getFormattedDate(endDate);
 
         // Fetch all demandes

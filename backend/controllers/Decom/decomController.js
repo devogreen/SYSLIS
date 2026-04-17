@@ -105,9 +105,63 @@ const faireDecom = async (req, res) => {
                 })
             }
 
+            /***************        GESTION DES TPE     *****************/
+
+            let allTpes = null
+            // Récupérer les SN de la liste
+            const serials = details.map(item => item.terminalSN);
+
+            // 1. Create only missing ones
+            await tx.parc_tpe.createMany({
+                data: serials.map(item => ({
+                    serial_number: item,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 8,
+                })),
+                skipDuplicates: true
+            });
+
+            // 2. Update ALL (existing + newly created)
+            await tx.parc_tpe.updateMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 8,
+                }
+            });
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: 8,
+                    form_id: decomForm.id,
+                }))
+            });
+
             return {
                 decomForm,
                 nouveauDecom,
+                allTpes,
             }
         })
 
@@ -337,8 +391,61 @@ const modifyDecom = async (req, res) => {
                 })
             }
 
+            /***************        GESTION DES TPE     *****************/
+
+            let allTpes = null
+            // Récupérer les SN de la liste
+            const serials = details.map(item => item.terminalSN);
+
+            // 1. Create only missing ones
+            await tx.parc_tpe.createMany({
+                data: serials.map(item => ({
+                    serial_number: item,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 8,
+                })),
+                skipDuplicates: true
+            });
+
+            // 2. Update ALL (existing + newly created)
+            await tx.parc_tpe.updateMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 8,
+                }
+            });
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: 8,
+                    form_id: decomForm.id,
+                }))
+            });
+
             return {
-                decomForm, decom
+                decomForm, decom, allTpes
             }
         })
 
@@ -670,7 +777,7 @@ const receptionDecom = async (req, res) => {
                         created_by: utilisateur.id_user,
                         created_at: dateAction,
                         last_modified_at: dateAction,
-                        statut_id: 3,
+                        statut_id: 9,
                     }))
                 });
             }
@@ -684,7 +791,7 @@ const receptionDecom = async (req, res) => {
                             updated_by: utilisateur.id_user,
                             updated_at: dateAction,
                             last_modified_at: dateAction,
-                            statut_id: 3,
+                            statut_id: 9,
                         }
                     })
                 )
@@ -707,7 +814,7 @@ const receptionDecom = async (req, res) => {
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: 3,
+                    statut_id: 9,
                     form_id: decomForm.id,
                 }))
             });
@@ -1086,140 +1193,155 @@ const verifyDecom = async (req, res) => {
                     decom_id: decom.id,
                 }
             })
-            for (const item of listeVerified) {
-                const retourTechForm = await tx.forms.create({
+
+            const retourTechPromises = listeVerified.map(item =>
+                tx.forms.create({
                     data: {
                         type: 'retour_technique',
                         created_by: utilisateur.id_user,
                         created_at: dateAction,
                         last_modified_at: dateAction,
                         nom_user: utilisateur.fullname,
-                    },
+                    }
                 })
-                await tx.retour_technique.create({
-                    data: {
-                        form_id: retourTechForm.id,
-                        decom_id: decom.id,
-                        retour_id: retourDecom.id,
-                        sn_id: item.id,
-                        commentaire_retour: item.retour,
-                        pieces_recuperees: item.pieces_recuperees,
-                        pieces_defectueuses: item.pieces_defectueuses,
-                        is_ok: item.is_ok,
-                        statut: item.statut,
-                    },
-                })
-                await tx.sn_decom.update({
-                    where: {
-                        id: item.id,
-                    },
-                    data: {
-                        commentaire_retour: item.retour,
-                        pieces_recuperees: item.pieces_recuperees,
-                        pieces_defectueuses: item.pieces_defectueuses,
-                        is_ok: item.is_ok,
-                        statut: item.statut,
-                        updated_at: dateAction,
-                        last_modified_at: dateAction,
-                    },
-                })
-            }
-
-            const statutMap = {
-                parametrage: 4,
-                rebus: 5,
-            };
-
-            // Récupérer les SN de la liste
-            const serials = listeVerified.map(item => item.serial_number);
-
-            // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-            // Faire une liste SN, ID pour les TPE déjà enregistrés
-            const existingMap = new Map(
-                existingTpes.map(e => [e.serial_number, e.id])
             );
 
-            const toCreate = [];
-            const toUpdate = [];
+            const retourTechForms = await Promise.all(retourTechPromises);
 
-            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-            listeVerified.forEach(item => {
-                if (existingMap.has(item.serial_number)) {
-                    toUpdate.push(item);
-                } else {
-                    toCreate.push(item);
-                }
-            });
-
-            // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
-            if (toCreate.length > 0) {
-                await tx.parc_tpe.createMany({
-                    data: toCreate.map(item => ({
-                        serial_number: item.serial_number,
-                        created_by: utilisateur.id_user,
-                        created_at: dateAction,
-                        last_modified_at: dateAction,
-                        statut_id: statutMap[item.statut],
-                    }))
-                });
-            }
-
-            // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
             await Promise.all(
-                toUpdate.map(item =>
-                    tx.parc_tpe.update({
-                        where: { serial_number: item.serial_number },
+                retourTechForms.map((form, index) => {
+                    const item = listeVerified[index];
+
+                    return tx.retour_technique.create({
                         data: {
-                            updated_by: utilisateur.id_user,
+                            form_id: form.id,
+                            decom_id: decom.id,
+                            retour_id: retourDecom.id,
+                            sn_id: item.id,
+                            commentaire_retour: item.retour,
+                            pieces_recuperees: item.pieces_recuperees,
+                            pieces_defectueuses: item.pieces_defectueuses,
+                            is_ok: item.is_ok,
+                            statut: item.statut,
+                        }
+                    });
+                })
+            );
+
+            await Promise.all(
+                listeVerified.map(item =>
+                    tx.sn_decom.update({
+                        where: { id: item.id },
+                        data: {
+                            commentaire_retour: item.retour,
+                            pieces_recuperees: item.pieces_recuperees,
+                            pieces_defectueuses: item.pieces_defectueuses,
+                            is_ok: item.is_ok,
+                            statut: item.statut,
                             updated_at: dateAction,
                             last_modified_at: dateAction,
-                            statut_id: statutMap[item.statut],
                         }
                     })
                 )
             );
 
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => {
-                    const item = listeVerified.find(
-                        i => i.serial_number === tpe.serial_number
-                    );
-
-                    return {
-                        id_tpe: tpe.id,
-                        created_by: utilisateur.id_user,
-                        created_at: dateAction,
-                        statut_id: statutMap[item.statut],
-                        form_id: decomForm.id,
-                    };
-                })
-            });
-
             return {
                 retourDecomForm, retourDecom
             }
         })
+
+        /***********      GESTION DES TPE     ************/
+
+        const statutMap = {
+            parametrage: 4,
+            rebus: 5,
+        };
+
+        // Récupérer les SN de la liste
+        const serials = listeVerified.map(item => item.serial_number);
+
+        // Récupérer les TPE déjà enregistrés dans le PARC
+        const existingTpes = await prisma.parc_tpe.findMany({
+            where: {
+                serial_number: { in: serials }
+            },
+            select: {
+                id: true,
+                serial_number: true
+            }
+        });
+        // Faire une liste SN, ID pour les TPE déjà enregistrés
+        const existingMap = new Map(
+            existingTpes.map(e => [e.serial_number, e.id])
+        );
+
+        const toCreate = [];
+        const toUpdate = [];
+
+        // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
+        listeVerified.forEach(item => {
+            if (existingMap.has(item.serial_number)) {
+                toUpdate.push(item);
+            } else {
+                toCreate.push(item);
+            }
+        });
+
+        // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
+        if (toCreate.length > 0) {
+            await prisma.parc_tpe.createMany({
+                data: toCreate.map(item => ({
+                    serial_number: item.serial_number,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: statutMap[item.statut],
+                }))
+            });
+        }
+
+        // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+        await Promise.all(
+            toUpdate.map(item =>
+                prisma.parc_tpe.update({
+                    where: { serial_number: item.serial_number },
+                    data: {
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: statutMap[item.statut],
+                    }
+                })
+            )
+        );
+
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        const allTpes = await prisma.parc_tpe.findMany({
+            where: {
+                serial_number: { in: serials }
+            },
+            select: {
+                id: true,
+                serial_number: true
+            }
+        });
+
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await prisma.history_tpe.createMany({
+            data: allTpes.map(tpe => {
+                const item = listeVerified.find(
+                    i => i.serial_number === tpe.serial_number
+                );
+
+                return {
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: statutMap[item.statut],
+                    form_id: decomForm.id,
+                };
+            })
+        });
 
         /************** GESTION DES MAILS  **************/
 

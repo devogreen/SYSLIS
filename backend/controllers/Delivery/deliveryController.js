@@ -10,6 +10,7 @@ const { sign } = require("crypto");
 const sendMail = require("../../utils/emailSender");
 const JSZip = require("jszip");
 const ExcelJS = require("exceljs");
+const { allowedNodeEnvironmentFlags } = require("process");
 
 const formatDate = (isoDate) => {
   const date = new Date(isoDate);
@@ -826,7 +827,7 @@ const getAllLivraisons = async (req, res) => {
       include: {
         forms: true,
         validations: true,
-        type_livraison_commerciale : true
+        type_livraison_commerciale: true
       }
     });
 
@@ -913,7 +914,7 @@ const updateLivraison = async (req, res) => {
       return res.status(404).json({ message: "Livraison non trouvée" });
     }
 
-    if (existingLivraison.statut_livraison === "livre"){
+    if (existingLivraison.statut_livraison === "livre") {
       console.error("Impossible de modifier une livraison déjà validée !")
       return res.status(400).json({ message: "Impossible de modifier une livraison déjà validée." });
     }
@@ -945,7 +946,7 @@ const updateLivraison = async (req, res) => {
 
       const updatedForm = await tx.forms.update({
         where: {
-          id: updated.form_id        
+          id: updated.form_id
         },
         data: {
           updated_at: dateAction,
@@ -2348,7 +2349,7 @@ const makeRemplacement = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
       let allOldTpes = null
 
       // Récupérer les SN de la liste
@@ -2406,7 +2407,7 @@ const makeRemplacement = async (req, res) => {
 
 
       /**ANCIEN SN**/
-      
+
       // 1. Create only missing ones
       await tx.parc_tpe.createMany({
         data: oldSerials.map(item => ({
@@ -2633,46 +2634,85 @@ const validateRemplacement = async (req, res) => {
       where: { id: parseInt(remplacement_id) },
     });
 
-    if (!remplacement) return res.status(404).json({ message: "Remplacement introuvable." });
+    if (!remplacement) {
+      console.error("Remplacement non trouvé !")
+      return res.status(404).json({ message: "Remplacement introuvable." });
+    }
 
     if (remplacement.statut_livraison === "livre") {
+      console.error("Remplacement déjà validé !")
       return res.status(400).json({ message: "Remplacement déjà validée." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Signature du récepteur requise." });
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
     }
 
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
-    const signature = uploadResult.secure_url;
+    const signatureCloud = uploadResult.secure_url;
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+    if (!user_id) {
+      console.error("Utilisateur non authentifié !")
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
 
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
     });
 
     if (!user) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const newValidation = await prisma.validation_remplacement.create({
-      data: {
-        remplacement_id: parseInt(remplacement_id),
-        date_validation: new Date(),
-        user_id: user_id ? parseInt(user_id) : null,
-        commentaire,
-        nom_recepteur: user.fullname,
-        signature,
-      },
-    });
+    const dateAction = new Date()
 
-    await prisma.remplacements.update({
-      where: { id: parseInt(remplacement_id) },
-      data: { statut: "livre" },
-    });
+    const validationRemplacement = await prisma.$transaction(async (tx) => {
+      const validationForm = await tx.forms.create({
+        data: {
+          type: 'reception_remplacement',
+          created_at: dateAction,
+          created_by: user.id_user,
+          last_modified_at: dateAction,
+        },
+      });
+      const newValidation = await tx.validation_remplacement.create({
+        data: {
+          remplacement_id: parseInt(remplacement_id),
+          date_validation: dateAction,
+          user_id: user_id ? parseInt(user_id) : null,
+          commentaire,
+          nom_recepteur: user.fullname,
+          signature: signatureCloud,
+          form_id: validationForm.id,
+        },
+      });
+
+      await tx.remplacements.update({
+        where: { id: parseInt(remplacement_id) },
+        data: { statut: "livre" },
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: validationForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: dateAction,
+          role: 'receveur',
+        },
+      })
+
+      return {
+        validationForm,
+        newValidation,
+      }
+
+    })
 
     /******************************* GESTION DES MAILS  *******************************/
 
@@ -2760,7 +2800,11 @@ const validateRemplacement = async (req, res) => {
       }
     }
 
-    return res.status(201).json(newValidation);
+    console.log("Remplacement validé avec succès !")
+    return res.status(201).json({
+      message: "Remplacement validé avec succès.",
+      data: validationRemplacement,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
@@ -3233,30 +3277,181 @@ const updateRemplacement = async (req, res) => {
       : detailsParametrage;
 
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    const dataToUpdate = {
-      quantite: produits.length,
-      details_remplacement: JSON.stringify(produits),
-      commentaire,
-      date_remplacement: new Date(),
-      user_id: utilisateur ? utilisateur.id_user : null,
-      old_model_id: parseInt(ancien_model),
-      new_model_id: parseInt(nouveau_model),
-      service_id: parseInt(service_recepteur),
-      role_id: role_recepteur ? parseInt(role_recepteur) : null,
-      deleted: false,
-      nom_livreur: utilisateur.fullname || null,
-      details_parametrage: JSON.stringify(detailsParams),
-      statut: "en_cours",
-    }
-    const nouveauRemplacement = await prisma.remplacements.update({
+    const remplacement = await prisma.remplacements.findUnique({
       where: {
         id: parseInt(id)
-      },
-      data: dataToUpdate,
+      }
     });
+
+    if (!remplacement) {
+      console.error("Remplacement non trouvé !")
+      return res.status(404).json({ message: "Remplacement introuvable." });
+    }
+
+    if (remplacement.statut === "livre") {
+      console.error("Remplacement déjà validé !")
+      return res.status(400).json({ message: "Remplacement déjà validée." });
+    }
+
+    const dateAction = new Date();
+
+    const newRemplacement = await prisma.$transaction(async (tx) => {
+
+      const remplacementForm = await tx.forms.update({
+        where: {
+          id: remplacement.form_id
+        },
+        data: {
+          last_modified_at: dateAction,
+          updated_at: dateAction,
+          updated_by: utilisateur.id_user,
+          commentaire,
+          nom_user: utilisateur.fullname,
+        }
+      })
+
+      const nouveauRemplacement = await tx.remplacements.update({
+        where: {
+          id: parseInt(id)
+        },
+        data: {
+          quantite: produits.length,
+          details_remplacement: JSON.stringify(produits),
+          commentaire,
+          date_remplacement: dateAction,
+          user_id: utilisateur ? utilisateur.id_user : null,
+          old_model_id: parseInt(ancien_model),
+          new_model_id: parseInt(nouveau_model),
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          deleted: false,
+          nom_livreur: utilisateur.fullname || null,
+          details_parametrage: JSON.stringify(detailsParams),
+          statut: "en_cours",
+          form_id: remplacementForm.id,
+        },
+
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
+      let allTpes = null
+      let allOldTpes = null
+
+      // Récupérer les SN de la liste
+      const serials = produits.map(item => item.nouvelSN);
+      const oldSerials = produits.map(item => item.ancienSN);
+
+      /**NOUVEAU TPE**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: serials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 7,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+      /**ANCIEN SN**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: oldSerials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allOldTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allOldTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 3,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+      return {
+        remplacementForm,
+        nouveauRemplacement,
+        allTpes,
+        allOldTpes,
+      }
+
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -3316,7 +3511,7 @@ const updateRemplacement = async (req, res) => {
     const superviseurs = supervisionRole.map(us => us.users)
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${nouveauRemplacement.id}`;
+    let deliveryLink = `${url}/remplacement-details/${newRemplacement.nouveauRemplacement.id}`;
 
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
@@ -3324,7 +3519,7 @@ const updateRemplacement = async (req, res) => {
       const subject = `MODIFICATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
-        <p>Le formulaire de remplacement ${nouveauRemplacement.id} a été modifié.</p>
+        <p>Le formulaire de remplacement ${newRemplacement.nouveauRemplacement.id} a été modifié.</p>
         <ul>
           <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
           <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
@@ -3369,9 +3564,10 @@ const updateRemplacement = async (req, res) => {
       }
     }
 
+    console.log("Remplacement modifié avec succès")
     res.status(201).json({
       message: "Remplacement modifié avec succès",
-      remplacements: nouveauRemplacement
+      data: newRemplacement,
     });
 
   } catch (error) {

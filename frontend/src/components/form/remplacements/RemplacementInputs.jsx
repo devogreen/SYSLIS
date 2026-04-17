@@ -39,6 +39,16 @@ export default function RemplacementInputs() {
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
 
+  const LISTE_KEY = "listeRemplacement";
+  const saveListe = (liste) => {
+    sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+  };
+  const loadListe = () => {
+    const stored = sessionStorage.getItem(LISTE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  };
+  const savedListe = loadListe()
+
 
   const [isOrangeChecked, setOrangeChecked] = useState(false);
   const [isMTNChecked, setMTNChecked] = useState(false);
@@ -52,7 +62,7 @@ export default function RemplacementInputs() {
   const [loadingDelivery, setLoadingDelivery] = useState(false);
   const [typeLivraison, setTypeLivraison] = useState('');
   const [livraisonID, setLivraisonID] = useState(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(savedListe?.message || '');
   const [mobileMoney, setMobileMoney] = useState([]);
   const [produitsLivreTable, setProduitsLivresTable] = useState([]);
   const [produitsLivre, setProduitsLivres] = useState([]);
@@ -169,6 +179,16 @@ export default function RemplacementInputs() {
       }
     }; fetchTerminalInfos();
   }, [])
+
+  useEffect(() => {
+    saveListe({
+      produitsLivreTable,
+      produitsLivre,
+      quantiteLivraison,
+      message,
+      detailsParametrage,
+    })
+  }, [produitsLivreTable, produitsLivre, quantiteLivraison, message, detailsParametrage])
 
   const filteredPointMarchand = terminalSN ?
     terminals.filter((terminal) =>
@@ -331,12 +351,21 @@ export default function RemplacementInputs() {
     }
   }
 
-  const handleConfirm = () => {
-
+  const checkValidate = () => {
     if (!serviceId) {
       setErrorAjout("Vous devez choisir le service réceptionneur !");
+      return false;
+    }
+
+    return true;
+  }
+
+  const handleConfirm = () => {
+
+    if(!checkValidate()) {
       return;
     }
+
     if (!oldModel) {
       setErrorAjout("Vous devez choisir le model du TPE à remplacer !");
       return;
@@ -416,7 +445,7 @@ export default function RemplacementInputs() {
 
     setProduitsLivresTable((prev) => [...prev, newProduit]);
     setProduitsLivres((prev) => [...prev, newProduit]);
-    setQuantiteLivraison(quantiteLivraison + 1)
+    setQuantiteLivraison((prev) => prev + 1)
 
     // Optional: Reset form fields
     setTerminalSN('');
@@ -497,6 +526,9 @@ export default function RemplacementInputs() {
     } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
+      setQuantiteLivraison(0)
+      setMessage('')
+      setDetailsParametrage([])
       setLoadingDelivery(false)
     }
   }
@@ -522,6 +554,14 @@ export default function RemplacementInputs() {
   };
 
   const handleValidate = () => {
+    if (!checkValidate()) {
+      Swal.fire({
+        title: "Error",
+        text: "Les champs obligatoires ne sont pas tous remplis !",
+        icon: "error"
+      });
+      return;
+    }
     if (produitsLivre.length == 0) {
       Swal.fire({
         title: "Error",
