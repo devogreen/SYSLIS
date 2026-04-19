@@ -1026,6 +1026,7 @@ enum validation_demande_statut_validation_demande {
 enum Livraisons_type {
   livraison_piece
   livraison_commerciale
+  livraison_qr
 }
 
 enum demandes_statut_demande {
