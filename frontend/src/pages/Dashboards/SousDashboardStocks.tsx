@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import DatePicker from '../../components/form/date-picker';
+// @ts-ignore
+import urlBase from '../../backend/const.js'
 type DateValue = string | Date | Date[];
 
 interface Item {
@@ -89,9 +91,9 @@ export default function SousDashboardStocks() {
     setLoading(true);
     try {
       // Direct API calls (Stock service removed)
-      const itemsResponse = await fetch('http://localhost:5500/api/stock/getAllItems');
-      const stocksResponse = await fetch('http://localhost:5500/api/stock/getAllStocks');
-      
+      const itemsResponse = await fetch(`${urlBase}/api/stock/getAllItems`);
+      const stocksResponse = await fetch(`${urlBase}/api/stock/getAllStocks`);
+
       const itemsData = await itemsResponse.json();
       const stocksData = await stocksResponse.json();
 
@@ -160,7 +162,7 @@ export default function SousDashboardStocks() {
           const formattedEndDate = getFormattedDate(endDate);
   
           // Fetch all demandes
-          const response = await fetch('http://localhost:5500/api/demandes/getAllDemandes');
+          const response = await fetch(`${urlBase}/api/demandes/getAllDemandes`);
           if (response.ok) {
             const rawDemandes: Demande[] = await response.json();
   

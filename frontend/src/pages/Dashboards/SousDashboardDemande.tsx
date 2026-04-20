@@ -5,6 +5,9 @@ import { startOfWeek, endOfWeek, format } from 'date-fns';
 // @ts-ignore
 import { fr } from 'date-fns/locale';
 
+// @ts-ignore
+import urlBase from '../../backend/const.js'
+
 type DateValue = string | Date | Date[];
 
 interface Demande {
@@ -86,7 +89,7 @@ export default function SousDashboardDemande() {
         const formattedEndDate = getFormattedDate(endDate);
 
         // Fetch all demandes
-        const response = await fetch('http://localhost:5500/api/demandes/getAllDemandes');
+        const response = await fetch(`${urlBase}/api/demandes/getAllDemandes`);
         if (response.ok) {
           const rawDemandes: Demande[] = await response.json();
 

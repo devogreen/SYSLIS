@@ -807,19 +807,19 @@ const getGeneralStats = async (req, res) => {
             return [];
         });
 
-        console.log("TEST DE CONSOLE")
+        // console.log("TEST DE CONSOLE")
 
         const statsTypesLivraisons = {};
 
         livraisons.forEach(l => {
-            console.log("TEST DE FONCTION")
+            // console.log("TEST DE FONCTION")
             // ✅ on filtre uniquement les livraisons livrées
             if (l.statut_livraison === "livre") {
                 const type = l.type_livraison_commerciale?.nom_type_livraison || "Inconnu";
                 statsTypesLivraisons[type] = (statsTypesLivraisons[type] || 0) + 1;
             }
         });
-        console.log('Types livraisons:', statsTypesLivraisons);
+        // console.log('Types livraisons:', statsTypesLivraisons);
 
         const statsLivraisons = {
             total: livraisons.length,

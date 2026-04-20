@@ -5,6 +5,8 @@ import DatePicker from '../../components/form/date-picker';
 import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
 // @ts-ignore
 import { fr } from 'date-fns/locale';
+// @ts-ignore
+import urlBase from '../../backend/const.js'
 
 type DateValue = string | Date | Date[];
 
@@ -71,7 +73,7 @@ export default function SousDashboardRemplacement() {
         const formattedEndDate = getFormattedDate(endDate);
 
         // Fetch all remplacements
-        const response = await fetch('http://localhost:5500/api/delivery/getAllRemplacements');
+        const response = await fetch(`${urlBase}/api/delivery/getAllRemplacements`);
         if (response.ok) {
           const allRemplacements: Remplacement[] = await response.json();
 

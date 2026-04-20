@@ -7,7 +7,8 @@ import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
 // @ts-ignore
 import { fr } from 'date-fns/locale';
 import axios from 'axios';
-const urlBase = 'http://localhost:5500';
+// @ts-ignore
+import urlBase from '../../backend/const.js'
 
 type DateValue = string | Date | Date[];
 

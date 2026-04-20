@@ -6,6 +6,12 @@ import DatePicker from '../../components/form/date-picker';
 import { RefreshTimeIcon } from '../../icons';
 import type { LivraisonType } from '../../types';
 
+// @ts-ignore
+import { Stock } from '../../backend/stock/Stock.js'
+
+// @ts-ignore
+import urlBase from '../../backend/const.js'
+
 interface GeneralStats {
   typesLivraisons: any;
   livraisons: { total: number; attente: number; livrees: number; retours: number };
@@ -19,6 +25,10 @@ interface GeneralStats {
 
 
 export default function Dashboard() {
+
+  // @ts-ignore
+  const stockData = new Stock();
+
   const currentWeek = getWeek(new Date(), { weekStartsOn: 1 });
   // const getFormattedDate = (date) => format(date, 'yyyy-MM-dd');
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -44,7 +54,8 @@ export default function Dashboard() {
     setLoading(true);
     try {
       // Stats générales d'abord
-      const url = `http://localhost:5500/api/stats/general?startDate=${getFormattedDate(startDate)}&endDate=${getFormattedDate(endDate)}`;
+      const url = `${urlBase}/api/stats/general?startDate=${getFormattedDate(startDate)}&endDate=${getFormattedDate(endDate)}`;
+      // const url = statsData.getGeneralStats(getFormattedDate(startDate), getFormattedDate(endDate));
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -54,8 +65,10 @@ export default function Dashboard() {
       }
 
       // Stock id_piece=2
-      const itemsRes = await fetch('http://localhost:5500/api/stock/getAllItems');
-      const stocksRes = await fetch('http://localhost:5500/api/stock/getAllStocks');
+      const itemsRes = await fetch(`${urlBase}/api/stock/getAllItems`);
+      // const itemsRes = await stockData.getAllItems();
+      const stocksRes = await fetch(`${urlBase}/api/stock/getAllStocks`);
+      // const stocksRes = await stockData.getAllStocks();
       const items = await itemsRes.json();
       const stocks = await stocksRes.json();
 
@@ -366,7 +379,7 @@ export default function Dashboard() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <h3 className="text-xl font-semibold text-gray-500 mb-2">Chargement des statistiques...</h3>
-          <p className="text-gray-400">Vérifiez que le backend est démarré (port 5500)</p>
+          <p className="text-gray-400">Vérifiez que le backend est démarré</p>
         </div>
          )}
     </div>

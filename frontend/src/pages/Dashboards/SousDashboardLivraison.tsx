@@ -6,6 +6,9 @@ import {
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+// @ts-ignore
+import urlBase from '../../backend/const.js'
+
 type DateValue = string | Date | Date[];
 
 interface Livraison {
@@ -97,7 +100,7 @@ export default function SousDashboardLivraison() {
         const formattedEndDate = getFormattedDate(endDate);
 
         // Livraisons pour tableau
-        const livraisonsResponse = await fetch('http://localhost:5500/api/delivery/getAllLivraisons', {
+        const livraisonsResponse = await fetch(`${urlBase}/api/delivery/getAllLivraisons`, {
           headers: {
             'Content-Type': 'application/json',
           },
