@@ -49,7 +49,7 @@ export default function ModifyDemandeQrInputs() {
     const [optionsMarchands, setOptionsMarchands] = useState([])
     const [quantiteTerminal, setQuantiteTerminal] = useState(0)
     const [quantiteQr, setQuantiteQr] = useState(0)
-    const [quantite, setQuantite] = useState(2)
+    const [quantite, setQuantite] = useState(1)
 
     const [selectedTypeQr, setSelectedTypeQr] = useState('')
     const [selectedChaine, setSelectedChaine] = useState('')

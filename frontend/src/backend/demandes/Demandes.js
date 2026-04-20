@@ -34,18 +34,18 @@ export class Demandes {
     }
   };
 
-  async validateDemande(payload) {
+  async livraisonDemande(payload) {
     try {
-      const response = await axios.post(`${urlBase}/api/demandes/validateDemande`, payload)
+      const response = await axios.post(`${urlBase}/api/demandes/livraisonDemande`, payload)
       return response.data;
     } catch (error) {
       throw error.response.data;
     }
   }
 
-  async preValidateDemande(formData) {
+  async validateDemande(formData) {
     try {
-      const response = await axios.post(`${urlBase}/api/demandes/preValidateDemande`, formData, {
+      const response = await axios.post(`${urlBase}/api/demandes/validateDemande`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -127,21 +127,81 @@ export class Demandes {
   // Récupérer les demandes en attente (statut: en_cours)
   async getDemandesEnAttente() {
     try {
-      const response = await axios.get(`${urlBase}/api/demandes/getDemandesEnAttente`)
-      return response.data;
+      const response = await axios.get(`${urlBase}/api/demandes/getDemandesEnAttente`);
+      return response?.data || [];
     } catch (error) {
-      throw error.response.data
+      console.error('getDemandesEnAttente error:', error);
+      return [];
     }
   };
 
   // Récupérer les demandes validées (statut: valide)
   async getDemandesValidees() {
     try {
-      const response = await axios.get(`${urlBase}/api/demandes/getDemandesValidees`)
-      return response.data;
+      const response = await axios.get(`${urlBase}/api/demandes/getDemandesValidees`);
+      return response?.data || [];
     } catch (error) {
-      throw error.response.data
+      console.error('getDemandesValidees error:', error);
+      return [];
     }
   };
+
+  async regularisationDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regularisationDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      return response.data
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  async regValidateDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regValidateDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  async regLivraisonDemande(payload) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regLivraisonDemande`, payload)
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  async regReceptionDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/regReceptionDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
+  // Livraison de stock par pièce (unité)
+  async livraisonPiece(payload) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/livraisonPiece`, payload)
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
 }
 

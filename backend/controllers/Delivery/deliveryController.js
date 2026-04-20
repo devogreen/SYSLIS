@@ -10,6 +10,7 @@ const { sign } = require("crypto");
 const sendMail = require("../../utils/emailSender");
 const JSZip = require("jszip");
 const ExcelJS = require("exceljs");
+const { allowedNodeEnvironmentFlags } = require("process");
 
 const formatDate = (isoDate) => {
   const date = new Date(isoDate);
@@ -34,6 +35,248 @@ let test_env = TEST_ENV
 if (test_env) {
   GENERAL_URL = localUrl
 }
+// Fonction de regularisationReception
+const regReception = async (req, res) => {
+  const {
+    date_reception,
+    livraison_id,
+    commentaire,
+    user_id,
+  } = req.body;
+
+  try {
+    const livraison = await prisma.livraison.findUnique({
+      where: { id_livraison: parseInt(livraison_id) },
+    });
+
+    if (!livraison) {
+      console.error("Livraison introuvable !")
+      return res.status(404).json({ message: "Livraison introuvable." });
+    }
+
+    if (livraison.statut_livraison === "livre") {
+      console.error("Livraison déjà validée !")
+      return res.status(400).json({ message: "Livraison déjà validée." });
+    }
+
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+
+    // Gestion de l'upload Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
+      folder: "greenpay/signatures",
+    });
+
+    const signatureCloud = uploadResult.secure_url;
+
+    if (!signatureCloud) {
+      console.error("Vous devez fournir la signature (cloudinary) !")
+      return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
+    }
+
+    if (!user_id) {
+      console.error("Utilisateur non authentifié !")
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
+    const user = await prisma.users.findUnique({
+      where: { id_user: parseInt(user_id) },
+    });
+
+    if (!user) {
+      console.error("Utilisateur non trouvé !")
+      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
+
+    const typeLivraison = await tx.type_livraison_commerciale.findUnique({
+      where: {
+        id_type_livraison: livraison.type_livraison_id
+      }
+    })
+    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
+
+
+    const dateAction = new Date(date_reception)
+
+    const reception = await prisma.$transaction(async (tx) => {
+
+      const receptionForm = await tx.forms.create({
+        data: {
+          type: 'reception_sn',
+          created_by: user.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: user.fullname,
+          commentaire,
+          is_reg: true,
+        }
+      })
+      const newValidation = await tx.validations.create({
+        data: {
+          livraison_id: parseInt(livraison_id),
+          date_validation: dateAction,
+          commentaire,
+          user_id: user_id ? parseInt(user_id) : null,
+          nom_recepteur: user.fullname,
+          signature: signatureCloud,
+          form_id: receptionForm.id,
+        },
+      });
+
+      await tx.livraison.update({
+        where: { id_livraison: parseInt(livraison_id) },
+        data: { statut_livraison: "livre" },
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: receptionForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: dateAction,
+          role: 'receveur',
+        },
+      })
+
+      // ***************************************     GESTION STOCK CHARGEUR     *************************************
+
+      if (livraison.stock_id) {
+        const stockChargeur = await tx.stocks.findUnique({
+          where: {
+            id: livraison.stock_id,
+          },
+        })
+        const quantiteChargeur = stockChargeur.quantite_piece
+        // Mettre à jour le stock
+        await tx.stocks.update({
+          where: {
+            id: stockChargeur.id,
+          },
+          data: {
+            quantite_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            last_update: new Date(),
+          }
+        })
+        const mouvementDetails = {
+          typeMouvement: 5,
+          stockInitialPiece: quantiteChargeur,
+          quantiteMouvement: livraison.qte_totale_livraison,
+          stockFinalPiece: quantiteChargeur - livraison.qte_totale_livraison,
+        }
+        await tx.mouvement_stock.create({
+          data: {
+            type: 'sortie',
+            created_at: dateAction,
+            mouvement: 5,
+            formulaire_id: livraison.id_livraison,
+            stock_id: stockChargeur.id,
+            piece_id: 1,
+            service_origine: 3,
+            service_destination: livraison.service_id,
+            model_id: 1,
+            stock_initial: quantiteChargeur,
+            quantite: livraison.qte_totale_livraison,
+            stock_final: quantiteChargeur - livraison.qte_totale_livraison,
+            quantite_totale_piece: quantiteChargeur - livraison.qte_totale_livraison,
+            motif: livraisonTypeName,
+            commentaire: livraison.commentaire,
+            details_mouvement: JSON.stringify(mouvementDetails),
+          }
+        })
+      }
+
+      return {
+        receptionForm,
+        newValidation,
+      }
+    })
+
+    /******************************* GESTION DES MAILS  *******************************/
+
+    let produitsLivre = livraison.produitsLivre
+
+    const produits = typeof produitsLivre === "string"
+      ? JSON.parse(produitsLivre)
+      : produitsLivre;
+
+    const supervisionRole = await prisma.user_roles.findMany({
+      where: {
+        role_id: 13
+      },
+      include: {
+        users: true
+      }
+    })
+    const superviseurs = supervisionRole.map(us => us.users)
+
+    const roleLivraison = await prisma.user_roles.findMany({
+      where: {
+        role_id: 1
+      },
+      include: {
+        users: true
+      }
+    })
+    const livreurs = roleLivraison.map(us => us.users)
+
+    const url = GENERAL_URL
+    let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
+    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
+    const sendMail = require("../../utils/emailSender");
+
+    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
+      const subject = `REGULARISATION RECEPTION LIVRAISON (${livraisonTypeName})`;
+      const html = `
+        <p>Bonjour,</p>
+        <p>La réception de la livraison ${livraison.id_livraison} a été régularisée.</p>
+        <ul>
+          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Nombre de produits:</strong> ${produits.length}</li>
+        </ul>
+        <br>
+          <p>Commentaire : ${commentaire_mail}<p>
+        <br>
+        <p>Retrouvez la livraison à ce lien : 
+          <span>
+            <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+              Cliquez ici !
+            </a>
+          </span>
+        </p>
+        <br><br>
+        <p>Green - Pay vous remercie.</p>
+      `;
+
+      for (const livreur of livreurs) {
+        await sendMail({
+          to: livreur.email,
+          subject,
+          html,
+        });
+      }
+      if (superviseurs) {
+        for (const superviseur of superviseurs) {
+          await sendMail({
+            to: superviseur.email,
+            subject,
+            html,
+          });
+        }
+      }
+    }
+
+    console.log('Réception effectuée avec succès !')
+    return res.status(201).json({
+      message: 'Réception effectuée avec succès !',
+      data: reception,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur serveur." });
+  }
+};
 
 const deliver = async (req, res) => {
   try {
@@ -80,6 +323,7 @@ const deliver = async (req, res) => {
     });
 
     if (!typeLivraison) {
+      console.error("Type de livraison non trouvé !")
       return res.status(404).json({ message: "Type de livraison non trouvé" });
     }
 
@@ -90,37 +334,131 @@ const deliver = async (req, res) => {
       }
     });
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+
     // Gestion de l'upload Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
     const signature_expediteur = uploadResult.secure_url;
 
     if (!signature_expediteur) {
+      console.error("Vous devez fournir la signature (cloudinary) !")
       return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
     }
+    const dateAction = new Date()
 
-    const nouvelleLivraison = await prisma.livraison.create({
-      data: {
-        statut_livraison: "en_cours",
-        qte_totale_livraison: produits.length,
-        produitsLivre: JSON.stringify(produits),
-        commentaire,
-        nom_livreur: utilisateur.fullname || null,
-        date_livraison: new Date(),
-        deleted: false,
-        type_livraison_id: parseInt(type_livraison_id),
-        user_id: utilisateur ? utilisateur.id_user : null,
-        signature_expediteur,
-        service_id: parseInt(service_recepteur),
-        role_id: role_recepteur ? parseInt(role_recepteur) : null,
-        model_id: selected_model ? parseInt(selected_model) : null,
-        stock_id: selectedStock ? +selectedStock : null,
+    const livraison = await prisma.$transaction(async (tx) => {
+      const livraisonForm = await tx.forms.create({
+        data: {
+          type: 'livraison_sn',
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: utilisateur.fullname,
+          commentaire,
+        }
+      })
+      const nouvelleLivraison = await tx.livraison.create({
+        data: {
+          statut_livraison: "en_cours",
+          qte_totale_livraison: produits.length,
+          produitsLivre: JSON.stringify(produits),
+          commentaire,
+          nom_livreur: utilisateur.fullname || null,
+          date_livraison: dateAction,
+          deleted: false,
+          type_livraison_id: parseInt(type_livraison_id),
+          user_id: utilisateur ? utilisateur.id_user : null,
+          signature_expediteur,
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          model_id: selected_model ? parseInt(selected_model) : null,
+          stock_id: selectedStock ? +selectedStock : null,
+          form_id: livraisonForm.id,
+        }
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: livraisonForm.id,
+          signature_url: signature.path,
+          signed_by: utilisateur.id_user,
+          signed_at: dateAction,
+          role: 'livreur',
+        },
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
+      let = allTpes = null
+
+      if (nouvelleLivraison.type_livraison_id != 5 && nouvelleLivraison.type_livraison_id != 7 && nouvelleLivraison.type_livraison_id != 8) {
+        // Récupérer les SN de la liste
+        const serials = produits.map(item => item.serialNumber);
+
+        // 1. Create only missing ones
+        await tx.parc_tpe.createMany({
+          data: serials.map(item => ({
+            serial_number: item,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 6,
+          })),
+          skipDuplicates: true
+        });
+
+        // 2. Update ALL (existing + newly created)
+        await tx.parc_tpe.updateMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          data: {
+            updated_by: utilisateur.id_user,
+            updated_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 6,
+          }
+        });
+
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        allTpes = await tx.parc_tpe.findMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          select: {
+            id: true,
+            serial_number: true
+          }
+        });
+
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await tx.history_tpe.createMany({
+          data: allTpes.map(tpe => ({
+            id_tpe: tpe.id,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            statut_id: 6,
+            form_id: livraisonForm.id,
+          }))
+        });
       }
-    });
+
+      return {
+        livraisonForm,
+        nouvelleLivraison,
+        allTpes,
+      }
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -179,7 +517,7 @@ const deliver = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${nouvelleLivraison.id_livraison}`;
+    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
@@ -233,7 +571,246 @@ const deliver = async (req, res) => {
 
     res.status(201).json({
       message: "Livraison enregistrée avec succès",
-      livraison: nouvelleLivraison
+      data: livraison,
+    });
+
+  } catch (error) {
+    console.error("Erreur lors de la livraison :", error);
+    res.status(500).json({ message: "Erreur interne", error });
+  }
+};
+
+const regLivraison = async (req, res) => {
+  try {
+    const {
+      date_livraison,
+      produitsLivre,
+      commentaire,
+      user_id,
+      type_livraison_id,
+      service_recepteur,
+      role_recepteur,
+      selected_model,
+      selectedStock,
+    } = req.body;
+
+    // const files = req.files?.files || [];
+    // const signatureFile = req.files?.signature_expediteur?.[0] || null;
+
+    // const files_content = files.length
+    //   ? files.map(file => ({
+    //     name: file.originalname,
+    //     path: file.path,
+    //     type: file.mimetype,
+    //     size: file.size
+    //   }))
+    //   : [];
+
+    // let signature_expediteur = null;
+    // if (!signatureFile) {
+    //   console.log('La signature est requise!')
+    //   return res.status(400).json({ message: "Signature requise" });
+    // } else {
+    //   signature_expediteur = signatureFile.path;
+    // }
+
+    // Correction ici : gestion de produitsLivre (string JSON venant de form-data)
+    const produits = typeof produitsLivre === "string"
+      ? JSON.parse(produitsLivre)
+      : produitsLivre;
+
+    const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
+      where: {
+        id_type_livraison: parseInt(type_livraison_id)
+      }
+    });
+
+    if (!typeLivraison) {
+      return res.status(404).json({ message: "Type de livraison non trouvé" });
+    }
+
+    let utilisateur = null;
+    utilisateur = await prisma.users.findUnique({
+      where: {
+        id_user: parseInt(user_id)
+      }
+    });
+    if (!utilisateur) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+    // Gestion de l'upload Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
+      folder: "greenpay/signatures",
+    });
+    const signature_expediteur = uploadResult.secure_url;
+
+    if (!signature_expediteur) {
+      return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
+    }
+
+    const dateAction = new Date(date_livraison)
+
+    const livraison = await prisma.$transaction(async (tx) => {
+
+      const livraisonForm = await tx.forms.create({
+        data: {
+          type: 'livraison_sn',
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          nom_user: utilisateur.fullname,
+          commentaire,
+          is_reg: true,
+        }
+      })
+      const nouvelleLivraison = await tx.livraison.create({
+        data: {
+          statut_livraison: "en_cours",
+          date_livraison: new Date(date_livraison),
+          qte_totale_livraison: produits.length,
+          produitsLivre: JSON.stringify(produits),
+          commentaire,
+          nom_livreur: utilisateur.fullname || null,
+          date_livraison: new Date(dateAction),
+          deleted: false,
+          type_livraison_id: parseInt(type_livraison_id),
+          user_id: utilisateur ? utilisateur.id_user : null,
+          signature_expediteur,
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          model_id: selected_model ? parseInt(selected_model) : null,
+          stock_id: selectedStock ? +selectedStock : null,
+          form_id: livraisonForm.id,
+        }
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: livraisonForm.id,
+          signature_url: signature.path,
+          signed_by: utilisateur.id_user,
+          signed_at: dateAction,
+          role: 'livreur',
+        },
+      })
+
+      return {
+        livraisonForm,
+        nouvelleLivraison,
+      }
+    })
+
+    /******************************** GESTION DES MAILS  ***********************************/
+
+    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
+
+    const service = await prisma.services.findUnique({
+      where: {
+        id: parseInt(service_recepteur)
+      }
+    })
+
+    const userService = await prisma.user_services.findMany({
+      where: {
+        service_id: parseInt(service_recepteur)
+      },
+      include: {
+        users: true
+      }
+    })
+
+    let recepteurs
+    if (role_recepteur) {
+      const userRole = await prisma.user_roles.findMany({
+        where: {
+          role_id: parseInt(role_recepteur)
+        },
+        include: {
+          users: true
+        }
+      })
+      recepteurs = userRole.map(us => us.users)
+    } else {
+      const userRole = await prisma.user_roles.findMany({
+        where: {
+          role_id: 2
+        },
+        include: {
+          users: true
+        }
+      })
+      recepteurs = userRole.map(us => us.users)
+    }
+
+    const supervisionRole = await prisma.user_roles.findMany({
+      where: {
+        role_id: 13
+      },
+      include: {
+        users: true
+      }
+    })
+
+    const service_users = userService.map(us => us.users)
+    const superviseurs = supervisionRole.map(us => us.users)
+
+    let serviceDemandeur = service.nom_service.toUpperCase();
+
+    const url = GENERAL_URL
+    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
+
+    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
+    const subject = `REGULARISATION LIVRAISON (${livraisonTypeName})`;
+    const html = `
+      <p>Bonjour,</p>
+      <p>Une régularisation de livraison a été enregistrée.</p>
+      <ul>
+        <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+        <li><strong>Nombre de produits:</strong> ${produits.length}</li>
+      </ul>
+      <br>
+        <p>Commentaire : ${commentaire_mail}<p>
+      <br>
+      <p>Retrouvez la livraison à ce lien : 
+        <span>
+          <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+            Cliquez ici !
+          </a>
+        </span>
+      </p>
+      <br><br>
+      <p>Green - Pay vous remercie.</p>
+    `;
+
+    if (service_users && service_users.length > 0) {
+      for (const service_user of service_users) {
+        await sendMail({
+          to: service_user.email,
+          subject,
+          html,
+        });
+      }
+    }
+    if (superviseurs && superviseurs.length > 0) {
+      for (const superviseur of superviseurs) {
+        await sendMail({
+          to: superviseur.email,
+          subject,
+          html,
+        });
+      }
+    }
+
+    console.log("Livraison enregistrée avec succès")
+    res.status(201).json({
+      message: "Livraison enregistrée avec succès",
+      data: livraison,
     });
 
   } catch (error) {
@@ -248,7 +825,9 @@ const getAllLivraisons = async (req, res) => {
       where: { deleted: false },
       orderBy: { date_livraison: 'desc' },
       include: {
-        validations: true
+        forms: true,
+        validations: true,
+        type_livraison_commerciale: true
       }
     });
 
@@ -265,6 +844,7 @@ const getOneLivraison = async (req, res) => {
     const livraison = await prisma.livraison.findUnique({
       where: { id_livraison: parseInt(id) },
       include: {
+        forms: true,
         validations: true,
       }
     });
@@ -293,6 +873,7 @@ const updateLivraison = async (req, res) => {
     service_recepteur,
     role_recepteur,
     selected_model,
+    selectedStock,
   } = req.body;
 
   try {
@@ -309,6 +890,7 @@ const updateLivraison = async (req, res) => {
     })
 
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
@@ -319,29 +901,124 @@ const updateLivraison = async (req, res) => {
     });
 
     if (!typeLivraison) {
+      console.error("Type de livraison non trouvé !")
       return res.status(404).json({ message: "Type de livraison non trouvé" });
     }
 
-    // Données à mettre à jour
-    const dataToUpdate = {
-      produitsLivre: typeof produitsLivre === "string" ? produitsLivre : JSON.stringify(produitsLivre),
-      commentaire,
-      statut_livraison: 'en_cours',
-      type_livraison_id: parseInt(type_livraison_id),
-      date_livraison: new Date(),
-      qte_totale_livraison: produits.length,
-      user_id: utilisateur ? utilisateur.id_user : null,
-      nom_livreur: utilisateur.fullname,
-      service_id: parseInt(service_recepteur),
-      role_id: parseInt(role_recepteur),
-      model_id: selected_model ? parseInt(selected_model) : null,
-    };
-
-    // Mise à jour de la livraison
-    const updated = await prisma.livraison.update({
+    const existingLivraison = await prisma.livraison.findUnique({
       where: { id_livraison: parseInt(id) },
-      data: dataToUpdate
     });
+
+    if (!existingLivraison) {
+      console.error("Livraison non trouvée !")
+      return res.status(404).json({ message: "Livraison non trouvée" });
+    }
+
+    if (existingLivraison.statut_livraison === "livre") {
+      console.error("Impossible de modifier une livraison déjà validée !")
+      return res.status(400).json({ message: "Impossible de modifier une livraison déjà validée." });
+    }
+
+    const dateAction = new Date()
+
+    const livraison = await prisma.$transaction(async (tx) => {
+      // Données à mettre à jour
+      const dataToUpdate = {
+        produitsLivre: typeof produitsLivre === "string" ? produitsLivre : JSON.stringify(produitsLivre),
+        commentaire,
+        statut_livraison: 'en_cours',
+        type_livraison_id: parseInt(type_livraison_id),
+        date_livraison: dateAction,
+        qte_totale_livraison: produits.length,
+        user_id: utilisateur ? utilisateur.id_user : null,
+        nom_livreur: utilisateur.fullname,
+        service_id: parseInt(service_recepteur),
+        role_id: parseInt(role_recepteur),
+        model_id: selected_model ? parseInt(selected_model) : null,
+        stock_id: selectedStock ? +selectedStock : null,
+      };
+
+      // Mise à jour de la livraison
+      const updated = await prisma.livraison.update({
+        where: { id_livraison: parseInt(id) },
+        data: dataToUpdate
+      });
+
+      const updatedForm = await tx.forms.update({
+        where: {
+          id: updated.form_id
+        },
+        data: {
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          updated_by: utilisateur.id_user,
+          nom_user: utilisateur.fullname,
+          commentaire,
+        }
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
+      let = allTpes = null
+
+      if (updated.type_livraison_id != 5 && updated.type_livraison_id != 7 && updated.type_livraison_id != 8) {
+        // Récupérer les SN de la liste
+        const serials = produits.map(item => item.serialNumber);
+
+        // 1. Create only missing ones
+        await tx.parc_tpe.createMany({
+          data: serials.map(item => ({
+            serial_number: item,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 6,
+          })),
+          skipDuplicates: true
+        });
+
+        // 2. Update ALL (existing + newly created)
+        await tx.parc_tpe.updateMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          data: {
+            updated_by: utilisateur.id_user,
+            updated_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 6,
+          }
+        });
+
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        allTpes = await tx.parc_tpe.findMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          select: {
+            id: true,
+            serial_number: true
+          }
+        });
+
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await tx.history_tpe.createMany({
+          data: allTpes.map(tpe => ({
+            id_tpe: tpe.id,
+            created_by: utilisateur.id_user,
+            created_at: dateAction,
+            statut_id: 6,
+            form_id: updatedForm.id,
+          }))
+        });
+      }
+
+      return {
+        updated,
+        updatedForm,
+        allTpes,
+      }
+    })
 
 
     /********************************       GESTION DES MAILS       ***********************************/
@@ -402,14 +1079,14 @@ const updateLivraison = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${updated.id_livraison}`;
+    let deliveryLink = `${url}/formulaire/${livraison.updated.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `MODIFICATION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
-        <p>La livraison ${updated.id_livraison} a été modifiée.</p>
+        <p>La livraison ${livraison.updated.id_livraison} a été modifiée.</p>
         <ul>
           <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
@@ -453,7 +1130,10 @@ const updateLivraison = async (req, res) => {
       }
     }
 
-    return res.status(200).json(updated);
+    return res.status(200).json({
+      message: "Livraison effectuée avec succès",
+      data: livraison,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur lors de la mise à jour", error });
@@ -1607,35 +2287,181 @@ const makeRemplacement = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
+    }
+
     // Gestion de l'upload Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
-
     const signature_expediteur = uploadResult.secure_url;
 
     if (!signature_expediteur) {
+      console.error("Vous devez fournir la signature (cloudinary) !")
       return res.status(400).json({ message: "Vous devez fournir une signature d'expéditeur." });
     }
 
-    const nouveauRemplacement = await prisma.remplacements.create({
-      data: {
-        quantite: produits.length,
-        details_remplacement: JSON.stringify(produits),
-        commentaire,
-        date_remplacement: new Date(),
-        user_id: utilisateur ? utilisateur.id_user : null,
-        old_model_id: parseInt(ancien_model),
-        new_model_id: parseInt(nouveau_model),
-        service_id: parseInt(service_recepteur),
-        role_id: role_recepteur ? parseInt(role_recepteur) : null,
-        deleted: false,
-        nom_livreur: utilisateur.fullname || null,
-        signature_expediteur: signature_expediteur || null,
-        details_parametrage: JSON.stringify(detailsParams),
-        statut: "en_cours",
+    const dateAction = new Date()
+
+    const remplacement = await prisma.$transaction(async (tx) => {
+      const remplacementForm = await tx.forms.create({
+        data: {
+          type: 'remplacement_sn',
+          created_at: dateAction,
+          created_by: utilisateur.id_user,
+          last_modified_at: dateAction,
+          nom_user: utilisateur.fullname,
+          commentaire,
+        }
+      })
+      const nouveauRemplacement = await tx.remplacements.create({
+        data: {
+          quantite: produits.length,
+          details_remplacement: JSON.stringify(produits),
+          commentaire,
+          date_remplacement: dateAction,
+          user_id: utilisateur ? utilisateur.id_user : null,
+          old_model_id: parseInt(ancien_model),
+          new_model_id: parseInt(nouveau_model),
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          deleted: false,
+          nom_livreur: utilisateur.fullname || null,
+          signature_expediteur: signature_expediteur || null,
+          details_parametrage: JSON.stringify(detailsParams),
+          statut: "en_cours",
+          form_id: remplacementForm.id,
+        }
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: remplacementForm.id,
+          signature_url: signature.path,
+          signed_by: utilisateur.id_user,
+          signed_at: dateAction,
+          role: 'livreur',
+        },
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
+      let allTpes = null
+      let allOldTpes = null
+
+      // Récupérer les SN de la liste
+      const serials = produits.map(item => item.nouvelSN);
+      const oldSerials = produits.map(item => item.ancienSN);
+
+      /**NOUVEAU TPE**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: serials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 7,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+
+      /**ANCIEN SN**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: oldSerials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allOldTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allOldTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 3,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+      return {
+        remplacementForm,
+        nouveauRemplacement,
+        allTpes,
+        allOldTpes,
       }
-    });
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -1695,7 +2521,7 @@ const makeRemplacement = async (req, res) => {
     const superviseurs = supervisionRole.map(us => us.users)
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${nouveauRemplacement.id}`;
+    let deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
 
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
@@ -1750,7 +2576,7 @@ const makeRemplacement = async (req, res) => {
 
     res.status(201).json({
       message: "Remplacement enregistré avec succès",
-      remplacements: nouveauRemplacement
+      data: remplacement,
     });
 
   } catch (error) {
@@ -1808,46 +2634,85 @@ const validateRemplacement = async (req, res) => {
       where: { id: parseInt(remplacement_id) },
     });
 
-    if (!remplacement) return res.status(404).json({ message: "Remplacement introuvable." });
+    if (!remplacement) {
+      console.error("Remplacement non trouvé !")
+      return res.status(404).json({ message: "Remplacement introuvable." });
+    }
 
     if (remplacement.statut_livraison === "livre") {
+      console.error("Remplacement déjà validé !")
       return res.status(400).json({ message: "Remplacement déjà validée." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "Signature du récepteur requise." });
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      console.error('Signature manquante !')
+      return res.status(404).json({ message: "Signature introuvable !" });
     }
 
-    const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
       folder: "greenpay/signatures",
     });
-    const signature = uploadResult.secure_url;
+    const signatureCloud = uploadResult.secure_url;
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+    if (!user_id) {
+      console.error("Utilisateur non authentifié !")
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
 
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
     });
 
     if (!user) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const newValidation = await prisma.validation_remplacement.create({
-      data: {
-        remplacement_id: parseInt(remplacement_id),
-        date_validation: new Date(),
-        user_id: user_id ? parseInt(user_id) : null,
-        commentaire,
-        nom_recepteur: user.fullname,
-        signature,
-      },
-    });
+    const dateAction = new Date()
 
-    await prisma.remplacements.update({
-      where: { id: parseInt(remplacement_id) },
-      data: { statut: "livre" },
-    });
+    const validationRemplacement = await prisma.$transaction(async (tx) => {
+      const validationForm = await tx.forms.create({
+        data: {
+          type: 'reception_remplacement',
+          created_at: dateAction,
+          created_by: user.id_user,
+          last_modified_at: dateAction,
+        },
+      });
+      const newValidation = await tx.validation_remplacement.create({
+        data: {
+          remplacement_id: parseInt(remplacement_id),
+          date_validation: dateAction,
+          user_id: user_id ? parseInt(user_id) : null,
+          commentaire,
+          nom_recepteur: user.fullname,
+          signature: signatureCloud,
+          form_id: validationForm.id,
+        },
+      });
+
+      await tx.remplacements.update({
+        where: { id: parseInt(remplacement_id) },
+        data: { statut: "livre" },
+      });
+
+      await tx.form_signatures.create({
+        data: {
+          form_id: validationForm.id,
+          signature_url: signature.path,
+          signed_by: user.id_user,
+          signed_at: dateAction,
+          role: 'receveur',
+        },
+      })
+
+      return {
+        validationForm,
+        newValidation,
+      }
+
+    })
 
     /******************************* GESTION DES MAILS  *******************************/
 
@@ -1935,7 +2800,11 @@ const validateRemplacement = async (req, res) => {
       }
     }
 
-    return res.status(201).json(newValidation);
+    console.log("Remplacement validé avec succès !")
+    return res.status(201).json({
+      message: "Remplacement validé avec succès.",
+      data: validationRemplacement,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
@@ -2408,30 +3277,181 @@ const updateRemplacement = async (req, res) => {
       : detailsParametrage;
 
     if (!utilisateur) {
+      console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    const dataToUpdate = {
-      quantite: produits.length,
-      details_remplacement: JSON.stringify(produits),
-      commentaire,
-      date_remplacement: new Date(),
-      user_id: utilisateur ? utilisateur.id_user : null,
-      old_model_id: parseInt(ancien_model),
-      new_model_id: parseInt(nouveau_model),
-      service_id: parseInt(service_recepteur),
-      role_id: role_recepteur ? parseInt(role_recepteur) : null,
-      deleted: false,
-      nom_livreur: utilisateur.fullname || null,
-      details_parametrage: JSON.stringify(detailsParams),
-      statut: "en_cours",
-    }
-    const nouveauRemplacement = await prisma.remplacements.update({
+    const remplacement = await prisma.remplacements.findUnique({
       where: {
         id: parseInt(id)
-      },
-      data: dataToUpdate,
+      }
     });
+
+    if (!remplacement) {
+      console.error("Remplacement non trouvé !")
+      return res.status(404).json({ message: "Remplacement introuvable." });
+    }
+
+    if (remplacement.statut === "livre") {
+      console.error("Remplacement déjà validé !")
+      return res.status(400).json({ message: "Remplacement déjà validée." });
+    }
+
+    const dateAction = new Date();
+
+    const newRemplacement = await prisma.$transaction(async (tx) => {
+
+      const remplacementForm = await tx.forms.update({
+        where: {
+          id: remplacement.form_id
+        },
+        data: {
+          last_modified_at: dateAction,
+          updated_at: dateAction,
+          updated_by: utilisateur.id_user,
+          commentaire,
+          nom_user: utilisateur.fullname,
+        }
+      })
+
+      const nouveauRemplacement = await tx.remplacements.update({
+        where: {
+          id: parseInt(id)
+        },
+        data: {
+          quantite: produits.length,
+          details_remplacement: JSON.stringify(produits),
+          commentaire,
+          date_remplacement: dateAction,
+          user_id: utilisateur ? utilisateur.id_user : null,
+          old_model_id: parseInt(ancien_model),
+          new_model_id: parseInt(nouveau_model),
+          service_id: parseInt(service_recepteur),
+          role_id: role_recepteur ? parseInt(role_recepteur) : null,
+          deleted: false,
+          nom_livreur: utilisateur.fullname || null,
+          details_parametrage: JSON.stringify(detailsParams),
+          statut: "en_cours",
+          form_id: remplacementForm.id,
+        },
+
+      })
+
+      /*******************     GESTION PARC TPE     *******************/
+
+      let allTpes = null
+      let allOldTpes = null
+
+      // Récupérer les SN de la liste
+      const serials = produits.map(item => item.nouvelSN);
+      const oldSerials = produits.map(item => item.ancienSN);
+
+      /**NOUVEAU TPE**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: serials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 7,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: serials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 7,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+      /**ANCIEN SN**/
+
+      // 1. Create only missing ones
+      await tx.parc_tpe.createMany({
+        data: oldSerials.map(item => ({
+          serial_number: item,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        })),
+        skipDuplicates: true
+      });
+
+      // 2. Update ALL (existing + newly created)
+      await tx.parc_tpe.updateMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        data: {
+          updated_by: utilisateur.id_user,
+          updated_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 3,
+        }
+      });
+
+      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      allOldTpes = await tx.parc_tpe.findMany({
+        where: {
+          serial_number: { in: oldSerials }
+        },
+        select: {
+          id: true,
+          serial_number: true
+        }
+      });
+
+      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      await tx.history_tpe.createMany({
+        data: allOldTpes.map(tpe => ({
+          id_tpe: tpe.id,
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          statut_id: 3,
+          form_id: remplacementForm.id,
+        }))
+      });
+
+      return {
+        remplacementForm,
+        nouveauRemplacement,
+        allTpes,
+        allOldTpes,
+      }
+
+    })
 
     /******************************** GESTION DES MAILS  ***********************************/
 
@@ -2491,7 +3511,7 @@ const updateRemplacement = async (req, res) => {
     const superviseurs = supervisionRole.map(us => us.users)
 
     const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${nouveauRemplacement.id}`;
+    let deliveryLink = `${url}/remplacement-details/${newRemplacement.nouveauRemplacement.id}`;
 
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
@@ -2499,7 +3519,7 @@ const updateRemplacement = async (req, res) => {
       const subject = `MODIFICATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
-        <p>Le formulaire de remplacement ${nouveauRemplacement.id} a été modifié.</p>
+        <p>Le formulaire de remplacement ${newRemplacement.nouveauRemplacement.id} a été modifié.</p>
         <ul>
           <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
           <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
@@ -2544,9 +3564,10 @@ const updateRemplacement = async (req, res) => {
       }
     }
 
+    console.log("Remplacement modifié avec succès")
     res.status(201).json({
       message: "Remplacement modifié avec succès",
-      remplacements: nouveauRemplacement
+      data: newRemplacement,
     });
 
   } catch (error) {
@@ -2809,10 +3830,100 @@ const generateRemplacementPDF = async (req, res) => {
     return res.status(500).json({ message: "Erreur lors de la génération du PDF" });
   }
 };
+// Récupérer les livraisons d’une semaine
+const getLivraisonsByWeek = async (req, res) => {
+  try {
+    const { week, year } = req.query;
+
+    const startDate = startOfWeek(new Date(year, 0, 1), { weekStartsOn: 1 });
+    startDate.setDate(startDate.getDate() + (week - 1) * 7);
+
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        date_livraison: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+    });
+
+    res.json(livraisons);
+  } catch (error) {
+    res.status(500).json({ message: "Erreur serveur", error });
+  }
+};
+
+// Récupérer les statistiques globales des livraisons (en attente, livrées, retours)
+
+const getLivraisonsInRange = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        date_livraison: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      include: {
+        type_livraison_commerciale: true,
+      },
+      orderBy: {
+        date_livraison: 'desc',
+      },
+    });
+
+    res.json(livraisons);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+// Cartes statistiques des livraisons
+const getStatsLivraisons = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const start = startDate ? new Date(startDate) : new Date('2020-01-01');
+    const end = endDate ? new Date(endDate) : new Date();
+
+    const livraisons = await prisma.livraison.findMany({
+      where: {
+        deleted: false,
+        date_livraison: {
+          gte: start,
+          lte: end
+        }
+      }
+    });
+
+    const stats = {
+      attente: livraisons.filter(l => l.statut_livraison === 'en_cours' || l.statut_livraison === 'en_attente').length,
+      livrees: livraisons.filter(l => l.statut_livraison === 'livre').length,
+      returns: livraisons.filter(l => l.statut_livraison === 'retour').length,
+      total: livraisons.length
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Erreur stats:', error);
+    res.status(500).json({ message: 'Erreur serveur stats', error: error.message });
+  } finally {
+    await prisma.$disconnect();
+  }
+
+
+}
 
 
 module.exports = {
   deliver,
+  regLivraison,
+  regReception,
   getAllLivraisons,
   getOneLivraison,
   updateLivraison,
@@ -2840,4 +3951,7 @@ module.exports = {
   updateRemplacement,
   returnRemplacement,
   generateRemplacementPDF,
+  getLivraisonsByWeek,
+  getLivraisonsInRange,
+  getStatsLivraisons,
 }

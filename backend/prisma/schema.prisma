@@ -22,9 +22,9 @@ model Livraisons {
   service_id              Int?
   date_livraison          DateTime                    @default(now()) @db.DateTime(0)
   autres_champs_livraison String?                     @db.LongText
-  roles                   roles?                      @relation(fields: [role_id], references: [id_role], map: "Livraisons_ibfk_1")
-  services                services?                   @relation(fields: [service_id], references: [id], map: "Livraisons_ibfk_2")
-  livraison_piece         livraison_piece?
+  roles                   roles?                      @relation(fields: [role_id], references: [id_role], onDelete: Restrict, map: "Livraisons_ibfk_1")
+  services                services?                   @relation(fields: [service_id], references: [id], onDelete: Restrict, map: "Livraisons_ibfk_2")
+  users                   users                       @relation(fields: [user_id], references: [id_user], map: "Livraisons_ibfk_4")
   reception_livraison     reception_livraison[]
 
   @@index([role_id], map: "role_id")
@@ -36,10 +36,10 @@ model demandes {
   id                                 Int                     @id @default(autoincrement())
   nom_demandeur                      String?                 @db.VarChar(255)
   date_demande                       DateTime                @db.DateTime(0)
-  commentaire                        String?                 @db.VarChar(255)
-  qte_total_demande                  Int?
+  commentaire                        String?                 @db.Text
+  qte_total_demande                  Int
   nomenclature                       String?                 @db.VarChar(255)
-  details_demande                    String                  @db.LongText
+  details_demande                    String?                 @db.LongText
   details_demandeur                  String?                 @db.LongText
   statut_demande                     demandes_statut_demande
   user_id                            Int?
@@ -47,52 +47,53 @@ model demandes {
   item_id                            Int?
   type_demande                       Int?
   role_id_recepteur                  Int?
-  demande_livree                     Boolean?                @default(false)
+  demande_livree                     Boolean                 @default(false)
   demande_recue                      Boolean                 @default(false)
   id_demandeur                       Int?
   motif_demande                      String?                 @db.VarChar(255)
   service_demandeur                  Int?
   champs_autre                       String?                 @db.LongText
   files                              String?                 @db.LongText
-  is_deleted                         Int                     @default(0) @db.TinyInt
+  is_deleted                         Boolean                 @default(false)
+  form_id                            Int?
   type_mouvement_stock               type_mouvement_stock?   @relation(fields: [type_demande], references: [id], onDelete: Restrict, map: "demandes_ibfk_10")
-  users_demandes_user_idTousers      users?                  @relation("demandes_user_idTousers", fields: [user_id], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "demandes_ibfk_2")
-  roles                              roles?                  @relation(fields: [role_id_recepteur], references: [id_role], onDelete: Restrict, onUpdate: Restrict, map: "demandes_ibfk_3")
-  items                              items?                  @relation(fields: [item_id], references: [id_piece], onDelete: Restrict, onUpdate: Restrict, map: "demandes_ibfk_6")
-  users_demandes_id_demandeurTousers users?                  @relation("demandes_id_demandeurTousers", fields: [id_demandeur], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "demandes_ibfk_7")
-  services                           services?               @relation(fields: [service_demandeur], references: [id], onDelete: NoAction, map: "demandes_ibfk_8")
-  stocks                             stocks?                 @relation(fields: [stock_id], references: [id], onDelete: NoAction, map: "demandes_ibfk_9")
+  users_demandes_user_idTousers      users?                  @relation("demandes_user_idTousers", fields: [user_id], references: [id_user], onDelete: Restrict, map: "demandes_ibfk_2")
+  roles                              roles?                  @relation(fields: [role_id_recepteur], references: [id_role], map: "demandes_ibfk_3")
+  forms                              forms?                  @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "demandes_ibfk_4")
+  items                              items?                  @relation(fields: [item_id], references: [id_piece], onDelete: Cascade, map: "demandes_ibfk_6")
+  users_demandes_id_demandeurTousers users?                  @relation("demandes_id_demandeurTousers", fields: [id_demandeur], references: [id_user], map: "demandes_ibfk_7")
+  services                           services?               @relation(fields: [service_demandeur], references: [id], map: "demandes_ibfk_8")
+  stocks                             stocks?                 @relation(fields: [stock_id], references: [id], onDelete: Cascade, map: "demandes_ibfk_9")
   fichiers                           fichiers[]
-  livraison_piece                    livraison_piece?
   mouvement_stock                    mouvement_stock[]
   reception_piece                    reception_piece[]
   validation_demande                 validation_demande[]
+  livraison_piece                    livraison_piece[]
 
   @@index([id_demandeur], map: "id_demandeur")
   @@index([role_id_recepteur], map: "role_id_recepteur")
   @@index([service_demandeur], map: "service_demandeur")
-  @@index([item_id], map: "type_demande_id")
   @@index([user_id], map: "user_id")
   @@index([stock_id], map: "stock_id")
   @@index([type_demande], map: "type_demande")
+  @@index([item_id], map: "item_id")
+  @@index([form_id], map: "form_id")
 }
 
 model items {
   id_piece        Int               @id @default(autoincrement())
   nom_piece       String            @db.VarChar(255)
   type            items_type?
-  created_at      DateTime?         @default(now()) @db.DateTime(0)
+  created_at      DateTime?         @db.DateTime(0)
   created_by      String?           @db.VarChar(255)
   user_id         Int?
   is_deleted      Boolean           @default(false)
   demandes        demandes[]
-  users           users?            @relation(fields: [user_id], references: [id_user], onUpdate: NoAction, map: "items_ibfk_3")
+  users           users?            @relation(fields: [user_id], references: [id_user], onDelete: Restrict, map: "items_ibfk_3")
   items_models    items_models[]
   items_services  items_services[]
-  livraison_piece livraison_piece[]
   mouvement_stock mouvement_stock[]
   reception_piece reception_piece[]
-  serial_numbers  serial_numbers[]
   stock_carton    stock_carton[]
   stock_lot       stock_lot[]
   stock_piece     stock_piece[]
@@ -108,6 +109,7 @@ model items_models {
   model_piece model_piece @relation(fields: [model_id], references: [id_model], onDelete: Cascade, map: "items_models_ibfk_2")
 
   @@id([item_id, model_id])
+  @@index([model_id], map: "model_id")
 }
 
 model items_services {
@@ -117,6 +119,7 @@ model items_services {
   services   services @relation(fields: [service_id], references: [id], onDelete: Cascade, map: "items_services_ibfk_2")
 
   @@id([item_id, service_id])
+  @@index([service_id], map: "service_id")
 }
 
 model livraison {
@@ -124,7 +127,7 @@ model livraison {
   statut_livraison           livraison_statut_livraison  @default(en_cours)
   qte_totale_livraison       Int
   produitsLivre              String                      @db.LongText
-  commentaire                String?                     @db.VarChar(255)
+  commentaire                String?                     @db.LongText
   date_livraison             DateTime                    @db.DateTime(0)
   deleted                    Boolean                     @default(false)
   date_deleted               DateTime?                   @db.DateTime(0)
@@ -136,15 +139,18 @@ model livraison {
   role_id                    Int?
   model_id                   Int?
   stock_id                   Int?
+  form_id                    Int?
   fichiers                   fichiers[]
   users                      users?                      @relation(fields: [user_id], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "livraison_ibfk_1")
   type_livraison_commerciale type_livraison_commerciale? @relation(fields: [type_livraison_id], references: [id_type_livraison], onDelete: Restrict, onUpdate: Restrict, map: "livraison_ibfk_2")
-  services                   services?                   @relation(fields: [service_id], references: [id], onDelete: NoAction, map: "livraison_ibfk_3")
-  roles                      roles?                      @relation(fields: [role_id], references: [id_role], onDelete: NoAction, map: "livraison_ibfk_4")
+  services                   services?                   @relation(fields: [service_id], references: [id], onDelete: Restrict, map: "livraison_ibfk_3")
+  roles                      roles?                      @relation(fields: [role_id], references: [id_role], onDelete: Restrict, map: "livraison_ibfk_4")
   model_piece                model_piece?                @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "livraison_ibfk_5")
   stocks                     stocks?                     @relation(fields: [stock_id], references: [id], map: "livraison_ibfk_6")
+  forms                      forms?                      @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "livraison_ibfk_7")
   mouvement_stock            mouvement_stock[]
   validations                validations[]
+  sn_livraison               sn_livraison[]
 
   @@index([model_id], map: "model_id")
   @@index([role_id], map: "role_id")
@@ -152,18 +158,42 @@ model livraison {
   @@index([type_livraison_id], map: "type_livraison_id")
   @@index([user_id], map: "user_id")
   @@index([stock_id], map: "stock_id")
+  @@index([form_id], map: "form_id")
+}
+
+model sn_livraison {
+  id               Int       @id @default(autoincrement())
+  serial_number    String    @db.VarChar(255)
+  point_marchand   String?   @db.VarChar(255)
+  caisse           String?   @db.VarChar(255)
+  mobile_money     String?   @db.VarChar(255)
+  banque           String?   @db.VarChar(255)
+  commentaire      String?   @db.VarChar(255)
+  created_at       DateTime  @default(now()) @db.DateTime(0)
+  is_deleted       Boolean   @default(false)
+  livraison_id     Int
+  updated_at       DateTime? @db.DateTime(0)
+  last_modified_at DateTime  @default(now()) @db.DateTime(0)
+  livraison        livraison @relation(fields: [livraison_id], references: [id_livraison], onDelete: Restrict, map: "sn_livraison_ibfk_1")
+
+  @@index([serial_number], map: "serial_number")
+  @@index([livraison_id], map: "livraison_id")
 }
 
 model livraison_piece {
-  id              Int        @id @default(autoincrement())
-  piece_id        Int
-  produits_livres String?    @db.LongText
-  demande_id      Int?       @unique(map: "demande_id")
-  Livraisons      Livraisons @relation(fields: [id], references: [id], onDelete: Cascade, map: "livraison_piece_ibfk_1")
-  items           items      @relation(fields: [piece_id], references: [id_piece], onDelete: NoAction, map: "livraison_piece_ibfk_2")
-  demandes        demandes?  @relation(fields: [demande_id], references: [id], onDelete: Cascade, map: "livraison_piece_ibfk_3")
+  id                Int       @id @default(autoincrement())
+  demande_id        Int?
+  details_demande   String?   @db.LongText
+  details_demandeur String?   @db.LongText
+  form_id           Int?
+  stock_id          Int?
+  forms             forms?    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_3")
+  stocks            stocks?   @relation(fields: [stock_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_4")
+  demandes          demandes? @relation(fields: [demande_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_5")
 
-  @@index([piece_id], map: "piece_id")
+  @@index([stock_id], map: "stock_id")
+  @@index([form_id], map: "form_id")
+  @@index([demande_id], map: "demande_id")
 }
 
 model model_piece {
@@ -202,13 +232,13 @@ model mouvement_stock {
   motif                                                  String?               @db.Text
   commentaire                                            String?               @db.LongText
   details_mouvement                                      String?               @db.LongText
-  services_mouvement_stock_service_origineToservices     services?             @relation("mouvement_stock_service_origineToservices", fields: [service_origine], references: [id], onDelete: NoAction, map: "mouvement_stock_ibfk_1")
-  services_mouvement_stock_service_destinationToservices services?             @relation("mouvement_stock_service_destinationToservices", fields: [service_destination], references: [id], onDelete: NoAction, map: "mouvement_stock_ibfk_2")
-  demandes                                               demandes?             @relation(fields: [demande_id], references: [id], onDelete: Restrict, map: "mouvement_stock_ibfk_3")
-  livraison                                              livraison?            @relation(fields: [formulaire_id], references: [id_livraison], onDelete: Restrict, map: "mouvement_stock_ibfk_4")
-  items                                                  items                 @relation(fields: [piece_id], references: [id_piece], onDelete: NoAction, map: "mouvement_stock_ibfk_5")
+  services_mouvement_stock_service_origineToservices     services?             @relation("mouvement_stock_service_origineToservices", fields: [service_origine], references: [id], map: "mouvement_stock_ibfk_1")
+  services_mouvement_stock_service_destinationToservices services?             @relation("mouvement_stock_service_destinationToservices", fields: [service_destination], references: [id], map: "mouvement_stock_ibfk_2")
+  demandes                                               demandes?             @relation(fields: [demande_id], references: [id], map: "mouvement_stock_ibfk_3")
+  livraison                                              livraison?            @relation(fields: [formulaire_id], references: [id_livraison], map: "mouvement_stock_ibfk_4")
+  items                                                  items                 @relation(fields: [piece_id], references: [id_piece], onDelete: Cascade, map: "mouvement_stock_ibfk_5")
   model_piece                                            model_piece           @relation(fields: [model_id], references: [id_model], onDelete: Cascade, map: "mouvement_stock_ibfk_6")
-  type_mouvement_stock                                   type_mouvement_stock? @relation(fields: [mouvement], references: [id], map: "mouvement_stock_ibfk_7")
+  type_mouvement_stock                                   type_mouvement_stock? @relation(fields: [mouvement], references: [id], onDelete: Restrict, map: "mouvement_stock_ibfk_7")
   stocks                                                 stocks?               @relation(fields: [stock_id], references: [id], map: "mouvement_stock_ibfk_8")
 
   @@index([demande_id], map: "demande_id")
@@ -227,11 +257,11 @@ model reception_livraison {
   date_reception        DateTime                             @default(now()) @db.DateTime(0)
   user_id               Int
   nom_recepteur         String?                              @db.VarChar(255)
-  commentaire_reception String                               @db.VarChar(255)
+  commentaire_reception String?                              @db.LongText
   signature_recepteur   String?                              @db.VarChar(255)
   statut_reception      reception_livraison_statut_reception
-  Livraisons            Livraisons                           @relation(fields: [livraison_id], references: [id], onDelete: Cascade, map: "reception_livraison_ibfk_1")
-  users                 users                                @relation(fields: [user_id], references: [id_user], onDelete: NoAction, map: "reception_livraison_ibfk_2")
+  Livraisons            Livraisons                           @relation(fields: [livraison_id], references: [id], map: "reception_livraison_ibfk_1")
+  users                 users                                @relation(fields: [user_id], references: [id_user], map: "reception_livraison_ibfk_2")
 
   @@index([livraison_id], map: "livraison_id")
   @@index([user_id], map: "user_id")
@@ -253,12 +283,14 @@ model remplacements {
   signature_expediteur                                String?                   @db.VarChar(255)
   details_parametrage                                 String?                   @db.LongText
   statut                                              remplacements_statut
+  form_id                                             Int?
   fichiers                                            fichiers[]
-  users                                               users                     @relation(fields: [user_id], references: [id_user], onDelete: NoAction, map: "remplacements_ibfk_1")
-  model_piece_remplacements_old_model_idTomodel_piece model_piece               @relation("remplacements_old_model_idTomodel_piece", fields: [old_model_id], references: [id_model], onDelete: NoAction, map: "remplacements_ibfk_2")
-  model_piece_remplacements_new_model_idTomodel_piece model_piece               @relation("remplacements_new_model_idTomodel_piece", fields: [new_model_id], references: [id_model], onDelete: NoAction, map: "remplacements_ibfk_3")
-  services                                            services                  @relation(fields: [service_id], references: [id], onDelete: NoAction, map: "remplacements_ibfk_4")
-  roles                                               roles                     @relation(fields: [role_id], references: [id_role], onDelete: NoAction, map: "remplacements_ibfk_5")
+  users                                               users                     @relation(fields: [user_id], references: [id_user], map: "remplacements_ibfk_1")
+  model_piece_remplacements_old_model_idTomodel_piece model_piece               @relation("remplacements_old_model_idTomodel_piece", fields: [old_model_id], references: [id_model], map: "remplacements_ibfk_2")
+  model_piece_remplacements_new_model_idTomodel_piece model_piece               @relation("remplacements_new_model_idTomodel_piece", fields: [new_model_id], references: [id_model], map: "remplacements_ibfk_3")
+  services                                            services                  @relation(fields: [service_id], references: [id], map: "remplacements_ibfk_4")
+  roles                                               roles                     @relation(fields: [role_id], references: [id_role], map: "remplacements_ibfk_5")
+  forms                                               forms?                    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "remplacements_ibfk_6")
   validation_remplacement                             validation_remplacement[]
 
   @@index([new_model_id], map: "new_model_id")
@@ -266,6 +298,7 @@ model remplacements {
   @@index([role_id], map: "role_id")
   @@index([service_id], map: "service_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model roles {
@@ -277,8 +310,6 @@ model roles {
   livraison     livraison[]
   remplacements remplacements[]
   user_roles    user_roles[]
-
-  @@index([nom_role], map: "nom_role")
 }
 
 model services {
@@ -320,7 +351,6 @@ model stock_carton {
   model_piece           model_piece      @relation(fields: [model_id], references: [id_model], onDelete: Cascade, map: "stock_carton_ibfk_4")
   stocks                stocks?          @relation(fields: [stock_id], references: [id], onDelete: Cascade, map: "stock_carton_ibfk_5")
 
-  @@index([lot_id], map: "lot")
   @@index([lot_id], map: "lot_id")
   @@index([model_id], map: "model_id")
   @@index([piece_id], map: "piece_id")
@@ -380,7 +410,7 @@ model type_livraison_commerciale {
   user_id            Int?
   is_deleted         Boolean     @default(false)
   livraison          livraison[]
-  users              users?      @relation(fields: [user_id], references: [id_user], onDelete: NoAction, map: "type_livraison_commerciale_ibfk_1")
+  users              users?      @relation(fields: [user_id], references: [id_user], onDelete: Restrict, map: "type_livraison_commerciale_ibfk_1")
 
   @@index([user_id], map: "user_id")
 }
@@ -401,19 +431,21 @@ model type_parametrage {
 model user_roles {
   user_id Int
   role_id Int
-  users   users @relation(fields: [user_id], references: [id_user], onDelete: Cascade, map: "user_roles_ibfk_3")
-  roles   roles @relation(fields: [role_id], references: [id_role], onDelete: Cascade, map: "user_roles_ibfk_4")
+  users   users @relation(fields: [user_id], references: [id_user], map: "user_roles_ibfk_3")
+  roles   roles @relation(fields: [role_id], references: [id_role], map: "user_roles_ibfk_4")
 
   @@id([user_id, role_id])
+  @@index([role_id], map: "role_id")
 }
 
 model user_services {
   user_id    Int
   service_id Int
-  services   services @relation(fields: [service_id], references: [id], onDelete: Cascade, map: "user_services_ibfk_1")
-  users      users    @relation(fields: [user_id], references: [id_user], onDelete: Cascade, map: "user_services_ibfk_2")
+  services   services @relation(fields: [service_id], references: [id], map: "user_services_ibfk_1")
+  users      users    @relation(fields: [user_id], references: [id_user], map: "user_services_ibfk_2")
 
   @@id([user_id, service_id])
+  @@index([service_id], map: "service_id")
 }
 
 model users {
@@ -424,8 +456,9 @@ model users {
   email                                 String?                      @db.VarChar(255)
   reset_token                           String?                      @db.VarChar(255)
   reset_expires                         DateTime?                    @db.DateTime(0)
-  created_at                            DateTime?                    @default(now()) @db.Date
-  is_deleted                            Boolean                      @default(false)
+  created_at                            DateTime?                    @default(now()) @db.DateTime(0)
+  is_deleted                            Int?                         @default(0) @db.TinyInt
+  Livraisons                            Livraisons[]
   demandes_demandes_user_idTousers      demandes[]                   @relation("demandes_user_idTousers")
   demandes_demandes_id_demandeurTousers demandes[]                   @relation("demandes_id_demandeurTousers")
   fichiers                              fichiers[]
@@ -446,26 +479,33 @@ model users {
   validation_demande                    validation_demande[]
   validation_remplacement               validation_remplacement[]
   validations                           validations[]
+  stockOwner                            stocks[]
+  tpe_created                           parc_tpe[]                   @relation("tpe_created_by_user")
+  tpe_updated                           parc_tpe[]                   @relation("tpe_updated_by_user")
+  history_tpe                           history_tpe[]
 }
 
 model validation_demande {
   id_validation_demande     Int                                          @id @default(autoincrement())
   nom_validateur            String?                                      @db.VarChar(255)
   date_validation_demande   DateTime                                     @db.DateTime(0)
-  commentaire               String?                                      @db.VarChar(255)
+  commentaire               String?                                      @db.LongText
   signature                 String?                                      @db.VarChar(255)
   statut_validation_demande validation_demande_statut_validation_demande
   id_user                   Int?
   id_demande                Int
   quantite_validee          Int?
   stock_id                  Int?
-  demandes                  demandes                                     @relation(fields: [id_demande], references: [id], onUpdate: Restrict, map: "validation_demande_ibfk_1")
+  form_id                   Int?
+  demandes                  demandes                                     @relation(fields: [id_demande], references: [id], onDelete: Cascade, map: "validation_demande_ibfk_1")
   users                     users?                                       @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "validation_demande_ibfk_2")
   stocks                    stocks?                                      @relation(fields: [stock_id], references: [id], map: "validation_demande_ibfk_3")
+  forms                     forms?                                       @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validation_demande_ibfk_4")
 
   @@index([id_demande], map: "id_demande")
   @@index([id_user], map: "id_user")
   @@index([stock_id], map: "stock_id")
+  @@index([form_id], map: "form_id")
 }
 
 model validation_remplacement {
@@ -476,11 +516,14 @@ model validation_remplacement {
   commentaire     String?       @db.LongText
   nom_recepteur   String?       @db.VarChar(255)
   signature       String?       @db.VarChar(255)
+  form_id         Int?
+  forms           forms?        @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validation_remplacement_ibfk_2")
   users           users         @relation(fields: [user_id], references: [id_user], map: "validation_remplacement_ibfk_3")
-  remplacements   remplacements @relation(fields: [remplacement_id], references: [id], onDelete: NoAction, map: "validation_remplacement_ibfk_4")
+  remplacements   remplacements @relation(fields: [remplacement_id], references: [id], map: "validation_remplacement_ibfk_4")
 
   @@index([remplacement_id], map: "remplacement_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model validations {
@@ -488,15 +531,18 @@ model validations {
   livraison_id    Int
   date_validation DateTime                    @default(now()) @db.DateTime(0)
   etat_validation validations_etat_validation @default(valide)
-  commentaire     String?                     @db.VarChar(255)
+  commentaire     String?                     @db.LongText
   user_id         Int?
   nom_recepteur   String?                     @db.VarChar(255)
   signature       String?                     @db.VarChar(255)
+  form_id         Int?
   livraison       livraison                   @relation(fields: [livraison_id], references: [id_livraison], onUpdate: Restrict, map: "validations_ibfk_1")
   users           users?                      @relation(fields: [user_id], references: [id_user], onDelete: Restrict, onUpdate: Restrict, map: "validations_ibfk_2")
+  forms           forms?                      @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "validations_ibfk_3")
 
   @@index([livraison_id], map: "livraison_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model stocks {
@@ -512,9 +558,11 @@ model stocks {
   created_by                     Int?
   last_update                    DateTime             @default(now()) @db.DateTime(0)
   updated_by                     Int?
+  owner                          Int?
   is_deleted                     Boolean              @default(false)
   demandes                       demandes[]
   livraison                      livraison[]
+  livraison_piece                livraison_piece[]
   mouvement_stock                mouvement_stock[]
   serial_numbers                 serial_numbers[]
   stock_carton                   stock_carton[]
@@ -524,13 +572,16 @@ model stocks {
   services                       services             @relation(fields: [service_id], references: [id], onDelete: Cascade, map: "stocks_ibfk_3")
   users_stocks_created_byTousers users?               @relation("stocks_created_byTousers", fields: [created_by], references: [id_user], map: "stocks_ibfk_4")
   users_stocks_updated_byTousers users?               @relation("stocks_updated_byTousers", fields: [updated_by], references: [id_user], map: "stocks_ibfk_5")
+  stockOwner                     users?               @relation(fields: [owner], references: [id_user], map: "stocks_ibfk_6")
   validation_demande             validation_demande[]
+  history_tpe                    history_tpe[]
 
   @@index([created_by], map: "created_by")
   @@index([model_id], map: "model_id")
   @@index([piece_id], map: "piece_id")
   @@index([service_id], map: "service_id")
   @@index([updated_by], map: "updated_by")
+  @@index([owner], map: "owner")
 }
 
 model reception_piece {
@@ -538,17 +589,20 @@ model reception_piece {
   item_id             Int
   user_id             Int
   demande_id          Int?
-  date                DateTime  @default(now()) @db.DateTime(0)
   signature_recepteur String?   @db.VarChar(255)
   nom_recepteur       String?   @db.VarChar(255)
   commentaire         String?   @db.LongText
+  form_id             Int?
+  created_at          DateTime  @default(now()) @db.DateTime(0)
   items               items     @relation(fields: [item_id], references: [id_piece], onDelete: Cascade, map: "reception_piece_ibfk_1")
   users               users     @relation(fields: [user_id], references: [id_user], onDelete: Cascade, map: "reception_piece_ibfk_2")
   demandes            demandes? @relation(fields: [demande_id], references: [id], onDelete: Cascade, map: "reception_piece_ibfk_3")
+  forms               forms?    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_piece_ibfk_4")
 
   @@index([demande_id], map: "demande_id")
   @@index([item_id], map: "item_id")
   @@index([user_id], map: "user_id")
+  @@index([form_id], map: "form_id")
 }
 
 model serial_numbers {
@@ -563,9 +617,8 @@ model serial_numbers {
   is_deleted    Boolean       @default(false)
   created_at    DateTime      @db.DateTime(0)
   stocks        stocks?       @relation(fields: [stock_id], references: [id], onDelete: Cascade, map: "serial_numbers_ibfk_1")
-  stock_lot     stock_lot?    @relation(fields: [lot_id], references: [id], map: "serial_numbers_ibfk_2")
-  stock_carton  stock_carton? @relation(fields: [carton_id], references: [id], map: "serial_numbers_ibfk_3")
-  items         items         @relation(fields: [item_id], references: [id_piece], onDelete: Cascade, map: "serial_numbers_ibfk_4")
+  stock_lot     stock_lot?    @relation(fields: [lot_id], references: [id], onDelete: Cascade, map: "serial_numbers_ibfk_2")
+  stock_carton  stock_carton? @relation(fields: [carton_id], references: [id], onDelete: Cascade, map: "serial_numbers_ibfk_3")
   model_piece   model_piece   @relation(fields: [model_id], references: [id_model], onDelete: Cascade, map: "serial_numbers_ibfk_5")
   services      services?     @relation(fields: [service_id], references: [id], onDelete: Cascade, map: "serial_numbers_ibfk_6")
 
@@ -597,8 +650,7 @@ model fichiers {
   livraison       livraison?               @relation(fields: [livraison_id], references: [id_livraison], map: "fichiers_ibfk_1")
   remplacements   remplacements?           @relation(fields: [remplacement_id], references: [id], map: "fichiers_ibfk_3")
   demandes        demandes?                @relation(fields: [demande_id], references: [id], map: "fichiers_ibfk_4")
-  users           users                    @relation(fields: [uploaded_by], references: [id_user], onDelete: NoAction, map: "fichiers_ibfk_5")
-  forms           forms?                   @relation(fields: [form_id], references: [id], map: "fichiers_ibfk_6")
+  users           users                    @relation(fields: [uploaded_by], references: [id_user], map: "fichiers_ibfk_5")
 
   @@index([demande_id], map: "demande_id")
   @@index([livraison_id], map: "livraison_id")
@@ -617,7 +669,7 @@ model demande_qr {
   form_id           Int
   statut            demande_qr_statut
   quantite_qr       Int?
-  quantite_marchand Int?
+  quantite_marchand Int
   liste_demande     String?           @db.LongText
   is_reg            Boolean           @default(false)
   forms             forms             @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "demande_qr_ibfk_3")
@@ -755,26 +807,130 @@ model type_paiement {
   marchands_qr marchands_qr[]
 }
 
+model form_decom {
+  id               Int                @id @default(autoincrement())
+  form_id          Int
+  statut           forms_decom_statut
+  quantite         Int?
+  liste_decom      String?            @db.LongText
+  forms            forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
+  reception_decom  reception_decom[]
+  sn_decom         sn_decom[]
+  retour_technique retour_technique[]
+  retour_decom     retour_decom[]
+
+  @@index([form_id], map: "form_id")
+}
+
+model reception_decom {
+  id         Int                  @id @default(autoincrement())
+  form_id    Int
+  decom_id   Int
+  type       reception_decom_type
+  forms      forms                @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_1")
+  form_decom form_decom           @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_2")
+
+  @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+}
+
+model sn_decom {
+  id                  Int                @id @default(autoincrement())
+  serial_number       String             @db.VarChar(255)
+  point_marchand      String?            @db.VarChar(255)
+  tid_gim             String?            @db.VarChar(255)
+  tid_ecobank         String?            @db.VarChar(255)
+  banque              String?            @db.VarChar(255)
+  etat                String?            @db.VarChar(255)
+  ri                  String?            @db.VarChar(255)
+  commercial          String?            @db.VarChar(255)
+  commentaire         String?            @db.VarChar(255)
+  created_at          DateTime           @default(now()) @db.DateTime(0)
+  is_deleted          Boolean            @default(false)
+  decom_id            Int
+  updated_at          DateTime?          @db.DateTime(0)
+  last_modified_at    DateTime           @default(now()) @db.DateTime(0)
+  commentaire_retour  String?            @db.LongText
+  pieces_recuperees   String?            @db.LongText
+  pieces_defectueuses String?            @db.LongText
+  is_ok               Boolean            @default(true)
+  statut              sn_decom_statut    @default(checking)
+  form_decom          form_decom         @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "sn_decom_ibfk_1")
+  retour_technique    retour_technique[]
+
+  @@index([serial_number], map: "serial_number")
+  @@index([decom_id], map: "decom_id")
+}
+
+model retour_technique {
+  id                  Int             @id @default(autoincrement())
+  form_id             Int
+  decom_id            Int
+  retour_id           Int
+  sn_id               Int
+  commentaire_retour  String?         @db.LongText
+  pieces_recuperees   String?         @db.LongText
+  pieces_defectueuses String?         @db.LongText
+  is_ok               Boolean         @default(true)
+  statut              sn_decom_statut @default(checking)
+  forms               forms           @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "retour_technique_ibfk_1")
+  form_decom          form_decom      @relation(fields: [decom_id], references: [id], onDelete: Cascade, map: "retour_technique_ibfk_2")
+  retour_decom        retour_decom    @relation(fields: [retour_id], references: [id], onDelete: Cascade, map: "retour_technique_ibfk3")
+  sn_decom            sn_decom        @relation(fields: [sn_id], references: [id], onDelete: NoAction, map: "retour_technique_ibfk4")
+
+  @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+  @@index([retour_id], map: "retour_id")
+  @@index([sn_id], map: "sn_id")
+}
+
+model retour_decom {
+  id         Int               @id @default(autoincrement())
+  form_id    Int
+  decom_id   Int
+  type       retour_decom_type @default(verification)
+  forms      forms             @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "retour_decom_ibfk_1")
+  form_decom form_decom        @relation(fields: [decom_id], references: [id], onDelete: Cascade, map: "retour_decom_ibfk_2")
+
+  retour_technique retour_technique[]
+
+  @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+}
+
 model forms {
-  id                            Int               @id @default(autoincrement())
+  id                            Int                       @id @default(autoincrement())
   type                          forms_type
   created_by                    Int
   updated_by                    Int?
-  created_at                    DateTime          @default(now()) @db.DateTime(0)
-  updated_at                    DateTime?         @db.DateTime(0)
-  last_modified_at              DateTime          @default(now()) @db.DateTime(0)
-  nom_user                      String?           @db.VarChar(255)
-  commentaire                   String?           @db.LongText
-  is_deleted                    Boolean           @default(false)
+  created_at                    DateTime                  @default(now()) @db.DateTime(0)
+  updated_at                    DateTime?                 @db.DateTime(0)
+  last_modified_at              DateTime                  @default(now()) @db.DateTime(0)
+  nom_user                      String?                   @db.VarChar(255)
+  commentaire                   String?                   @db.LongText
+  is_deleted                    Boolean                   @default(false)
+  is_reg                        Boolean                   @default(false)
   demande_qr                    demande_qr[]
-  fichiers                      fichiers[]
+  demandes                      demandes[]
   form_signatures               form_signatures[]
-  users_forms_created_byTousers users             @relation("forms_created_byTousers", fields: [created_by], references: [id_user], map: "forms_ibfk_1")
-  users_forms_updated_byTousers users?            @relation("forms_updated_byTousers", fields: [updated_by], references: [id_user], map: "forms_ibfk_2")
+  users_forms_created_byTousers users                     @relation("forms_created_byTousers", fields: [created_by], references: [id_user], map: "forms_ibfk_1")
+  users_forms_updated_byTousers users?                    @relation("forms_updated_byTousers", fields: [updated_by], references: [id_user], onUpdate: Restrict, map: "forms_ibfk_2")
   generation_qr                 generation_qr[]
   impression_qr                 impression_qr[]
+  livraison                     livraison[]
+  livraison_piece               livraison_piece[]
   livraison_qr                  livraison_qr[]
+  reception_piece               reception_piece[]
   reception_qr                  reception_qr[]
+  remplacements                 remplacements[]
+  validation_demande            validation_demande[]
+  validation_remplacement       validation_remplacement[]
+  validations                   validations[]
+  form_decom                    form_decom[]
+  reception_decom               reception_decom[]
+  retour_technique              retour_technique[]
+  retour_decom                  retour_decom[]
+  history_tpe                   history_tpe[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -785,6 +941,55 @@ model format_qr {
   id           Int            @id @default(autoincrement())
   format       String         @db.VarChar(255)
   marchands_qr marchands_qr[]
+}
+
+model parc_tpe {
+  id               Int           @id @default(autoincrement())
+  serial_number    String        @unique @db.VarChar(255)
+  created_by       Int
+  updated_by       Int?
+  created_at       DateTime      @default(now()) @db.DateTime(0)
+  updated_at       DateTime?     @db.DateTime(0)
+  last_modified_at DateTime      @default(now()) @db.DateTime(0)
+  statut_id        Int
+  users_create_tpe users         @relation("tpe_created_by_user", fields: [created_by], references: [id_user], map: "parc_tpe_ibfk_1")
+  users_update_tpe users?        @relation("tpe_updated_by_user", fields: [updated_by], references: [id_user], map: "parc_tpe_ibfk_2")
+  statut_tpe       statut_tpe    @relation(fields: [statut_id], references: [id], map: "parc_tpe_ibfk_3")
+  history_tpe      history_tpe[]
+
+  @@index([created_by], map: "created_by")
+  @@index([updated_by], map: "updated_by")
+  @@index([statut_id], map: "statut_id")
+}
+
+model history_tpe {
+  id         Int        @id @default(autoincrement())
+  id_tpe     Int
+  created_at DateTime   @default(now()) @db.DateTime(0)
+  created_by Int?
+  statut_id  Int
+  form_id    Int?
+  stock_id   Int?
+  users      users?     @relation(fields: [created_by], references: [id_user], map: "history_tpe_ibfk_1")
+  forms      forms?     @relation(fields: [form_id], references: [id], map: "history_tpe_ibfk_2")
+  stocks     stocks?    @relation(fields: [stock_id], references: [id], map: "history_tpe_ibfk_3")
+  parc_tpe   parc_tpe   @relation(fields: [id_tpe], references: [id], map: "history_tpe_ibfk_4")
+  statut_tpe statut_tpe @relation(fields: [statut_id], references: [id], map: "history_tpe_ibfk_5")
+
+  @@index([created_by], map: "created_by")
+  @@index([form_id], map: "form_id")
+  @@index([stock_id], map: "stock_id")
+  @@index([id_tpe], map: "id_tpe")
+  @@index([statut_id], map: "statut_id")
+}
+
+model statut_tpe {
+  id          Int           @id @default(autoincrement())
+  statut      String        @db.VarChar(255)
+  parc_tpe    parc_tpe[]
+  history_tpe history_tpe[]
+
+  @@index([statut], map: "statut")
 }
 
 enum livraison_statut_livraison {
@@ -821,6 +1026,7 @@ enum validation_demande_statut_validation_demande {
 enum Livraisons_type {
   livraison_piece
   livraison_commerciale
+  livraison_qr
 }
 
 enum demandes_statut_demande {
@@ -866,19 +1072,16 @@ enum demande_qr_statut {
   recue
 }
 
-enum forms_type {
-  livraison_sn
-  reception_sn
-  remplacement_sn
-  reception_remplacement
-  demande_stock
-  validation_stock
-  reception_stock
-  demande_qr
-  generation_qr
-  impression_qr
-  livraison_qr
-  reception_qr
+enum form_decom_statut {
+  en_cours
+  retourne
+  recu
+  clos
+}
+
+enum reception_decom_type {
+  validation
+  retour
 }
 
 enum form_signatures_role {
@@ -894,6 +1097,7 @@ enum fichiers_type_formulaire {
   remplacement
   demande
   demande_qr
+  decom
 }
 
 enum fichiers_role {
@@ -903,4 +1107,51 @@ enum fichiers_role {
   validateur
   regularisateur
   generateur
+}
+
+enum forms_type {
+  livraison_sn
+  reception_sn
+  remplacement_sn
+  reception_remplacement
+  demande_stock
+  validation_stock
+  reception_stock
+  demande_qr
+  generation_qr
+  impression_qr
+  livraison_qr
+  reception_qr
+  reception_piece
+  livraison_stock
+  decom
+  reception_decom
+  retour_technique
+  retour_decom
+}
+
+enum forms_decom_statut {
+  en_cours
+  retourne
+  recu
+  clos
+}
+
+enum sn_decom_statut {
+  parametrage
+  rebus
+  checking
+}
+
+enum retour_decom_type {
+  verification
+  cloture
+}
+
+enum statut_parc_tpe {
+  neuf
+  back_office
+  decom
+  parametrage
+  rebut
 }

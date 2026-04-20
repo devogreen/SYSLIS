@@ -26,6 +26,7 @@ import SignatureCanvas from 'react-signature-canvas'
 import { Users } from "../../../backend/users/Users.js"
 import { Stock } from "../../../backend/stock/Stock.js"
 import { Remplacements } from "../../../backend/livraisons/Remplacements.js";
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 export default function RemplacementInputs() {
 
@@ -34,8 +35,19 @@ export default function RemplacementInputs() {
   const usersData = new Users()
   const stockData = new Stock()
   const remplacements = new Remplacements()
+  const gestionTpeData = new GestionTpe()
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
+
+  const LISTE_KEY = "listeRemplacement";
+  const saveListe = (liste) => {
+    sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+  };
+  const loadListe = () => {
+    const stored = sessionStorage.getItem(LISTE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  };
+  const savedListe = loadListe()
 
 
   const [isOrangeChecked, setOrangeChecked] = useState(false);
@@ -50,7 +62,7 @@ export default function RemplacementInputs() {
   const [loadingDelivery, setLoadingDelivery] = useState(false);
   const [typeLivraison, setTypeLivraison] = useState('');
   const [livraisonID, setLivraisonID] = useState(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(savedListe?.message || '');
   const [mobileMoney, setMobileMoney] = useState([]);
   const [produitsLivreTable, setProduitsLivresTable] = useState([]);
   const [produitsLivre, setProduitsLivres] = useState([]);
@@ -97,6 +109,9 @@ export default function RemplacementInputs() {
   const [selectedFiles, setSelectedFiles] = useState([])
 
   const [isRneChecked, setRneChecked] = useState(false)
+
+  const [statutTpeOld, setStatutTpeOld] = useState('')
+  const [statutTpeNew, setStatutTpeNew] = useState('')
 
   useEffect(() => {
     const fetchTerminalInfos = async () => {
@@ -164,6 +179,16 @@ export default function RemplacementInputs() {
       }
     }; fetchTerminalInfos();
   }, [])
+
+  useEffect(() => {
+    saveListe({
+      produitsLivreTable,
+      produitsLivre,
+      quantiteLivraison,
+      message,
+      detailsParametrage,
+    })
+  }, [produitsLivreTable, produitsLivre, quantiteLivraison, message, detailsParametrage])
 
   const filteredPointMarchand = terminalSN ?
     terminals.filter((terminal) =>
@@ -267,43 +292,80 @@ export default function RemplacementInputs() {
     );
   }
 
-  const handleChangeSn = (value) => {
+  const handleChangeSn = async (value) => {
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
     setOrangeChecked(false)
     setMTNChecked(false)
     setMOOVChecked(false)
-    setRneChecked(false)
+    setStatutTpeNew('')
     setTerminalSN(value)
     const pointMarchand = terminals.find((terminal) => {
       return terminal.SERIAL_NUMBER == value
     })
-    if (pointMarchand) {
-      setTerminalName(pointMarchand.POINT_MARCHAND)
-      setTerminalBanque(pointMarchand.BANQUE)
-      setTerminalCaisse(pointMarchand.TPE)
-      if (pointMarchand.NUM_ORANGE.startsWith("07")) {
-        setOrangeChecked(true)
+    try {
+      if (pointMarchand) {
+        setTerminalName(pointMarchand.POINT_MARCHAND)
+        setTerminalBanque(pointMarchand.BANQUE)
+        setTerminalCaisse(pointMarchand.TPE)
+        if (pointMarchand.NUM_ORANGE.startsWith("07")) {
+          setOrangeChecked(true)
+        }
+        if (pointMarchand.NUM_MTN.startsWith("05")) {
+          setMTNChecked(true)
+        }
+        if (pointMarchand.NUM_MOOV.startsWith("01")) {
+          setMOOVChecked(true)
+        }
       }
-      if (pointMarchand.NUM_MTN.startsWith("05")) {
-        setMTNChecked(true)
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpeNew(statutTpe)
+        } else {
+          setStatutTpeNew('non enregistré')
+        }
       }
-      if (pointMarchand.NUM_MOOV.startsWith("01")) {
-        setMOOVChecked(true)
-      }
-      if(pointMarchand.RNE) {
-        setRneChecked(true)
-      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
     }
+  }
+
+  const handleChangeOldSn = async (value) => {
+    setStatutTpeOld('')
+    setAncienSN(value)
+    try {
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpeOld(statutTpe)
+        } else {
+          setStatutTpeOld('non enregistré')
+        }
+      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
+    }
+  }
+
+  const checkValidate = () => {
+    if (!serviceId) {
+      setErrorAjout("Vous devez choisir le service réceptionneur !");
+      return false;
+    }
+
+    return true;
   }
 
   const handleConfirm = () => {
 
-    if (!serviceId) {
-      setErrorAjout("Vous devez choisir le service réceptionneur !");
+    if(!checkValidate()) {
       return;
     }
+
     if (!oldModel) {
       setErrorAjout("Vous devez choisir le model du TPE à remplacer !");
       return;
@@ -383,7 +445,7 @@ export default function RemplacementInputs() {
 
     setProduitsLivresTable((prev) => [...prev, newProduit]);
     setProduitsLivres((prev) => [...prev, newProduit]);
-    setQuantiteLivraison(quantiteLivraison + 1)
+    setQuantiteLivraison((prev) => prev + 1)
 
     // Optional: Reset form fields
     setTerminalSN('');
@@ -397,6 +459,8 @@ export default function RemplacementInputs() {
     setMOOVChecked(false);
     setRneChecked(false);
     setMobileMoney([]);
+    setStatutTpeNew('')
+    setStatutTpeOld('')
 
     setErrorAjout('')
     setIsConfirmModalOpen(false)
@@ -435,7 +499,7 @@ export default function RemplacementInputs() {
     fd.append('detailsParametrage', JSON.stringify(detailsParametrage))
     if (sign) {
       const blob = await fetch(sign).then(res => res.blob());
-      fd.append('signature_expediteur', blob, 'signature.png');
+      fd.append('signature', blob, 'signature.png');
     }
 
     try {
@@ -462,6 +526,9 @@ export default function RemplacementInputs() {
     } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
+      setQuantiteLivraison(0)
+      setMessage('')
+      setDetailsParametrage([])
       setLoadingDelivery(false)
     }
   }
@@ -487,6 +554,14 @@ export default function RemplacementInputs() {
   };
 
   const handleValidate = () => {
+    if (!checkValidate()) {
+      Swal.fire({
+        title: "Error",
+        text: "Les champs obligatoires ne sont pas tous remplis !",
+        icon: "error"
+      });
+      return;
+    }
     if (produitsLivre.length == 0) {
       Swal.fire({
         title: "Error",
@@ -549,11 +624,12 @@ export default function RemplacementInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Ancien S/N <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpeOld}</span>
                       <Input type="text" id="input" value={ancienSN} onChange={(e) => {
                         const value = e.target.value
                         if (/^\d*$/.test(value)) {
                           if (value.length <= 10) {
-                            setAncienSN(value);
+                            handleChangeOldSn(value);
                           }
                         }
                       }} />
@@ -570,6 +646,7 @@ export default function RemplacementInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Nouvel S/N <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpeNew}</span>
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits

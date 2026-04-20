@@ -4,6 +4,7 @@ import { useState } from "react";
 import LivraisonsGenerales from "../../components/livraisons/LivraisonsGenerales"
 // @ts-ignore
 import LivraisonsPieStats from "../../components/livraisons/LivraisonsPieStats"
+//  import DashboardLivraisons from "../../components/dashboard/livraisons/DashboardLivraisons.tsx";
 // @ts-ignore
 import ChargeursReturn from "../../components/livraisons/ChargeursReturn"
 // @ts-ignore
@@ -132,7 +133,7 @@ export default function DeliveryDashboard() {
         </div>
       </div>
 
-      <div className="grid xl:grid-cols-2 gap-6 my-6">
+<div className="grid xl:grid-cols-2 gap-6 my-6">
         <div className="grid grid-cols-1">
           <LivraisonsGenerales startDate={startDate} endDate={endDate} />
         </div>
@@ -140,6 +141,7 @@ export default function DeliveryDashboard() {
           <LivraisonsPieStats startDate={startDate} endDate={endDate} />
         </div>
       </div>
+    
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 my-3">
         <DemandesAttentes />
         <DemandesValidees startDate={startDate} endDate={endDate} />

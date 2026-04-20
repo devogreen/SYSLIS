@@ -22,6 +22,7 @@ import { ProductDeliveries } from "../../../backend/livraisons/ProductDeliveries
 import { Modal } from "../../ui/modal/index.tsx";
 import Swal from 'sweetalert2'
 import { Stock } from "../../../backend/stock/Stock.js"
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 
 export default function ModifyLivraisonInputs() {
@@ -33,7 +34,18 @@ export default function ModifyLivraisonInputs() {
   const stockData = new Stock()
   const { id } = useParams();
   const navigate = useNavigate();
+  const gestionTpeData = new GestionTpe()
 
+
+  const LISTE_KEY = "listeLivraison";
+  const saveListe = (liste) => {
+    sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+  };
+  const loadListe = () => {
+    const stored = sessionStorage.getItem(LISTE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  };
+  const savedListe = loadListe()
 
   const [isOrangeChecked, setOrangeChecked] = useState(false);
   const [isMTNChecked, setMTNChecked] = useState(false);
@@ -47,10 +59,12 @@ export default function ModifyLivraisonInputs() {
   const [loadingDelivery, setLoadingDelivery] = useState(false);
   const [typeLivraison, setTypeLivraison] = useState('');
   const [livraisonID, setLivraisonID] = useState();
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(savedListe?.message || '');
   const [mobileMoney, setMobileMoney] = useState([]);
-  const [produitsLivreTable, setProduitsLivresTable] = useState([]);
-  const [produitsLivre, setProduitsLivres] = useState([]);
+
+  const [produitsLivreTable, setProduitsLivresTable] = useState(savedListe?.produitsLivreTable || []);
+  const [produitsLivre, setProduitsLivres] = useState(savedListe?.produitsLivre || []);
+
   const [error, setError] = useState(null);
   const [errorFrom, setErrorForm] = useState(null);
   const [errorAjout, setErrorAjout] = useState(null);
@@ -72,7 +86,7 @@ export default function ModifyLivraisonInputs() {
 
   const [serviceId, setServiceId] = useState(null)
 
-  const [quantiteLivraison, setQuantiteLivraison] = useState(0)
+  const [quantiteLivraison, setQuantiteLivraison] = useState(savedListe?.quantiteLivraison || 0)
 
   const [optionsModels, setOptionsModels] = useState([])
   const [listModels, setListModels] = useState([])
@@ -80,6 +94,13 @@ export default function ModifyLivraisonInputs() {
   const [nomModel, setNomModel] = useState('')
 
   const [isRneChecked, setRneChecked] = useState(false)
+
+  const [statutTpe, setStatutTpe] = useState('')
+
+  const [selectedChargeur, setSelectedChargeur] = useState(false)
+  const [optionsStocks, setOptionsStocks] = useState([])
+  const [selectedStock, setSelectedStock] = useState(null)
+  const [stockChargeurs, setStockChargeurs] = useState([])
 
   useEffect(() => {
     const fetchDeliveryInfos = async () => {
@@ -153,12 +174,33 @@ export default function ModifyLivraisonInputs() {
           setSelectedModel(model.id_model)
         }
 
+        const stocks_data = await stockData.getAllStocks()
+        const stockChargeurs_data = stocks_data.filter((item) => {
+          return item.piece_id == 1 && item.service_id == 3 && item.quantite_piece > 0 && item.is_deleted == false
+        })
+        setStockChargeurs(stockChargeurs_data)
+        const options_stocks = stockChargeurs_data.map((item) => ({
+          value: item.id,
+          label: `${item.code_stock} : ${item.quantite_piece} pièces`
+        }))
+        setOptionsStocks(options_stocks)
+
+        if(delivery_data.stock_id) {
+          setSelectedStock(delivery_data.stock_id)
+        }
+
+        if (delivery_data.type_livraison_id == 5 || delivery_data.type_livraison_id == 7 || delivery_data.type_livraison_id == 8) {
+          setSelectedChargeur(true)
+        } else {
+          setSelectedChargeur(false)
+        }
+
       } catch (error) {
         console.log('Error fetching data ', error)
         setErrorForm('Erreur lors de la génération du formulaire')
 
       } finally {
-        setLoadingDeliveryInfos(false)
+        // setLoadingDeliveryInfos(false)
       }
     }
     const fetchTerminalInfos = async () => {
@@ -180,6 +222,15 @@ export default function ModifyLivraisonInputs() {
     fetchTerminalInfos();
 
   }, [id])
+
+  useEffect(() => {
+    saveListe({
+      produitsLivreTable,
+      produitsLivre,
+      quantiteLivraison,
+      message,
+    })
+  }, [produitsLivreTable, produitsLivre, quantiteLivraison, message])
 
   const filteredPointMarchand = terminalSN ?
     terminals.filter((terminal) =>
@@ -218,7 +269,17 @@ export default function ModifyLivraisonInputs() {
     } else {
       setTypeLivraison('');
     }
+
+    if (value == 5 || value == 7 || value == 8) {
+      setSelectedChargeur(true)
+    } else {
+      setSelectedChargeur(false)
+    }
   };
+
+  const handleSelectStock = (value) => {
+    setSelectedStock(value)
+  }
 
   const ChangeService = (value) => {
     console.log("Selected value:", value);
@@ -238,7 +299,7 @@ export default function ModifyLivraisonInputs() {
     }
   }
 
-  const handleChangeSn = (value) => {
+  const handleChangeSn = async (value) => {
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
@@ -247,42 +308,64 @@ export default function ModifyLivraisonInputs() {
     setMOOVChecked(false)
     setRneChecked(false)
     setTerminalSN(value)
-    const pointMarchand = terminals.find((terminal) => {
-      return terminal.SERIAL_NUMBER == value
-    })
-    if (pointMarchand) {
-      setTerminalName(pointMarchand.POINT_MARCHAND)
-      setTerminalBanque(pointMarchand.BANQUE)
-      setTerminalCaisse(pointMarchand.TPE)
-      if (pointMarchand.NUM_ORANGE.startsWith("07")) {
-        setOrangeChecked(true)
+    setStatutTpe('')
+    try {
+      const pointMarchand = terminals.find((terminal) => {
+        return terminal.SERIAL_NUMBER == value
+      })
+      if (pointMarchand) {
+        // console.log('Point marchand trouvé : ', pointMarchand)
+        setTerminalName(pointMarchand.POINT_MARCHAND)
+        setTerminalBanque(pointMarchand.BANQUE)
+        setTerminalCaisse(pointMarchand.TPE)
+        if (pointMarchand.NUM_ORANGE.startsWith("07")) {
+          setOrangeChecked(true)
+        }
+        if (pointMarchand.NUM_MTN.startsWith("05")) {
+          setMTNChecked(true)
+        }
+        if (pointMarchand.NUM_MOOV.startsWith("01")) {
+          setMOOVChecked(true)
+        }
       }
-      if (pointMarchand.NUM_MTN.startsWith("05")) {
-        setMTNChecked(true)
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        // console.log(tpeData)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpe(statutTpe)
+        } else {
+          setStatutTpe('non enregistré')
+        }
       }
-      if (pointMarchand.NUM_MOOV.startsWith("01")) {
-        setMOOVChecked(true)
-      }
-      if(pointMarchand.RNE) {
-        setRneChecked(true)
-      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
     }
+  }
+
+  const checkValidate = () => {
+    if (!livraisonID) {
+      setErrorAjout("Vous devez choisir le type de livraison !");
+      return false;
+    }
+    if (!selectedModel) {
+      setErrorAjout("Vous devez choisir le model du TPE !");
+      return false;
+    }
+    if (!serviceId) {
+      setErrorAjout("Vous devez choisir le service réceptionneur !");
+      return false;
+    }
+
+    return true
   }
 
   const handleConfirm = () => {
 
-    if (!livraisonID) {
-      setErrorAjout("Vous devez choisir le type de livraison !");
+    if (!checkValidate()) {
       return;
     }
-    if (!selectedModel) {
-      setErrorAjout("Vous devez choisir le model du TPE !");
-      return;
-    }
-    if (!serviceId) {
-      setErrorAjout("Vous devez choisir le service réceptionneur !");
-      return;
-    }
+
     if (terminalSN.length < 10 || !terminalName || !terminalCaisse) {
       setErrorAjout("S/N invalide !");
       return;
@@ -330,10 +413,18 @@ export default function ModifyLivraisonInputs() {
 
     console.log('Trying to ADD.....')
     const localMobileMoney = [];
-    if (isOrangeChecked) localMobileMoney.push("OM");
-    if (isMTNChecked) localMobileMoney.push("MTN");
-    if (isMOOVChecked) localMobileMoney.push("MOOV");
-    if (isRneChecked) localMobileMoney.push("RNE");
+    if (isOrangeChecked) {
+      localMobileMoney.push("OM")
+    };
+    if (isMTNChecked) {
+      localMobileMoney.push("MTN")
+    };
+    if (isMOOVChecked) {
+      localMobileMoney.push("MOOV")
+    };
+    if (isRneChecked) {
+      localMobileMoney.push("RNE")
+    }
 
     const newProduit = {
       pointMarchand: terminalName,
@@ -348,23 +439,35 @@ export default function ModifyLivraisonInputs() {
     setProduitsLivres((prev) => [...prev, newProduit]);
     setQuantiteLivraison((prev) => prev + 1);
 
+    saveListe({ produitsLivreTable, produitsLivre, quantiteLivraison })
+
     // Optional: Reset form fields
     setTerminalSN('');
     setTerminalName('');
     setTerminalBanque('')
     setTerminalCaisse('')
-    setMessageTPE('')
+    setMessageTPE('');
     setOrangeChecked(false);
     setMTNChecked(false);
     setMOOVChecked(false);
-    setRneChecked(false);
+    setRneChecked(false)
     setMobileMoney([]);
+    setStatutTpe('')
     setErrorAjout('')
     setIsConfirmModalOpen(false)
   }
 
   const handleDeliver = async (e) => {
     e.preventDefault();
+
+    if (!checkValidate()) {
+      Swal.fire({
+        title: "Error",
+        text: "Les champs requis ne sont pas tous remplis.",
+        icon: "error"
+      });
+      return;
+    }
 
     if (produitsLivre.length == 0) {
       Swal.fire({
@@ -374,16 +477,7 @@ export default function ModifyLivraisonInputs() {
       });
       return;
     }
-    if (!livraisonID) {
-      Swal.fire({
-        title: "Error",
-        text: "Vous devez choisir un type de livraison",
-        icon: "error"
-      });
-      return;
-    }
 
-    console.log(produitsLivre)
     const payload = {
       produitsLivre: JSON.stringify(produitsLivre),
       commentaire: message,
@@ -392,6 +486,7 @@ export default function ModifyLivraisonInputs() {
       service_recepteur: serviceId,
       role_recepteur: selectedRole,
       selected_model: selectedModel,
+      selectedStock,
     }
 
     try {
@@ -419,6 +514,8 @@ export default function ModifyLivraisonInputs() {
     } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
+      setQuantiteLivraison(0)
+      setMessage('')
       setLoadingDelivery(false)
     }
 
@@ -463,6 +560,21 @@ export default function ModifyLivraisonInputs() {
                         className="dark:bg-dark-900"
                       />
                     </div>
+                    {selectedChargeur ? (
+                      <>
+                        <div>
+                          <Label>Stocks</Label>
+                          <Select
+                            options={optionsStocks}
+                            defaultValue={selectedStock}
+                            onChange={handleSelectStock}
+                            className="dark:bg-dark-900"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <></>
+                    )}
                     <div>
                       <Label>Model TPE <span className="text-red-700">*</span></Label>
                       <Select
@@ -506,6 +618,7 @@ export default function ModifyLivraisonInputs() {
 
                     <div>
                       <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits
@@ -779,10 +892,10 @@ export default function ModifyLivraisonInputs() {
               <span>S/N terminal : <span className="font-bold text-red-700">{terminalSN}</span></span>
             </div>
             <div>
-              <span>Point Marchand : <span className="font-bold text-red-700">{filteredPointMarchand.map((terminal) => terminal.POINT_MARCHAND).join("%")}</span></span>
+              <span>Point Marchand : <span className="font-bold text-red-700">{terminalName}</span></span>
             </div>
             <div>
-              <span> Banque : <span className="font-bold text-red-700">{filteredPointMarchand.map((terminal) => terminal.BANQUE).join("%")}</span></span>
+              <span> Banque : <span className="font-bold text-red-700">{terminalBanque}</span></span>
             </div>
             <div className="flex flex-col">
               <span>Mobile Money : </span>

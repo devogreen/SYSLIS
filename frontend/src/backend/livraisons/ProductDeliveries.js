@@ -18,6 +18,35 @@ export class ProductDeliveries {
     }
   };
 
+   async regReception(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/delivery/regReception`, formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      // console.log(response)
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  };
+
+  async regLivraison(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/delivery/regLivraison`, formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      // console.log(response)
+      return response.data;
+    } catch (error) {
+      throw error.response.data;
+    }
+  };
   async deliverOld(commentaire, type_livraison_id, user_id, isAncienne, date_livraison, nom_livreur, nom_validateur, produitsLivre) {
     try {
       const response = await axios.post(`${urlBase}/api/delivery/deliverOld`,

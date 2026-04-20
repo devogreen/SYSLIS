@@ -18,7 +18,18 @@ import { Demandes } from "../../../backend/demandes/Demandes.js";
 import { Dropdown } from "primereact/dropdown";
 
 import SignatureCanvas from 'react-signature-canvas'
-import { useSyncExternalStore } from "react";
+
+import { Calendar } from 'primereact/calendar';
+import { addLocale } from "primereact/api";
+
+addLocale('fr', {
+    firstDayOfWeek: 1,
+    dayNames: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'],
+    dayNamesShort: ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'],
+    dayNamesMin: ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'],
+    monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
+    monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+});
 
 export default function LivraisonDemandeInputs() {
 
@@ -153,6 +164,13 @@ export default function LivraisonDemandeInputs() {
 
     const [validateur, setValidateur] = useState('')
 
+    const [isReg, setIsReg] = useState(false)
+    const [dateValidation, setDateValidation] = useState(null)
+
+    const [selectedDateLivraison, setSelectedDateLivraison] = useState(null)
+
+    const isOnlyDigits = (str) => /^\d+$/.test(str);
+
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true)
@@ -161,10 +179,22 @@ export default function LivraisonDemandeInputs() {
                 const demande_data = await demandeData.getOneDemande(idDemande)
                 const detailsDemande = JSON.parse(demande_data.details_demande)
 
+                console.log("Demande data: ", demande_data)
+
+                const demandeForm = demande_data.forms
+                if (demandeForm) {
+                    setIsReg(demandeForm.is_reg)
+                }
+
                 const index = demande_data.validation_demande.length - 1
                 const validation = demande_data.validation_demande[index]
                 setCommentaireValidation(validation.commentaire)
                 setQuantiteValidee(validation.quantite_validee)
+
+
+                const validationForm = validation.forms
+                const dateValidation = new Date(validationForm.last_modified_at)
+                setDateValidation(dateValidation)
 
                 const items_data = await stockData.getAllItems()
                 setItems(items_data)
@@ -222,11 +252,13 @@ export default function LivraisonDemandeInputs() {
 
                 const stocks_data_all = await stockData.getAllStocks()
                 const stocks_data = stocks_data_all.filter((item) => {
-                    return item.is_deleted == false && 
-                        item.piece_id == demande_data.item_id && 
+                    return item.is_deleted == false &&
+                        item.piece_id == demande_data.item_id &&
                         item.quantite_piece > 0 &&
-                        item.created_by == +userId
+                        item.created_by == +userId &&
+                        item.service_id == detailsDemande.selectedServicePiece
                 })
+                console.log("Stocks data: ", stocks_data)
                 setStocks(stocks_data)
                 const options_stocks = stocks_data.map((item) => {
                     const serviceStock = services_data.find((s) => {
@@ -566,30 +598,16 @@ export default function LivraisonDemandeInputs() {
     };
 
     const checkValidate = () => {
+        if (isReg) {
+            if (!selectedDateLivraison) {
+                setError("Vous devez choisir une date !")
+                return false
+            }
+        }
         if (selectedStock.length == 0) {
             setError("Vous devez choisir le stock !")
             return false
         }
-        // if (!serviceUser) {
-        //     setError("Vous devez choisir le service demandeur")
-        //     return false
-        // }
-        // if (!selectedUser) {
-        //     setError("Vous devez choisir le demandeur")
-        //     return false
-        // }
-        // if (!motif) {
-        //     setError("Vous devez précisier le motif !")
-        //     return false
-        // }
-        // if (!selectedServicePiece) {
-        //     setError("Vous devez choisir le service !")
-        //     return false
-        // }
-        // if (!selectedModel) {
-        //     setError("Vous devez choisir le modèle !")
-        //     return false
-        // }
         setError('')
         return true
     }
@@ -959,25 +977,26 @@ export default function LivraisonDemandeInputs() {
         // fd.append('motif', motif)
         // fd.append('serviceDemandeur', serviceUser)
         // fd.append('champsAutre', otherFields)
-        const payload = {
-            demande_id: idDemande,
-            user_id: userId,
-            commentaire: message,
-            stock_id: selectedStock,
-            nomenclature,
-            detailsDemande: JSON.stringify(detailsDemande),
-            detailsDemandeur: JSON.stringify(detailsDemandeur),
-            itemId: selectedPiece,
-        }
 
         try {
+            const payload = {
+                demande_id: idDemande,
+                user_id: userId,
+                commentaire,
+                stock_id: selectedStock,
+                nomenclature,
+                detailsDemande: JSON.stringify(detailsDemande),
+                detailsDemandeur: JSON.stringify(detailsDemandeur),
+                itemId: selectedPiece,
+                date_livraison: new Date(selectedDateLivraison),
+            }
             setLoadingValidation(true)
-            console.log('Sendind payload...')
+            if (isReg) {
+                await demandeData.regLivraisonDemande(payload)
+            } else {
+                await demandeData.livraisonDemande(payload)
+            }
 
-            const response = await demandeData.validateDemande(payload)
-            // const response = await demandeData.validateDemande(fd)
-
-            console.log(response)
             Swal.fire({
                 title: "Succès",
                 text: "Stock livré avec succès !",
@@ -1081,6 +1100,27 @@ export default function LivraisonDemandeInputs() {
                                             </div>
                                         </div>
                                         <div className="space-y-5">
+                                            <div>
+                                                {isReg ? (
+                                                    <>
+                                                        <div>
+                                                            <Label>Date Livraison <span className="text-red-700">*</span></Label>
+                                                            <Calendar
+                                                                value={selectedDateLivraison}
+                                                                locale="fr"
+                                                                onChange={(e) => setSelectedDateLivraison(e.value)}
+                                                                dateFormat="dd/mm/yy"
+                                                                placeholder="jj/mm/aaaa"
+                                                                minDate={new Date(dateValidation)}
+                                                                maxDate={new Date()}
+                                                                className="w-full"
+                                                            />
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                            </div>
                                             <div className="text-center">
                                                 <span className="text-sm font-semibold">Informations sur stock</span>
                                             </div>
@@ -1346,10 +1386,13 @@ export default function LivraisonDemandeInputs() {
                                                                     )}
                                                                     <div>
                                                                         <Label>Quantité pièce</Label>
-                                                                        <Input type="number" id="input" value={newStockPiece}
+                                                                        <Input
+                                                                            type="text"
+                                                                            id="input"
+                                                                            value={newStockPiece}
                                                                             onChange={(e) => {
-                                                                                const value = Number(e.target.value)
-                                                                                if (value >= 0) {
+                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                    const value = e.target.value
                                                                                     setNewStockPiece(value)
                                                                                 }
                                                                             }}
@@ -1396,10 +1439,13 @@ export default function LivraisonDemandeInputs() {
                                                                 </div>
                                                                 <div>
                                                                     <Label>Quantité</Label>
-                                                                    <Input type="number" id="input" value={newStockPiece}
+                                                                    <Input
+                                                                        type="text"
+                                                                        id="input"
+                                                                        value={newStockPiece}
                                                                         onChange={(e) => {
-                                                                            const value = Number(e.target.value)
-                                                                            if (value >= 0) {
+                                                                            if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                const value = e.target.value
                                                                                 setNewStockPiece(value)
                                                                             }
                                                                         }}
@@ -1421,6 +1467,15 @@ export default function LivraisonDemandeInputs() {
                                                         const value = e.target.value
                                                         setNomenclature(value)
                                                     }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <Label>Commentaire</Label>
+                                                <TextArea
+                                                    type="text"
+                                                    placeholder="Ajoutez un commentaire"
+                                                    value={commentaire}
+                                                    onChange={(value) => setCommentaire(value)}
                                                 />
                                             </div>
                                             <div>

@@ -87,6 +87,8 @@ export default function ModifyDemandeInputs() {
 
   const [selectedFiles, setSelectedFiles] = useState([])
 
+  const isOnlyDigits = (str) => /^\d+$/.test(str);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
@@ -408,8 +410,9 @@ export default function ModifyDemandeInputs() {
       setError("Quantité initiale invalide !")
     }
 
-    if (quantite <= 0) {
+    if (quantite <= 0 || isNaN(quantite) || quantite === '') {
       setError("Quantité demandée invalide !")
+      return
     }
 
     setValidationModalOpen(true)
@@ -557,7 +560,7 @@ export default function ModifyDemandeInputs() {
                           </>
                         )}
                       </div>
-                      <div>
+                      {/* <div>
                         <Label>Service Demandeur <span className="text-red-700">*</span></Label>
                         <Select
                           options={optionsServicesUsers}
@@ -574,7 +577,7 @@ export default function ModifyDemandeInputs() {
                           onChange={handleSelectUser}
                           className="dark:bg-dark-900"
                         />
-                      </div>
+                      </div> */}
                       <div>
                         <Label>Motif <span className="text-red-700">*</span></Label>
                         <Input
@@ -700,12 +703,12 @@ export default function ModifyDemandeInputs() {
                                 <div>
                                   <Label>Quantité demandée</Label>
                                   <Input
-                                    type="number"
+                                    type="text"
                                     id="input"
                                     value={quantite}
                                     onChange={(e) => {
-                                      const value = Number(e.target.value)
-                                      if (value >= 0) {
+                                      if(isOnlyDigits(e.target.value) || e.target.value === '') {
+                                        const value = e.target.value
                                         setQuantite(value)
                                       }
                                     }}

@@ -25,6 +25,7 @@ import { Modal } from "../../ui/modal/index.tsx";
 import SignatureCanvas from 'react-signature-canvas'
 import { Users } from "../../../backend/users/Users.js"
 import { Stock } from "../../../backend/stock/Stock.js"
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 export default function LivraisonInputs() {
 
@@ -32,8 +33,19 @@ export default function LivraisonInputs() {
   const productDeliveries = new ProductDeliveries();
   const usersData = new Users()
   const stockData = new Stock()
+  const gestionTpeData = new GestionTpe()
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
+
+  const LISTE_KEY = "listeLivraison";
+  const saveListe = (liste) => {
+    sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+  };
+  const loadListe = () => {
+    const stored = sessionStorage.getItem(LISTE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  };
+  const savedListe = loadListe()
 
   const [isOrangeChecked, setOrangeChecked] = useState(false);
   const [isMTNChecked, setMTNChecked] = useState(false);
@@ -47,11 +59,11 @@ export default function LivraisonInputs() {
   const [loadingDelivery, setLoadingDelivery] = useState(false);
   const [typeLivraison, setTypeLivraison] = useState('');
   const [livraisonID, setLivraisonID] = useState(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(savedListe?.message || '');
   const [mobileMoney, setMobileMoney] = useState([]);
 
-  const [produitsLivreTable, setProduitsLivresTable] = useState([]);
-  const [produitsLivre, setProduitsLivres] = useState([]);
+  const [produitsLivreTable, setProduitsLivresTable] = useState(savedListe?.produitsLivreTable || []);
+  const [produitsLivre, setProduitsLivres] = useState(savedListe?.produitsLivre || []);
 
   const [error, setError] = useState(null);
   const [errorFrom, setErrorForm] = useState(null);
@@ -77,7 +89,7 @@ export default function LivraisonInputs() {
 
   const [serviceId, setServiceId] = useState(null)
 
-  const [quantiteLivraison, setQuantiteLivraison] = useState(0)
+  const [quantiteLivraison, setQuantiteLivraison] = useState(savedListe?.quantiteLivraison || 0)
 
   const [optionsModels, setOptionsModels] = useState([])
   const [listModels, setListModels] = useState([])
@@ -92,6 +104,8 @@ export default function LivraisonInputs() {
   const [selectedFiles, setSelectedFiles] = useState([])
 
   const [isRneChecked, setRneChecked] = useState(false)
+
+  const [statutTpe, setStatutTpe] = useState('')
 
   // useEffect(() => {
   //   const savedProduits = sessionStorage.getItem("produitsLivreTable");
@@ -117,7 +131,6 @@ export default function LivraisonInputs() {
         setTerminals(data)
 
         let type_delivery_data = await productDeliveries.getAllTypeLivraisonCommerciale()
-        console.log(type_delivery_data)
         let type_delivery = type_delivery_data.filter((type) => {
           return type.is_deleted == false
         })
@@ -172,6 +185,15 @@ export default function LivraisonInputs() {
       }
     }; fetchTerminalInfos();
   }, [])
+
+  useEffect(() => {
+    saveListe({
+      produitsLivreTable,
+      produitsLivre,
+      quantiteLivraison,
+      message,
+    })
+  }, [produitsLivreTable, produitsLivre, quantiteLivraison, message])
 
   const filteredPointMarchand = terminalSN ?
     terminals.filter((terminal) =>
@@ -263,7 +285,7 @@ export default function LivraisonInputs() {
     );
   }
 
-  const handleChangeSn = (value) => {
+  const handleChangeSn = async (value) => {
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
@@ -272,39 +294,64 @@ export default function LivraisonInputs() {
     setMOOVChecked(false)
     setRneChecked(false)
     setTerminalSN(value)
-    const pointMarchand = terminals.find((terminal) => {
-      return terminal.SERIAL_NUMBER == value
-    })
-    if (pointMarchand) {
-      setTerminalName(pointMarchand.POINT_MARCHAND)
-      setTerminalBanque(pointMarchand.BANQUE)
-      setTerminalCaisse(pointMarchand.TPE)
-      if (pointMarchand.NUM_ORANGE.startsWith("07")) {
-        setOrangeChecked(true)
+    setStatutTpe('')
+    try {
+      const pointMarchand = terminals.find((terminal) => {
+        return terminal.SERIAL_NUMBER == value
+      })
+      if (pointMarchand) {
+        // console.log('Point marchand trouvé : ', pointMarchand)
+        setTerminalName(pointMarchand.POINT_MARCHAND)
+        setTerminalBanque(pointMarchand.BANQUE)
+        setTerminalCaisse(pointMarchand.TPE)
+        if (pointMarchand.NUM_ORANGE.startsWith("07")) {
+          setOrangeChecked(true)
+        }
+        if (pointMarchand.NUM_MTN.startsWith("05")) {
+          setMTNChecked(true)
+        }
+        if (pointMarchand.NUM_MOOV.startsWith("01")) {
+          setMOOVChecked(true)
+        }
       }
-      if (pointMarchand.NUM_MTN.startsWith("05")) {
-        setMTNChecked(true)
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        // console.log(tpeData)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpe(statutTpe)
+        } else {
+          setStatutTpe('non enregistré')
+        }
       }
-      if (pointMarchand.NUM_MOOV.startsWith("01")) {
-        setMOOVChecked(true)
-      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
     }
+  }
+
+  const checkValidate = () => {
+    if (!livraisonID) {
+      setErrorAjout("Vous devez choisir le type de livraison !");
+      return false;
+    }
+    if (!selectedModel) {
+      setErrorAjout("Vous devez choisir le model du TPE !");
+      return false;
+    }
+    if (!serviceId) {
+      setErrorAjout("Vous devez choisir le service réceptionneur !");
+      return false;
+    }
+
+    return true
   }
 
   const handleConfirm = () => {
 
-    if (!livraisonID) {
-      setErrorAjout("Vous devez choisir le type de livraison !");
+    if(!checkValidate()){
       return;
     }
-    if (!selectedModel) {
-      setErrorAjout("Vous devez choisir le model du TPE !");
-      return;
-    }
-    if (!serviceId) {
-      setErrorAjout("Vous devez choisir le service réceptionneur !");
-      return;
-    }
+
     if (terminalSN.length < 10 || !terminalName || !terminalCaisse) {
       setErrorAjout("S/N invalide !");
       return;
@@ -361,7 +408,7 @@ export default function LivraisonInputs() {
     if (isMOOVChecked) {
       localMobileMoney.push("MOOV")
     };
-    if(isRneChecked) {
+    if (isRneChecked) {
       localMobileMoney.push("RNE")
     }
 
@@ -378,6 +425,8 @@ export default function LivraisonInputs() {
     setProduitsLivres((prev) => [...prev, newProduit]);
     setQuantiteLivraison((prev) => prev + 1);
 
+    saveListe({ produitsLivreTable, produitsLivre, quantiteLivraison })
+
     // Optional: Reset form fields
     setTerminalSN('');
     setTerminalName('');
@@ -389,6 +438,7 @@ export default function LivraisonInputs() {
     setMOOVChecked(false);
     setRneChecked(false)
     setMobileMoney([]);
+    setStatutTpe('')
     setErrorAjout('')
     setIsConfirmModalOpen(false)
   }
@@ -432,7 +482,7 @@ export default function LivraisonInputs() {
     // });
     if (sign) {
       const blob = await fetch(sign).then(res => res.blob());
-      fd.append('signature_expediteur', blob, 'signature.png');
+      fd.append('signature', blob, 'signature.png');
     }
 
     try {
@@ -459,6 +509,8 @@ export default function LivraisonInputs() {
     } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
+      setQuantiteLivraison(0)
+      setMessage('')
       setLoadingDelivery(false)
     }
   }
@@ -474,6 +526,16 @@ export default function LivraisonInputs() {
   };
 
   const handleValidate = () => {
+
+    if (!checkValidate()) {
+      Swal.fire({
+        title: "Error",
+        text: "Les champs requis ne sont pas tous remplis.",
+        icon: "error"
+      });
+      return;
+    }
+
     if (produitsLivre.length == 0) {
       Swal.fire({
         title: "Error",
@@ -608,6 +670,7 @@ export default function LivraisonInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits

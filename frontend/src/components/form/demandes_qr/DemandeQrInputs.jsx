@@ -22,7 +22,7 @@ import {
     TableHeader,
     TableRow,
 } from "../../ui/table";
-import { format } from "date-fns";
+import { format, set } from "date-fns";
 import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
 import Swal from "sweetalert2";
@@ -39,6 +39,16 @@ export default function DemandeQrInputs() {
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
 
+    const LISTE_KEY = "listQr";
+    const saveListe = (liste) => {
+        sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
+    };
+    const loadListe = () => {
+        const stored = sessionStorage.getItem(LISTE_KEY);
+        return stored ? JSON.parse(stored) : null;
+    };
+    const savedListe = loadListe()
+
     const [loadingData, setLoadingData] = useState(false)
     const [loadingValidation, setLoadingValidation] = useState(false)
 
@@ -54,10 +64,10 @@ export default function DemandeQrInputs() {
     const [selectedChaine, setSelectedChaine] = useState('')
     const [selectedMarchand, setSelectedMarchand] = useState('')
 
-    const [quantiteTotale, setQuantiteTotale] = useState(0)
-    const [totalQr, setTotalQr] = useState(0)
+    const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
+    const [totalQr, setTotalQr] = useState(savedListe?.totalQr || 0)
 
-    const [listeLivraison, setListeLivraison] = useState([])
+    const [listeLivraison, setListeLivraison] = useState(savedListe?.listeLivraison || [])
 
     const [isModalParMarchand, setIsModalParMarchand] = useState(false)
     const [isModalParChaineOpen, setIsModalParChaineOpen] = useState(false)
@@ -74,7 +84,7 @@ export default function DemandeQrInputs() {
     const [selectedDateDemande, setSelectedDateDemande] = useState(new Date())
     const [selectedDateLivraison, setSelectedDateLivraison] = useState(new Date())
 
-    const [commentaire, setCommentaire] = useState('')
+    const [commentaire, setCommentaire] = useState(savedListe?.commentaire || '')
 
     const [isSignModalOpen, setIsSignModalOpen] = useState(false)
     const [signature, setSignature] = useState();
@@ -90,7 +100,7 @@ export default function DemandeQrInputs() {
     const [format, setFormat] = useState('')
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
-    const [nbreMarchand, setNbreMarchand] = useState(0)
+    const [nbreMarchand, setNbreMarchand] = useState(savedListe?.nbreMarchand || 0)
 
     const [selectedFiles, setSelectedFiles] = useState([])
 
@@ -100,11 +110,11 @@ export default function DemandeQrInputs() {
                 setLoadingData(true)
                 const merchantList = await merchantsData.findMerchant()
                 // console.log('Total' ,merchantList.length)
-                console.log(merchantList)
+                // console.log(merchantList)
                 const uniqueMerchants = Array.from(
                     new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
                 );
-                // console.log(uniqueMerchants)
+                console.log(uniqueMerchants)
                 // console.log(('unique', uniqueMerchants.length))
 
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
@@ -130,7 +140,7 @@ export default function DemandeQrInputs() {
                 setOptionsMarchands(optionsPm)
 
                 // Fonction pour avoir la liste des marchands + nbr de TPE, groupés par chaîne
-                const groupedChaine = merchantList.reduce((acc, item) => {
+                const groupedChaine = uniqueMerchants.reduce((acc, item) => {
                     const { GROUPE, POINT_MARCHAND } = item
 
                     // 1️⃣ Create group if it doesn't exist
@@ -149,6 +159,7 @@ export default function DemandeQrInputs() {
                     return acc
                 }, {})
                 // 4️⃣ Convert object to desired array structure
+                console.log(groupedChaine)
                 const listeChaine = Object.entries(groupedChaine).map(
                     ([GROUPE, points]) => ({
                         GROUPE,
@@ -196,6 +207,16 @@ export default function DemandeQrInputs() {
         }
         fetchData()
     }, [])
+
+    useEffect(() => {
+        saveListe({
+            listeLivraison,
+            quantiteTotale,
+            nbreMarchand,
+            totalQr,
+            commentaire,
+        })
+    }, [listeLivraison, quantiteTotale, nbreMarchand, totalQr, commentaire])
 
     // const optionsTypeQr = [
     //     { label: 'Orange Money', value: 'Orange Money' },
@@ -344,6 +365,7 @@ export default function DemandeQrInputs() {
         const chaine = chaineGroup.find((item) => {
             return item.GROUPE == value
         })
+        console.log(chaine)
         if (chaine) {
             const listMarchands = chaine.POINT_MARCHAND.map((item, index) => ({
                 id: index,
@@ -385,7 +407,7 @@ export default function DemandeQrInputs() {
         if (marchand) {
             setSelectedChaine(marchand.GROUPE)
             setQuantiteTerminal(marchand.count)
-            setQuantiteQr(quantite*marchand.count)
+            setQuantiteQr(quantite * marchand.count)
         }
     }
 
@@ -590,6 +612,11 @@ export default function DemandeQrInputs() {
             navigate('/toutes-les-demandes-qr')
         } finally {
             setLoadingValidation(false)
+            setListeLivraison([])
+            setQuantiteTotale(0)
+            setTotalQr(0)
+            setCommentaire('')
+            setNbreMarchand(0)
         }
     }
 

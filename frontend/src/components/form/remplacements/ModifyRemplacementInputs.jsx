@@ -25,6 +25,7 @@ import SignatureCanvas from 'react-signature-canvas'
 import { Users } from "../../../backend/users/Users.js"
 import { Stock } from "../../../backend/stock/Stock.js"
 import { Remplacements } from "../../../backend/livraisons/Remplacements.js";
+import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 
 export default function ModifyRemplacementInputs() {
 
@@ -36,6 +37,7 @@ export default function ModifyRemplacementInputs() {
   const remplacements = new Remplacements()
   const userId = localStorage.getItem('id');
   const navigate = useNavigate();
+  const gestionTpeData = new GestionTpe()
 
 
   const [isOrangeChecked, setOrangeChecked] = useState(false);
@@ -95,6 +97,9 @@ export default function ModifyRemplacementInputs() {
   const [detailsParametrage, setDetailsParametrage] = useState([])
 
   const [isRneChecked, setRneChecked] = useState(false)
+
+  const [statutTpeOld, setStatutTpeOld] = useState('')
+  const [statutTpeNew, setStatutTpeNew] = useState('')
 
   useEffect(() => {
     const fetchTerminalInfos = async () => {
@@ -283,34 +288,62 @@ export default function ModifyRemplacementInputs() {
     }
   }
 
-  const handleChangeSn = (value) => {
+  const handleChangeSn = async (value) => {
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
     setOrangeChecked(false)
     setMTNChecked(false)
     setMOOVChecked(false)
-    setRneChecked(false)
+    setStatutTpeNew('')
     setTerminalSN(value)
     const pointMarchand = terminals.find((terminal) => {
       return terminal.SERIAL_NUMBER == value
     })
-    if (pointMarchand) {
-      setTerminalName(pointMarchand.POINT_MARCHAND)
-      setTerminalBanque(pointMarchand.BANQUE)
-      setTerminalCaisse(pointMarchand.TPE)
-      if (pointMarchand.NUM_ORANGE.startsWith("07")) {
-        setOrangeChecked(true)
+    try {
+      if (pointMarchand) {
+        setTerminalName(pointMarchand.POINT_MARCHAND)
+        setTerminalBanque(pointMarchand.BANQUE)
+        setTerminalCaisse(pointMarchand.TPE)
+        if (pointMarchand.NUM_ORANGE.startsWith("07")) {
+          setOrangeChecked(true)
+        }
+        if (pointMarchand.NUM_MTN.startsWith("05")) {
+          setMTNChecked(true)
+        }
+        if (pointMarchand.NUM_MOOV.startsWith("01")) {
+          setMOOVChecked(true)
+        }
       }
-      if (pointMarchand.NUM_MTN.startsWith("05")) {
-        setMTNChecked(true)
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpeNew(statutTpe)
+        } else {
+          setStatutTpeNew('non enregistré')
+        }
       }
-      if (pointMarchand.NUM_MOOV.startsWith("01")) {
-        setMOOVChecked(true)
+    } catch (error) {
+      console.log('Error fetching data ', error)
+    }
+  }
+
+  const handleChangeOldSn = async (value) => {
+    setStatutTpeOld('')
+    setAncienSN(value)
+    try {
+      if (value.length == 10) {
+        const tpeData = await gestionTpeData.getTpeInfos(value)
+        if (tpeData) {
+          const statutTpe = tpeData.statut_tpe.statut
+          setStatutTpeOld(statutTpe)
+        } else {
+          setStatutTpeOld('non enregistré')
+        }
       }
-      if(pointMarchand.RNE) {
-        setRneChecked(true)
-      }
+    } catch (error) {
+      console.log('Error fetching data ', error)
     }
   }
 
@@ -578,11 +611,12 @@ export default function ModifyRemplacementInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Ancien S/N <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpeOld}</span>
                       <Input type="text" id="input" value={ancienSN} onChange={(e) => {
                         const value = e.target.value
                         if (/^\d*$/.test(value)) {
                           if (value.length <= 10) {
-                            setAncienSN(value);
+                            handleChangeOldSn(value);
                           }
                         }
                       }} />
@@ -599,12 +633,14 @@ export default function ModifyRemplacementInputs() {
                     </div>
                     <div>
                       <Label htmlFor="input">Nouvel S/N <span className="text-red-700">*</span></Label>
+                      <span className="text-xs text-blue-500 text-center">{statutTpeNew}</span>
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits
                         if (/^\d*$/.test(value)) {
                           // Only allow up to 10 characters
                           if (value.length <= 10) {
+                            // setTerminalSN(value);
                             handleChangeSn(value)
                           }
                         }

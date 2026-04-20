@@ -867,7 +867,7 @@ export default function RegularisationDemandeQrInputs() {
 
                                                 </div>
                                                 <div>
-                                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                                    <Label>Importer des fichiers</Label>
                                                     <div
                                                         {...getFilesRootProps()}
                                                         className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"

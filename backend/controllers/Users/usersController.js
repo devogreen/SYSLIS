@@ -92,7 +92,7 @@ const register = async (req, res) => {
         <br>
         <p>Vous pouvez à tout moment changer votre mot de passe ou le réinitialiser dans l'application.<p>
         <br>
-        <p>En cas de soucis de connexion ou autre veuillez vous référer au groupe support développement.<p>
+        <p>En cas de soucis de connexion ou autre, veuillez vous référer au groupe support développement.<p>
         <br><br>
         <p>Green - Pay vous remercie.</p>
     `
@@ -101,7 +101,6 @@ const register = async (req, res) => {
             to: newUser.email,
             subject,
             html,
-            attachments
         })
     }
 
@@ -199,12 +198,12 @@ const updateUser = async (req, res) => {
                 to: user.email,
                 subject,
                 html,
-                attachments
             })
         }
 
         res.status(200).json({ message: "Utilisateur mis à jour.", updatedUser });
     } catch (error) {
+        console.error(error)
         res.status(500).json({ message: "Erreur serveur.", error });
     }
 };
@@ -439,7 +438,19 @@ const getOneUser = async (req, res) =>{
 
     try{
         const user = await prisma.users.findUnique({
-            where: { id_user: parseInt(id) }
+            where: { id_user: parseInt(id) },
+            include: {
+                user_roles: {
+                    include: {
+                        roles: true,
+                    },
+                },
+                user_services: {
+                    include: {
+                        services: true,
+                    },
+                },
+            },
         });
 
         if(!user){

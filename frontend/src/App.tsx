@@ -17,7 +17,7 @@ import FormElements from "./pages/Forms/FormElements";
 import Blank from "./pages/Blank";
 // import AppLayout from "./layouts/deliveryAdminLayout/AppLayoutDelivery";
 import { ScrollToTop } from "./components/common/ScrollToTop";
-// import DeliveryDashboard from "./pages/Dashboards/DeliveryDashboard";
+//  import DeliveryDashboard from "./pages/Dashboards/DeliveryDashboard";
 
 // @ts-ignore
 import DashboardRedirector from "./DashboardRedirector";
@@ -192,6 +192,31 @@ import DemandeQrDetails from "./pages/DemandesQrPages/DemandeQrDetails"
 import ModifyDemandeQrForm from "./pages/Forms/DemandesQrForms/ModifyDemandeQrForm"
 // @ts-ignore
 import AllMarchandsQr from "./pages/DemandesQrPages/AllMarchandsQr"
+// @ts-ignore
+import RegularisationLivraisonForm from "./pages/Forms/LivraisonForms/RegularisationLivraisonForm"
+// @ts-ignore
+import SousDashboardLivraison from "./pages/Dashboards/SousDashboardLivraison"
+import SousDashboardRemplacement from "./pages/Dashboards/SousDashboardRemplacement";
+import SousDashboardQRcode from "./pages/Dashboards/SousDashboardQRcode";
+import SousDashboardStocks from "./pages/Dashboards/SousDashboardStocks";
+
+// @ts-ignore
+import DecomForm from "./pages/Forms/DecomForms/DecomForm"
+// @ts-ignore
+import AllDecom from "./pages/DecomPages/AllDecom"
+// @ts-ignore
+import DecomDetails from "./pages/DecomPages/DecomDetails"
+// @ts-ignore
+import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
+// @ts-ignore
+import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomForm"
+
+// @ts-ignore
+import AllParcTpe from "./pages/GestionTpePages/AllParcTpe"
+// @ts-ignore
+import HistoryTpe from "./pages/GestionTpePages/HistoryTpe"
+// @ts-ignore
+import ManipulationTpeForm from "./pages/Forms/GestionTpeForms/ManipulationTpeForm"
 
 export default function App() {
   return (
@@ -204,6 +229,11 @@ export default function App() {
 
               {/* Dashboard */}
               <Route index element={<Dashboard />} />
+              <Route path="/sous-dashboard-livraison" element={<SousDashboardLivraison />} />
+              {/* <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardDemande />} /> */}
+              <Route path="/sous-dashboard-remplacement" element={<SousDashboardRemplacement />} />
+              <Route path="/sous-dashboard-qrcode" element={<SousDashboardQRcode />} />
+              <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardStocks />} />
               {/* Others Page */}
               <Route path="/profile" element={<UserProfiles />} />
               <Route path="/calendar" element={<Calendar />} />
@@ -221,6 +251,7 @@ export default function App() {
               <Route path="/demande-livraison/:id" element={<DemandeDeliveryDetails />} />
               <Route path="/livraison-pieces/:id" element={<LivraisonPiecesForm />} />
               <Route path="/modifier-livraison-pieces/:id" element={<ModifyLivraisonPiecesForm />} />
+              <Route path="/regularisation-livraison" element={<RegularisationLivraisonForm />} />
 
               {/* Demandes QR CODE */}
               <Route path="/regularisation-demande-qr" element={<RegularisationDemandeQrForm />} />
@@ -260,6 +291,18 @@ export default function App() {
               <Route path="/tous-les-remplacements" element={<AllRemplacements />} />
               <Route path="/remplacement-details/:id" element={<RemplacementDetails />} />
               <Route path="/modifier-remplacement/:id" element={<ModifyRemplacementForm />} />
+
+              {/* Décommissionnement */}
+              <Route path="/nouveau-decommissionnement" element={<DecomForm />} />
+              <Route path="/tous-les-decommissionnements" element={<AllDecom />} />
+              <Route path="/decom-details/:id" element={<DecomDetails />} />
+              <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
+              <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
+
+              {/* Gestion Parc TPE */}
+              <Route path="/parc-tpe" element={<AllParcTpe />} />
+              <Route path="/historique-tpe/:id" element={<HistoryTpe />} />
+              <Route path="/manipulation-tpe" element={<ManipulationTpeForm />} />
 
               {/* User */}
               <Route path="/user-profil" element={<UserDetails />} />
