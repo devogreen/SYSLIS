@@ -120,6 +120,7 @@ export default function RemplacementInputs() {
         let data;
         data = await merchants.findMerchant();
         setTerminals(data)
+        console.log('Terminals : ', data)
 
         let type_delivery_data = await productDeliveries.getAllTypeLivraisonCommerciale()
         let type_delivery = type_delivery_data.filter((type) => {
@@ -318,6 +319,7 @@ export default function RemplacementInputs() {
         if (pointMarchand.NUM_MOOV.startsWith("01")) {
           setMOOVChecked(true)
         }
+        console.log('point marchand trouvé : ', pointMarchand)
       }
       if (value.length == 10) {
         const tpeData = await gestionTpeData.getTpeInfos(value)

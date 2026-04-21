@@ -8,7 +8,6 @@ const { faireDemande, getAllDemandes, getOneDemande, livraisonDemande, returnDem
     cancelDemande, updateDemande, generateDemandePDF, receivePiece, validateDemande,
     getAllDemandeFiles, downloadFile, getDemandesEnAttente, getDemandesValideesNonLivrees,
     regularisationDemande, regValidateDemande, regLivraisonDemande, regReceptionDemande,
-    livraisonPiece,
 } = require("../controllers/Demande/demandeController")
 
 router.post('/faireDemande', uploadAll.fields([
@@ -43,6 +42,5 @@ router.post('/regLivraisonDemande', regLivraisonDemande);
 router.post('/regReceptionDemande', uploadAll.fields([
     { name: 'signature'},
 ]), regReceptionDemande);
-router.post('/livraisonPiece', livraisonPiece);
 
 module.exports = router

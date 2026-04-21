@@ -1128,6 +1128,25 @@ const livraisonDemande = async (req, res) => {
           mouvement_stock_demandeur = await tx.mouvement_stock.create({
             data: dataEntree,
           })
+        } else (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'TECH ASSIST') {
+          const livraisonSnForm = await tx.forms.create({
+            data: {
+              type: 'livraison_sn',
+              created_by: user.id_user,
+              created_at: dateAction,
+              last_modified_at: dateAction,
+              nom_user: user.fullname,
+              commentaire,
+            }
+          })
+
+          await tx.livraison.create({
+            data: {
+              form_id: livraisonSnForm.id,
+              statut_livraison: 'en_cours',
+              qte_totale_livraison: final,
+            }
+          })
         }
 
         await tx.demandes.update({
@@ -2146,225 +2165,6 @@ const livraisonDemande = async (req, res) => {
     return res.status(500).json({ message: "Erreur serveur." });
   }
 };
-
-const livraisonPiece = async (req, res) => {
-  try {
-    const {
-      demande_id,
-      user_id,
-      commentaire,
-      stock_id,
-      nomenclature,
-      detailsDemande,
-      detailsDemandeur,
-      itemId,
-    } = req.body;
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demande_id) },
-    });
-
-    if (!demande) {
-      console.error(`Demande avec ID ${demande_id} non trouvée.`);
-      return res.status(404).json({ message: "Demande introuvable." });
-    }
-
-    if (demande.demande_livree == true) {
-      console.error(`Demande avec ID ${demande_id} a déjà été livrée.`);
-      return res.status(400).json({ message: "Demande déjà livrée." });
-    }
-
-    if (!user_id) {
-      console.error("ID utilisateur non fourni.");
-      return res.status(403).json({ message: "Utilisateur non authentifié." });
-    }
-
-    const user = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
-    }
-
-    const detailsMouvement = typeof detailsDemande === "string" ? JSON.parse(detailsDemande) : detailsDemande;
-    const detailsEntree = typeof detailsDemandeur === "string" ? JSON.parse(detailsDemandeur) : detailsDemandeur;
-    const typeMouvement = detailsMouvement.typeMouvement
-    let dataMouvement = null
-    let initial = 0
-    let stock = 0
-    let final = 0
-    let finalPiece = Number(detailsMouvement.stockFinalPiece)
-    let finalPieceLot = 0
-    let mouvement_stock = null
-    const modelPiece = parseInt(detailsMouvement.model)
-    const servicePiece = parseInt(detailsMouvement.service)
-    const pieceId = itemId
-
-    let dataEntree = null
-    let initialDemandeur = 0
-    let finalDemandeur = 0
-    const finalPieceDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-    let mouvement_stock_demandeur = null
-    const serviceDemandeur = demande.service_demandeur
-
-    let updatedQuantiteDemandeur = null
-
-    const selectedStock = await prisma.stocks.findUnique({
-      where: {
-        id: parseInt(stock_id)
-      }
-    })
-
-    const dateAction = new Date();
-
-    const mouvementStock = await prisma.$transaction(async (tx) => {
-      initial = Number(detailsMouvement.stockInitialPiece)
-      stock = Number(detailsMouvement.quantiteMouvement)
-      final = Number(detailsMouvement.stockFinalPiece)
-      dataMouvement = {
-        type: 'sortie',
-        mouvement: 5,
-        demande_id: demande.id,
-        stock_id: parseInt(stock_id),
-        piece_id: parseInt(itemId),
-        service_origine: servicePiece,
-        service_destination: parseInt(demande.service_demandeur),
-        model_id: modelPiece,
-        stock_initial: initial,
-        quantite: stock,
-        stock_final: final,
-        quantite_totale_piece: final,
-        motif: demande.motif_demande,
-        commentaire,
-        details_mouvement: JSON.stringify(detailsMouvement),
-      }
-      mouvement_stock = await prisma.mouvement_stock.create({
-        data: dataMouvement,
-      })
-
-      const dataStock = {
-        quantite_piece: final,
-        last_update: dateAction,
-      }
-
-      const stockDonneur = await tx.stocks.update({
-        where: {
-          id: parseInt(stock_id),
-        },
-        data: dataStock,
-      })
-
-      initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-      finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-      const stockDemandeur = await tx.stocks.findFirst({
-        where: {
-          code_stock: stockDonneur.code_stock,
-          piece_id: 1,
-          service_id: 3,
-        }
-      })
-      let idStock = stockDemandeur ? stockDemandeur.id : null
-      if (!stockDemandeur) {
-        const stockDemandeur = await tx.stocks.create({
-          data: {
-            code_stock: stockDonneur.code_stock,
-            piece_id: 1,
-            model_id: modelPiece,
-            service_id: 3,
-            quantite_lot: 0,
-            quantite_carton: 0,
-            quantite_piece: finalPieceDemandeur,
-            created_at: dateAction,
-            created_by: user.id_user,
-            last_update: dateAction,
-            updated_by: user.id_user,
-          }
-        })
-        idStock = stockDemandeur.id
-      } else {
-        const updatedStockDemandeur = await tx.stocks.update({
-          where: {
-            id: idStock,
-          },
-          data: {
-            quantite_piece: finalDemandeur,
-            last_update: dateAction,
-          },
-        })
-        idStock = updatedStockDemandeur.id
-      }
-      dataEntree = {
-        type: 'entree',
-        mouvement: 5,
-        demande_id: demande.id,
-        stock_id: idStock,
-        piece_id: parseInt(itemId),
-        service_origine: servicePiece,
-        service_destination: parseInt(demande.service_demandeur),
-        model_id: modelPiece,
-        stock_initial: initialDemandeur,
-        quantite: stock,
-        stock_final: finalDemandeur,
-        quantite_totale_piece: finalPieceDemandeur,
-        motif: demande.motif_demande,
-        commentaire,
-        details_mouvement: JSON.stringify(detailsEntree),
-      }
-
-      mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        data: dataEntree,
-      })
-
-      await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
-        data: {
-          stock_id: +stock_id,
-          demande_livree: true,
-          nomenclature,
-          type_demande: typeMouvement,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-        },
-      });
-
-      const livraisonForm = await tx.forms.create({
-        data: {
-          type: 'livraison_stock',
-          created_by: user.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          nom_user: user.fullname,
-          commentaire,
-        }
-      })
-
-      const livraison = await tx.livraison_piece.create({
-        data: {
-          demande_id: demande.id,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-          form_id: livraisonForm.id,
-          stock_id: parseInt(stock_id),
-        }
-      })
-
-      return {
-        livraisonForm,
-        livraison,
-      }
-    })
-
-    console.log('Livraison de stock éffectuée avec succès !')
-    return res.status(201).json({
-      message: 'Livraison de stock éffectuée avec succès !',
-      data: mouvementStock,
-    });
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Erreur serveur." });
-  }
-}
 
 const returnDemande = async (req, res) => {
   const {
@@ -5093,5 +4893,4 @@ module.exports = {
   regValidateDemande,
   regLivraisonDemande,
   regReceptionDemande,
-  livraisonPiece,
 }
