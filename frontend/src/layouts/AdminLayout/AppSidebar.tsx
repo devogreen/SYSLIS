@@ -126,6 +126,7 @@ const navItems: NavItem[] = [
       { name: "REG Livraison", path: "/regularisation-livraison", roles: [1], pro: false },
       { name: "REG Demande Stock", path: "/regularisation-demande", roles: [3], pro: false },
       { name: "REG Demande QRC", path: "/regularisation-demande-qr", roles: [21], pro: false },
+      { name: "REG Remplacement", path: "/regularisation-remplacement", roles: [1], pro: false },
     ],
   },
 

@@ -218,6 +218,9 @@ import HistoryTpe from "./pages/GestionTpePages/HistoryTpe"
 // @ts-ignore
 import ManipulationTpeForm from "./pages/Forms/GestionTpeForms/ManipulationTpeForm"
 
+// @ts-ignore
+import RegRemplacementForm from "./pages/Forms/RemplacementForms/RegRemplacementForm"
+
 export default function App() {
   return (
     <>
@@ -291,6 +294,7 @@ export default function App() {
               <Route path="/tous-les-remplacements" element={<AllRemplacements />} />
               <Route path="/remplacement-details/:id" element={<RemplacementDetails />} />
               <Route path="/modifier-remplacement/:id" element={<ModifyRemplacementForm />} />
+              <Route path="/regularisation-remplacement" element={<RegRemplacementForm />} />
 
               {/* Décommissionnement */}
               <Route path="/nouveau-decommissionnement" element={<DecomForm />} />
