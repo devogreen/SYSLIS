@@ -23,8 +23,8 @@ import Swal from 'sweetalert2'
 import SignatureCanvas from 'react-signature-canvas'
 import Label from "../../components/form/Label";
 import TextArea from "../../components/form/input/TextArea";
-
-
+import { addLocale } from "primereact/api";
+import { Calendar } from 'primereact/calendar';
 
 export default function RemplacementDetails() {
 
@@ -74,10 +74,28 @@ export default function RemplacementDetails() {
 
     const [detailsParametrage, setDetailsParametrage] = useState([])
 
+    const [isReg, setIsReg] = useState(false)
+
+    const [selectedDateReception, setSelectedDateReception] = useState(null)
+    const [isModalRegularisationReceptionOpen, setIsModalRegularisationReceptionOpen] = useState(false);
+    const [dateLivraisonReg, setDateLivraisonReg] = useState(null)
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
     };
+
+    addLocale('fr', {
+        firstDayOfWeek: 1,
+        showMonthAfterYear: false,
+        dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+        dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+        dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+        monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+        today: 'Aujourd\'hui',
+        clear: 'Effacer'
+    });
 
     useEffect(() => {
         if (id) {
@@ -97,7 +115,7 @@ export default function RemplacementDetails() {
                     let livraison_data;
                     livraison_data = await remplacements.getOneRemplacement(id);
                     let index;
-                    console.log(livraison_data)
+                    // console.log(livraison_data)
                     setDeliveryDetails({
                         ...livraison_data,
                         produitsLivre: JSON.parse(livraison_data.details_remplacement)
@@ -123,6 +141,14 @@ export default function RemplacementDetails() {
                     })
                     if (nouveauModel) {
                         setNewModel(nouveauModel.nom_model)
+                    }
+
+                    const remplacementForm = livraison_data.forms
+                    if (remplacementForm) {
+                        if (remplacementForm.is_reg) {
+                            setIsReg(true)
+                            setDateLivraisonReg(remplacementForm.last_modified_at)
+                        }
                     }
 
                     if (livraison_data.statut == 'livre') {
@@ -197,18 +223,20 @@ export default function RemplacementDetails() {
         try {
             setLoadingReception(true);
             setIsModalReceptionOpen(false)
+            setIsModalRegularisationReceptionOpen(false)
             const sign = signatureReception.toDataURL('image/png')
             const fd = new FormData();
             fd.append('remplacement_id', id)
             fd.append('commentaire', messageReception);
             fd.append('user_id', userId);
+            fd.append('date_validation', selectedDateReception);
             if (sign) {
                 const blob = await fetch(sign).then(res => res.blob());
                 fd.append('signature', blob, 'signature.png');
             }
-            for (let [key, value] of fd.entries()) {
-                console.log(`${key}:`, value);
-            }
+            // for (let [key, value] of fd.entries()) {
+            //     console.log(`${key}:`, value);
+            // }
             const response = await remplacements.validateRemplacement(fd);
 
             Swal.fire({
@@ -276,7 +304,18 @@ export default function RemplacementDetails() {
                     <PageBreadcrumb pageTitle={`Remplacement`} />
                     <div>
                         <div className='grid grid-cols-2 justify-between items-center mb-6'>
-                            <div>
+                            <div className='space-y-4'>
+                                {isReg ? (
+                                    <>
+                                        <div>
+                                            <div className="">
+                                                <span className="border p-1.5 border-red-800 text-red-800 text-xs font-light">Régularisation</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <></>
+                                )}
                                 <div>
                                     <span>{`Remplacement TPE ${oldModel} en ${newModel} du ${dateLivraison}`}</span>
                                 </div>
@@ -344,13 +383,28 @@ export default function RemplacementDetails() {
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                            onClick={() => {
-                                                                setIsModalReceptionOpen(true)
-                                                            }}>
-                                                            <span className='mr-4'><i className="pi pi-inbox"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
-                                                        </button>
+                                                        {isReg ? (
+                                                            <>
+                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                    onClick={() => {
+                                                                        setIsModalRegularisationReceptionOpen(true)
+                                                                    }}>
+                                                                    <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                    <span className='text-sm text-gray-700 font-medium'>Reg Réception</span>
+                                                                </button>
+                                                            
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                    onClick={() => {
+                                                                        setIsModalReceptionOpen(true)
+                                                                    }}>
+                                                                    <span className='mr-4'><i className="pi pi-inbox"></i></span>
+                                                                    <span className='text-sm text-gray-700 font-medium'>Réceptionner Livraison</span>
+                                                                </button>
+                                                            </>
+                                                        )}
                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                             onClick={() => {
                                                                 setIsModalReturnLivraisonOpen(true)
@@ -597,6 +651,65 @@ export default function RemplacementDetails() {
                                 Annuler
                             </button>
                         </div>
+                    </div>
+                </div>
+            </Modal>
+            {/* Ajout du modal de reception d'une regularisation de livraison */}
+            <Modal isOpen={isModalRegularisationReceptionOpen} onClose={() => setIsModalRegularisationReceptionOpen(false)} className="p-4 max-w-md">
+                <div className='p-1'>
+                    <div className="w-full text-center mb-3">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium text-sm">Réception</span>
+                    </div>
+                    <div className='text-center mb-3 text-xs'>
+                        <span>Signez manuellement pour valider la réception</span>
+                    </div>
+                    <div className='flex flex-col justify-center items-center space-y-3'>
+                        <SignatureCanvas
+                            ref={data => setSignatureReception(data)}
+                            canvasProps={{ width: 300, height: 150, className: 'sigCanvas border border-gray-300 rounded' }}
+                        />
+                        <div className='w-full'>
+                            <Label>Date Réception <span className="text-red-700">*</span></Label>
+                            <Calendar
+                                value={selectedDateReception}
+                                locale="fr"
+                                onChange={(e) => setSelectedDateReception(e.value)}
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                                minDate={new Date(dateLivraisonReg)}
+                                maxDate={new Date()}
+                                className="w-full"
+                                style={{ fontSize: '2px' }}
+                            />
+                        </div>
+                        <div className='w-full'>
+                            <Label>Commentaire</Label>
+                            <TextArea
+                                value={messageReception}
+                                onChange={(value) => setMessageReception(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+
+                        <div className='w-full flex justify-center items-center'>
+                            <button
+                                onClick={handleClearReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Clear
+                            </button>
+                            <button
+                                onClick={handleReception}
+                                className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorSignReception}
+                        </span>
                     </div>
                 </div>
             </Modal>

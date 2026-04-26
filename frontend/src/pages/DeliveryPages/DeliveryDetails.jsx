@@ -24,8 +24,6 @@ import Label from "../../components/form/Label";
 import TextArea from "../../components/form/input/TextArea";
 import { addLocale } from "primereact/api";
 
-
-
 export default function DeliveryDetails() {
 
     const productDeliveries = new ProductDeliveries()
@@ -576,7 +574,7 @@ export default function DeliveryDetails() {
                 </div>
             </Modal>
 
-            {/* Ajout du modal de reception d'une livraison de regularisation */}
+            {/* Ajout du modal de reception d'une regularisation de livraison */}
             <Modal isOpen={isModalRegularisationReceptionOpen} onClose={() => setIsModalRegularisationReceptionOpen(false)} className="p-4 max-w-md">
                 <div className='p-1'>
                     <div className="w-full text-center mb-3">

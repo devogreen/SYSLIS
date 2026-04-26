@@ -11,7 +11,7 @@ const {deliver,getAllLivraisons, getOneLivraison,deleteLivraison,updateLivraison
     deleteTypeLivraison, updateDeliveryStock, generateTotalLivraisonPDF,getAllTypeParametrage, makeRemplacement,
     getAllRemplacements, getOneRemplacement, validateRemplacement, generateDeliveriesXLSX, generateRemplacementsXLSX,
     updateRemplacement, returnRemplacement, generateRemplacementPDF, regLivraison, regReception,
-    deliverregularisation,regularisationReception,getLivraisonsInRange,getStatsLivraisons,
+    deliverregularisation,regularisationReception,getLivraisonsInRange,getStatsLivraisons, regRemplacement,
 } = require("../controllers/Delivery/deliveryController")
 
 router.post('/deliver', uploadAll.fields([
@@ -59,5 +59,8 @@ router.post('/regReception', uploadAll.fields([
 // router.get("/livraisons-stats",getStatsLivraisons);
 // router.get("/statsLivraisons", require("../controllers/Delivery/statsLivraisonsController").getStatsLivraisons);
 router.get('/livraisons-in-range', getLivraisonsInRange);
+router.post('/regRemplacement', uploadAll.fields([
+    { name: 'signature' },
+]), regRemplacement);
 
 module.exports = router
