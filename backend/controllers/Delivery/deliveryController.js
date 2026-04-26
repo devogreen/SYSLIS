@@ -2591,8 +2591,13 @@ const getAllRemplacements = async (req, res) => {
       where: { deleted: false },
       orderBy: { date_remplacement: 'desc' },
       include: {
-        validation_remplacement: true
-      }
+        forms: true,
+        validation_remplacement: {
+          include: {
+            forms: true,
+          },
+        },
+      },
     });
 
     res.status(200).json(remplacements);

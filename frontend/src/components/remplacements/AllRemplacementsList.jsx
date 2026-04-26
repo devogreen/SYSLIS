@@ -21,6 +21,8 @@ import { MultiSelect } from "primereact/multiselect";
 
 import Swal from "sweetalert2";
 
+import Checkbox from "../form/input/Checkbox";
+
 export default function AllRemplacementsList() {
 
     const remplacements = new Remplacements();
@@ -87,6 +89,9 @@ export default function AllRemplacementsList() {
             : null
     );
 
+    const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
+    const [isNotReg, setIsNotReg] = useState(savedFilters?.isNotReg || false)
+
     addLocale('fr', {
         firstDayOfWeek: 1,
         showMonthAfterYear: false,
@@ -109,8 +114,10 @@ export default function AllRemplacementsList() {
             selectedService,
             selectedOldModels,
             selectedNewModels,
+            isReg,
+            isNotReg,
         });
-    }, [globalFilter, selectedStatus, datesLivraison, datesReception, selectedService, selectedOldModels, selectedNewModels]);
+    }, [globalFilter, selectedStatus, datesLivraison, datesReception, selectedService, selectedOldModels, selectedNewModels, isReg, isNotReg]);
 
     useEffect(() => {
         const fetchDeliveriesData = async () => {
@@ -293,6 +300,11 @@ export default function AllRemplacementsList() {
             const validation = item.validation_remplacement[index]
             dateReception = new Date(validation.date_validation)
         }
+
+        const form = item.forms
+
+        const matchesReg = isReg ? form?.is_reg : true;
+        const matchesNotReg = isNotReg ? !form?.is_reg : true;
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesService = selectedService.length > 0 ? selectedService.includes(item.service_id) : true;
         const matchesOldModel = selectedOldModels.length > 0 ? selectedOldModels.includes(item.old_model_id) : true;
@@ -302,7 +314,7 @@ export default function AllRemplacementsList() {
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesService && matchesOldModel && matchesNewModel && matchesDatesLivraison && matchesDatesReception && matchesGlobalFilter;
+        return matchesStatus && matchesService && matchesOldModel && matchesNewModel && matchesDatesLivraison && matchesDatesReception && matchesReg && matchesNotReg && matchesGlobalFilter;
     });
 
     const totalProduit = filteredDeliveryForms.reduce((sum, item) => sum + Number(item.quantite || 0), 0);
@@ -376,183 +388,161 @@ export default function AllRemplacementsList() {
     return (
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                <div className="px-6 pt-6 flex items-center">
-                    <div className="relative w-full">
-                        <Input
-                            className="pl-10"
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                            placeholder="Rechercher un formulaire..."
-                        />
-                        <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
-                    </div>
-                    <span className="pl-4">
-                        <button onClick={handleClearFilters}>
-                            <i className="pi pi-refresh"></i>
-                        </button>
-                    </span>
-                </div>
-                <div className="grid grid-cols-3 gap-3 p-6 pb-0">
-                    <MultiSelect
-                        value={selectedStatus}
-                        options={statusOptions}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setSelectedStatus(e.value)}
-                        placeholder="Filtrer par statut"
-                        className=""
-                    />
-                    <MultiSelect
-                        value={selectedService}
-                        options={optionsServices}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setselectedService(e.value)}
-                        placeholder="Filtrer par service"
-                        className=""
-                    />
-                    <MultiSelect
-                        value={selectedOldModels}
-                        options={optionsModels}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setSelectedOldModels(e.value)}
-                        placeholder="Filtrer par model remplaçé"
-                        className=""
-                    />
-                    <MultiSelect
-                        value={selectedNewModels}
-                        options={optionsModels}
-                        display="chip"
-                        optionLabel="label"
-                        maxSelectedLabels={2}
-                        onChange={(e) => setSelectedNewModels(e.value)}
-                        placeholder="Filtrer par model remplaçant"
-                        className=""
-                    />
-                </div>
-                <div className="flex justify-normal flex-wrap gap-3 mb-3 p-6">
-                    {/* <div className="flex gap-2">
-                        <DatePicker
-                            id="date-picker-debut"
-                            label="Date de début"
-                            placeholder="Date de début"
-                            value={startDate}
-                            onChange={(dates, currentDateString) => {
-                                setStartDate(dates[0])
-                            }}
-                            dateFormat="dd/mm/yy" />
-                        <DatePicker
-                            id="date-picker-fin"
-                            label="Date de fin"
-                            placeholder="Date de fin"
-                            value={endDate}
-                            onChange={(dates, currentDateString) => {
-                                if (dates && dates[0]) {
-                                    let selectedDate = new Date(dates[0]);
-                                    let nextDay = new Date(selectedDate);
-                                    nextDay.setDate(selectedDate.getDate() + 1);
-                                    setEndDate(nextDay);
-                                }
-                            }}
-                            dateFormat="dd/mm/yy" />
-                    </div> */}
-                    <div>
-                        <Label>Dates Livraison</Label>
-                        <Calendar
-                            value={datesLivraison}
-                            onChange={(e) => {
-                                setDatesLivraison(e.value)
-                                console.log(e.value)
-                            }}
-                            selectionMode="range"
-                            readOnlyInput
-                            hideOnRangeSelection
-                            locale="fr"
-                            dateFormat="dd/mm/yy"
-                            placeholder="dd/mm/yyyy"
-                        />
-                    </div>
-                    <div>
-                        <Label>Dates Réception</Label>
-                        <Calendar
-                            value={datesReception}
-                            onChange={(e) => setDatesReception(e.value)}
-                            selectionMode="range"
-                            readOnlyInput
-                            hideOnRangeSelection
-                            locale="fr"
-                            dateFormat="dd/mm/yy"
-                            placeholder="dd/mm/yyyy"
-                        />
-                    </div>
-                </div>
-                <div className="flex justify-between p-6 pt-0 items-center">
-                    <div className="flex space-x-3 items-center">
-                        <span className="text-md text-gray-600 dark:text-gray-300">
-                            {filteredDeliveryForms.length} formulaire(s) trouvé(s)
+                <div className="p-6 space-y-7">
+                    <div className="flex items-center">
+                        <div className="relative w-full">
+                            <Input
+                                className="pl-10"
+                                value={globalFilter}
+                                onChange={(e) => setGlobalFilter(e.target.value)}
+                                placeholder="Rechercher un formulaire..."
+                            />
+                            <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
+                        </div>
+                        <span className="pl-4">
+                            <button onClick={handleClearFilters}>
+                                <i className="pi pi-refresh"></i>
+                            </button>
                         </span>
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {totalProduit} TPE(s) remplacé(s)
-                        </span>
-                        <div className="flex space-x-2">
-                            {detailsParametrage.map((param) => {
-
-                                let classQuantite = param.quantite > 0 ? "text-blue-700 font-medium" : "text-gray-600 font-medium"
-
-                                return (
-                                    <>
-                                        <div key={param.id} className="">
-                                            <span className="text-xs text-gray-600">{param.nom} : <span className={classQuantite}>{param.quantite}</span></span>
-                                        </div>
-                                    </>
-                                )
-                            })}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pb-0">
+                        <MultiSelect
+                            value={selectedStatus}
+                            options={statusOptions}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setSelectedStatus(e.value)}
+                            placeholder="Filtrer par statut"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedService}
+                            options={optionsServices}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setselectedService(e.value)}
+                            placeholder="Filtrer par service"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedOldModels}
+                            options={optionsModels}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setSelectedOldModels(e.value)}
+                            placeholder="Filtrer par model remplaçé"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedNewModels}
+                            options={optionsModels}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setSelectedNewModels(e.value)}
+                            placeholder="Filtrer par model remplaçant"
+                            className=""
+                        />
+                    </div>
+                    <div className="flex justify-normal flex-wrap gap-3">
+                        <div>
+                            <Label>Dates Livraison</Label>
+                            <Calendar
+                                value={datesLivraison}
+                                onChange={(e) => {
+                                    setDatesLivraison(e.value)
+                                    console.log(e.value)
+                                }}
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                            />
+                        </div>
+                        <div>
+                            <Label>Dates Réception</Label>
+                            <Calendar
+                                value={datesReception}
+                                onChange={(e) => setDatesReception(e.value)}
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="dd/mm/yyyy"
+                            />
                         </div>
                     </div>
-                    <div className="flex space-x-3">
-                        {/* {loadingDownload ? 
-                        (
-                            <span className='flex items-center justify-center'>
-                                <ProgressSpinner style={{width: '20px', height: '20px'}} strokeWidth="8" animationDuration=".5s" />
-                            </span>
-                        ) : (
-                            <>
-                                {filteredDeliveryForms.length > 0 ? 
-                                    (
-                                        <>
-                                            <button className="flex items-center justify-center border rounded-full h-5 w-5 p-5 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
-                                                onClick={handleGlobalDownload}
-                                                >
-                                                <span className="">
-                                                    <i className="pi pi-folder"></i>
-                                                </span>
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <></>
-                                    )
+                    <div className="flex items-center gap-3 my-2">
+                        <Checkbox
+                            checked={isReg}
+                            onChange={(e) => {
+                                if (isReg) {
+                                    setIsReg(false)
+                                } else {
+                                    setIsReg(true)
+                                    setIsNotReg(false)
                                 }
-                            </>
-                        )} */}
-                        {loadingExtract ?
+                            }}
+                            label="Régularisations" />
+                    </div>
+                    <div className="flex items-center gap-3 my-2">
+                        <Checkbox
+                            checked={isNotReg}
+                            onChange={(e) => {
+                                if (isNotReg) {
+                                    setIsNotReg(false)
+                                } else {
+                                    setIsNotReg(true)
+                                    setIsReg(false)
+                                }
+                            }}
+                            label="Sans Régularisations" />
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <div className="flex space-x-3 items-center">
+                            <span className="text-md text-gray-600 dark:text-gray-300">
+                                {filteredDeliveryForms.length} formulaire(s) trouvé(s)
+                            </span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                {totalProduit} TPE(s) remplacé(s)
+                            </span>
+                            <div className="flex space-x-2">
+                                {detailsParametrage.map((param) => {
+
+                                    let classQuantite = param.quantite > 0 ? "text-blue-700 font-medium" : "text-gray-600 font-medium"
+
+                                    return (
+                                        <>
+                                            <div key={param.id} className="">
+                                                <span className="text-xs text-gray-600">{param.nom} : <span className={classQuantite}>{param.quantite}</span></span>
+                                            </div>
+                                        </>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        <div className="flex space-x-3">
+                            {/* {loadingDownload ? 
                             (
                                 <span className='flex items-center justify-center'>
-                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                    <ProgressSpinner style={{width: '20px', height: '20px'}} strokeWidth="8" animationDuration=".5s" />
                                 </span>
                             ) : (
                                 <>
-                                    {filteredDeliveryForms.length > 0 ?
+                                    {filteredDeliveryForms.length > 0 ? 
                                         (
                                             <>
                                                 <button className="flex items-center justify-center border rounded-full h-5 w-5 p-5 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
-                                                    onClick={handleExtractXLSX}
-                                                >
+                                                    onClick={handleGlobalDownload}
+                                                    >
                                                     <span className="">
-                                                        <i className="pi pi-download"></i>
+                                                        <i className="pi pi-folder"></i>
                                                     </span>
                                                 </button>
                                             </>
@@ -561,7 +551,32 @@ export default function AllRemplacementsList() {
                                         )
                                     }
                                 </>
-                            )}
+                            )} */}
+                            {loadingExtract ?
+                                (
+                                    <span className='flex items-center justify-center'>
+                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                    </span>
+                                ) : (
+                                    <>
+                                        {filteredDeliveryForms.length > 0 ?
+                                            (
+                                                <>
+                                                    <button className="flex items-center justify-center border rounded-full h-5 w-5 p-5 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
+                                                        onClick={handleExtractXLSX}
+                                                    >
+                                                        <span className="">
+                                                            <i className="pi pi-download"></i>
+                                                        </span>
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <></>
+                                            )
+                                        }
+                                    </>
+                                )}
+                        </div>
                     </div>
                 </div>
                 <div className="card">
