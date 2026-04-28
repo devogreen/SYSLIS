@@ -282,6 +282,8 @@ export default function AllRemplacementsList() {
         setDatesReception(null);
         setSelectedNewModels([]);
         setSelectedOldModels([]);
+        setIsNotReg(false)
+        setIsReg(false)
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
