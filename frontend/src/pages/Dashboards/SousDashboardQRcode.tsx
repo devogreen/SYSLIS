@@ -96,6 +96,7 @@ export default function SousDashboardQRcode() {
     }
   };
 
+  // @ts-ignore
   const handleResetDates = () => {
     setStartDate(null);
     setEndDate(null);
