@@ -516,6 +516,69 @@ const nbetpepartypeparperiod = async (req, res) => {
 };
 
 
+const getTpeDeliveredByLigne = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let whereClause = {
+      statut_livraison: 'livre',
+      deleted: false
+    };
+    
+    if (startDate && endDate) {
+      whereClause.date_livraison = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    const results = await prisma.livraison.groupBy({
+      by: ['service_id'],
+      where: whereClause,
+      _sum: {
+        qte_totale_livraison: true
+      }
+    });
+
+    // Get service names
+    const services = await prisma.services.findMany({
+      where: {
+        id: {
+          in: results.map(r => r.service_id).filter(Boolean)
+        }
+      },
+      select: {
+        id: true,
+        nom_service: true
+      }
+    });
+
+    const serviceMap = {};
+    services.forEach(s => {
+      serviceMap[s.id] = s.nom_service;
+    });
+
+    const stats = results.map(r => ({
+      service_id: r.service_id,
+      nom_ligne: serviceMap[r.service_id] || 'Non assigné',
+      tpe_livres: r._sum.qte_totale_livraison || 0
+    })).sort((a, b) => b.tpe_livres - a.tpe_livres);
+
+    res.json({
+      success: true,
+      total_tpe: stats.reduce((sum, s) => sum + s.tpe_livres, 0),
+      par_ligne: stats
+    });
+  } catch (error) {
+    console.error('Erreur getTpeDeliveredByLigne:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur serveur',
+      par_ligne: []
+    });
+  }
+};
+
 // const nbetpepartypeparperiod = async (req, res) => {
 //     const { datedebut, datefin } = req.body;
 //     const { id } = req.params;
@@ -824,9 +887,10 @@ const getGeneralStats = async (req, res) => {
         const statsLivraisons = {
             total: livraisons.length,
             attente: livraisons.filter(l => ['en_cours', 'en_attente'].includes(l.statut_livraison)).length,
-            livrees: livraisons.filter(l => l.statut_livraison === 'livre').length,
+            livrees: livraisons.filter(l => l.statut_livraison === 'livre').reduce((total, l) => total + (l.qte_totale_livraison || 0), 0),
             retours: livraisons.filter(l => l.validations?.some(v => v.etat_validation === 'retourne')).length || 0
         };
+
 
 // Demandes stats - safe query
         let statsDemandes = [];
@@ -875,8 +939,7 @@ const getGeneralStats = async (req, res) => {
             });
         }
 
-        // Stocks summary - safe query
-        let statsStocks = { _sum: { quantite_piece: 0, quantite_carton: 0, quantite_lot: 0 } };
+
         try {
             statsStocks = await prisma.stocks.aggregate({
                 where: { is_deleted: false },
@@ -888,24 +951,31 @@ const getGeneralStats = async (req, res) => {
 
         // QR Codes stats - group by statut with date filter via forms.created_at
         let statsQrMap = { soumise: 0, generee: 0, imprimee: 0, livree: 0, recue: 0 };
+        let statsQrQuantitiesMap = { soumise: 0, generee: 0, imprimee: 0, livree: 0, recue: 0 };
         if (startDate && endDate) {
             try {
                 const qrStats = await prisma.demande_qr.groupBy({
                     by: ['statut'],
                     where: {
                         forms: {
+                            is_deleted: false,
                             created_at: {
                                 gte: new Date(startDate + 'T00:00:00'),
                                 lte: new Date(endDate + 'T23:59:59')
                             }
                         }
                     },
-                    _count: { id: true }
+                    _count: { id: true },
+                    _sum: { quantite_qr: true }
                 });
                 statsQrMap = qrStats.reduce((acc, curr) => ({
                     ...acc,
                     [curr.statut]: curr._count.id
                 }), statsQrMap);
+                statsQrQuantitiesMap = qrStats.reduce((acc, curr) => ({
+                    ...acc,
+                    [curr.statut]: curr._sum.quantite_qr || 0
+                }), statsQrQuantitiesMap);
             } catch (err) {
                 console.error('QR stats groupBy error:', err);
             }
@@ -913,12 +983,22 @@ const getGeneralStats = async (req, res) => {
             try {
                 const qrStats = await prisma.demande_qr.groupBy({
                     by: ['statut'],
-                    _count: { id: true }
+                    where: {
+                        forms: {
+                            is_deleted: false
+                        }
+                    },
+                    _count: { id: true },
+                    _sum: { quantite_qr: true }
                 });
                 statsQrMap = qrStats.reduce((acc, curr) => ({
                     ...acc,
                     [curr.statut]: curr._count.id
                 }), statsQrMap);
+                statsQrQuantitiesMap = qrStats.reduce((acc, curr) => ({
+                    ...acc,
+                    [curr.statut]: curr._sum.quantite_qr || 0
+                }), statsQrQuantitiesMap);
             } catch (err) {
                 console.error('QR stats groupBy error (no filter):', err);
             }
@@ -964,6 +1044,7 @@ const getGeneralStats = async (req, res) => {
             demandesValideesNonRecues,
             stocks: statsStocks._sum,
             qr_codes: statsQrMap,
+            qr_quantities: statsQrQuantitiesMap,
             remplacementsLivres
         };
 
@@ -1027,6 +1108,74 @@ const getLivraisonsParTypeLivre = async (req, res) => {
   }
 };
 
+const getTpeLivresParType = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let whereClause = {
+      deleted: false,
+      statut_livraison: "livre"
+    };
+    
+    if (startDate && endDate) {
+      whereClause.date_livraison = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    // Group by type and sum quantity
+    const groupResults = await prisma.livraison.groupBy({
+      by: ['type_livraison_id'],
+      where: whereClause,
+      _sum: {
+        qte_totale_livraison: true
+      }
+    });
+
+    // Get type names
+    const typeIds = groupResults.map(r => r.type_livraison_id).filter(Boolean);
+    const types = await prisma.type_livraison_commerciale.findMany({
+      where: {
+        id_type_livraison: { in: typeIds },
+        is_deleted: false
+      },
+      select: {
+        id_type_livraison: true,
+        nom_type_livraison: true
+      }
+    });
+
+    const typeMap = {};
+    types.forEach(t => {
+      typeMap[t.id_type_livraison] = t.nom_type_livraison || `Type ${t.id_type_livraison}`;
+    });
+
+    const tpeParType = groupResults.map(r => ({
+      id: r.type_livraison_id,
+      nom: typeMap[r.type_livraison_id] || 'Inconnu',
+      quantite: r._sum.qte_totale_livraison || 0
+    })).filter(item => item.quantite > 0)
+     .sort((a, b) => b.quantite - a.quantite);
+
+    const totalTpe = tpeParType.reduce((sum, item) => sum + item.quantite, 0);
+
+    res.json({
+      success: true,
+      totalTpe,
+      tpeParType
+    });
+  } catch (error) {
+    console.error('Erreur getTpeLivresParType:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur serveur',
+      tpeParType: []
+    });
+  }
+};
+
+
 module.exports = {
     nbdeliverycharger,
     nbexitcharger,
@@ -1037,4 +1186,6 @@ module.exports = {
     nbetpepartypeparperiod,
     getGeneralStats,
     getLivraisonsParTypeLivre,
+    getTpeLivresParType,
 }
+
