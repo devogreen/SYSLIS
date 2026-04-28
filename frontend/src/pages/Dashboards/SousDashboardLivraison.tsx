@@ -174,7 +174,7 @@ export default function SousDashboardLivraison() {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-8 text-gray-800">Dashboard Livraisons</h1>
+      <h1 className="text-3xl font-bold mb-8 text-gray-800">Dashboard Livraisons TPE</h1>
 
       {/* Date Picker */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
