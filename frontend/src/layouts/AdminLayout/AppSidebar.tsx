@@ -35,10 +35,10 @@ const navItems: NavItem[] = [
     name: "Dashboard",
     subItems: [
       { name: "Semaine en cours", path: "/", pro: false },
-      { name: " Dashboard Livraison", path: "/sous-dashboard-livraison", roles: [1], pro: false },
-      { name: " Dashboard Remplacement", path: "/sous-dashboard-remplacement", roles: [1], pro: false },
-      { name: " Dashboard QRcode", path: "/sous-dashboard-qrcode", pro: false },
-      { name: " Dashboard MVT Stock", path: "/sous-dashboard-mvt-stock", pro: false },
+      { name: " Livraison TPE", path: "/sous-dashboard-livraison", roles: [1], pro: false },
+      { name: " Remplacement TPE", path: "/sous-dashboard-remplacement", roles: [1], pro: false },
+      { name: " QRcode", path: "/sous-dashboard-qrcode", pro: false },
+      { name: " Mouvement Stock", path: "/sous-dashboard-mvt-stock", pro: false },
       // { name: " Dashboard Stock", path: "/sous-dashboard-stock", pro: false },
       // { name: "Données Générales", path:"/donnees-generales", pro: false},
       // { name: "Statistiques livraisons", path: "/statistiques-livraisons", pro: false },
@@ -424,7 +424,7 @@ const AppSidebar: React.FC = () => {
         </nav>
         <div className="text-center text-xs font-bold text-gray-500">
           <span>
-            v.1.12.1
+            v.1.14.0
           </span>
         </div>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}

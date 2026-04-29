@@ -1,21 +1,20 @@
-# Task: Fix "Cannot find name 'terminal'" TypeScript error in Dashboard.tsx
+# TODO - Dashboard QR Code : Afficher toutes les données par défaut
 
-## Plan Breakdown & Progress
+## Plan de modifications
 
-### 1. ✅ [COMPLETE] Understand project and locate error
-- Searched for 'terminal' → Found in Dashboard.tsx
-- Read file → Confirmed undefined variable
+- [x] 1. Analyser le problème : `startDate`/`endDate` initialisés à la semaine courante → filtre appliqué dès le chargement
+- [x] 2. Lire les fichiers concernés (`SousDashboardQRcode.tsx`, `statsController.js`, `date-picker.tsx`)
+- [x] 3. Modifier `SousDashboardQRcode.tsx` :
+  - Changer `startDate`/`endDate` en `Date | null` initialisés à `null`
+  - Adapter `getFormattedDate` pour gérer `null`
+  - Adapter les handlers de changement de date pour le cas vide
+  - Modifier `fetchData` pour ne pas passer les query params si dates `null`
+  - Ajouter un bouton "Réinitialiser / Toutes les périodes"
+  - Corriger la grille `xl:grid-cols-5` → `xl:grid-cols-6` (6 cartes)
+- [x] 4. Tester le comportement par défaut (toutes les données affichées)
+- [x] 5. Tester le filtre par date (fonctionnement normal)
 
-### 2. ✅ [COMPLETE] Create TODO.md for tracking
-
-### 3. ✅ [COMPLETE] Edit frontend/src/pages/Dashboards/Dashboard.tsx
-- Replace `terminal?.` → `stats?.stocks?.`
-- Fix Tailwind classes: `bleu` → `blue`
-
-### 4. Test changes
-- Run `cd frontend && npm run dev`
-- Verify no TypeScript errors
-- Check "Stocks TERMINAL" card displays correctly
-
-### 5. ✅ [PENDING] Attempt completion
+## Notes
+- Le backend (`statsController.js`) gère déjà l'absence de `startDate`/`endDate` → requête sans filtre temporel
+- Aucune modification backend nécessaire
 

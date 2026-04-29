@@ -3917,7 +3917,7 @@ const getStatsLivraisons = async (req, res) => {
         }
       }
     });
-
+// console.log(livraisons);
     const stats = {
       attente: livraisons.filter(l => l.statut_livraison === 'en_cours' || l.statut_livraison === 'en_attente').length,
       livrees: livraisons.filter(l => l.statut_livraison === 'livre').length,
