@@ -2681,11 +2681,11 @@ const validateRemplacement = async (req, res) => {
     }
     let isReg = false
     let dateAction = new Date()
-    if (date_validation) {
+    const dateVer = new Date(date_validation)
+    if (!isNaN(dateVer.valueOf())) {
       dateAction = new Date(date_validation)
       isReg = true
     }
-
     const validationRemplacement = await prisma.$transaction(async (tx) => {
       const validationForm = await tx.forms.create({
         data: {

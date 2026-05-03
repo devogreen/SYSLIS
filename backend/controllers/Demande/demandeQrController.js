@@ -522,7 +522,7 @@ const faireDemandeQr = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
 
-        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
+        if ((generateurs && generateurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `NOUVELLE DEMANDE DE QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
@@ -551,13 +551,13 @@ const faireDemandeQr = async (req, res) => {
                     html,
                 });
             }
-            for (const imprimeur of imprimeurs) {
-                await sendMail({
-                    to: imprimeur.email,
-                    subject,
-                    html,
-                });
-            }
+            // for (const imprimeur of imprimeurs) {
+            //     await sendMail({
+            //         to: imprimeur.email,
+            //         subject,
+            //         html,
+            //     });
+            // }
             for (const superviseur of superviseurs) {
                 await sendMail({
                     to: superviseur.email,

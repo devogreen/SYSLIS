@@ -883,13 +883,17 @@ export default function DemandeQrDetails() {
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                        {/* <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                                             onClick={() => {
                                                                                 setIsModalGenerationOpen(true)
                                                                             }}>
                                                                             <span className='mr-4'><i className="pi pi-upload"></i></span>
                                                                             <span className='text-sm text-gray-700 font-medium'>Upload QR Codes</span>
-                                                                        </button>
+                                                                        </button> */}
+                                                                        <Link to={`/selection-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                            <span className='mr-4'><i className="pi pi-upload"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Upload QR Codes</span>
+                                                                        </Link>
                                                                     </>
                                                                 )}
                                                             </>
@@ -1210,6 +1214,11 @@ export default function DemandeQrDetails() {
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                Index
+                                                            </TableCell>
+                                                            <TableCell
+                                                                isHeader
+                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                 Type QR
                                                             </TableCell>
                                                             <TableCell
@@ -1243,6 +1252,9 @@ export default function DemandeQrDetails() {
                                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                                         {listeDemande.map((item, index) => (
                                                             <TableRow>
+                                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                                    {index+1}
+                                                                </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.typeQr}
                                                                 </TableCell>
@@ -1542,7 +1554,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateDemandeReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
@@ -1600,7 +1612,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateLivraisonReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>

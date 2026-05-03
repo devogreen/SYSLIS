@@ -221,6 +221,9 @@ import ManipulationTpeForm from "./pages/Forms/GestionTpeForms/ManipulationTpeFo
 // @ts-ignore
 import RegRemplacementForm from "./pages/Forms/RemplacementForms/RegRemplacementForm"
 
+// @ts-ignore
+import SelectionQrForm from "./pages/Forms/DemandesQrForms/SelectionQrForm"
+
 export default function App() {
   return (
     <>
@@ -263,6 +266,7 @@ export default function App() {
               <Route path="/demande-qr-details/:id" element={<DemandeQrDetails />} />
               <Route path="/modifier-demande-qr/:id" element={<ModifyDemandeQrForm />} />
               <Route path="/tous-les-marchands-qr" element={<AllMarchandsQr />} />
+              <Route path="/selection-qr/:id" element={<SelectionQrForm />} />
 
               {/* Stock */}
               <Route path="/voir-items" element={<AllItems />} />
