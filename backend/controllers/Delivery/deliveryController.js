@@ -399,7 +399,7 @@ const deliver = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (nouvelleLivraison.type_livraison_id != 5 && nouvelleLivraison.type_livraison_id != 7 && nouvelleLivraison.type_livraison_id != 8) {
         // Récupérer les SN de la liste
@@ -959,7 +959,7 @@ const updateLivraison = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (updated.type_livraison_id != 5 && updated.type_livraison_id != 7 && updated.type_livraison_id != 8) {
         // Récupérer les SN de la liste
@@ -2679,9 +2679,11 @@ const validateRemplacement = async (req, res) => {
       console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
+
     let isReg = false
     let dateAction = new Date()
-    if (date_validation) {
+    const dateVer = new Date(date_validation)
+    if (!isNaN(dateVer.valueOf())) {
       dateAction = new Date(date_validation)
       isReg = true
     }

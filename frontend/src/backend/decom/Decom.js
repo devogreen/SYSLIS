@@ -99,5 +99,14 @@ export class Decom {
             throw error.response.data;
         }
     }
+
+    async regVerifyDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/regVerifyDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
     
 }
