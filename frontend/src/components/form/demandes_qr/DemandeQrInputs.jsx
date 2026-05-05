@@ -499,6 +499,7 @@ export default function DemandeQrInputs() {
                 pointMarchand: selectedMarchand,
                 quantiteTerminal,
                 quantiteQr,
+                is_selected: true,
             }
 
             setListeLivraison((prev) => [...prev, newElement]);
@@ -520,6 +521,7 @@ export default function DemandeQrInputs() {
                 pointMarchand: item.POINT_MARCHAND,
                 quantiteTerminal: item.sn_count,
                 quantiteQr: item.quantiteQr,
+                is_selected: true,
             }))
             let listeQr = 0
             for (let item of liste) {

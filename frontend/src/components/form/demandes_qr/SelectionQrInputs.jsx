@@ -64,9 +64,11 @@ export default function SelectionQrInputs() {
 
     const [isModalConfirmModifOpen, setIsModalConfirmModifOpen] = useState(false)
 
-    const totalQr = listeDemande.reduce((sum, item) => sum + Number(item.quantiteQr || 0), 0);
 
     const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+    const selectedMarchands = listeDemande.filter(item => item.is_selected);
+    const totalQr = selectedMarchands.reduce((sum, item) => sum + Number(item.quantiteQr || 0), 0);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -113,6 +115,7 @@ export default function SelectionQrInputs() {
 
         const marchandQr = listeDemande.at(value)
         if (marchandQr) {
+            listeDemande[value].is_selected = true
             setSelectedMarchand(marchandQr)
             setQuantiteTpe(marchandQr.quantiteTerminal)
             setQuantiteQr(marchandQr.quantiteQr)
@@ -131,27 +134,10 @@ export default function SelectionQrInputs() {
     }
 
     const handleConfirmModif = () => {
-        if (!checkModif) {
+        if (!checkModif()) {
             return
         }
         setIsModalConfirmModifOpen(true)
-    }
-
-    const handleValidateAll = () => {
-        setIsAllChecked(true)
-
-    }
-    const handleValidateMarchand = (value) => {
-        const marchandQr = listeDemande.at(value)
-        const idMarchand = marchandQr.id
-
-        if (listeDemande[value].is_selected == true) {
-            listeDemande[value].is_selected = false
-            setIsAllChecked(false)
-        } else {
-            listeDemande[value].is_selected = true
-        }
-
     }
 
     const handleValidateModif = () => {
@@ -160,6 +146,10 @@ export default function SelectionQrInputs() {
         const idMarchand = listeDemande[indexMarchand].id
 
         listeDemande[indexMarchand].quantiteQr = quantiteQr
+
+    }
+
+    const handleConfirmValidate = () => {
 
     }
 
@@ -325,18 +315,16 @@ export default function SelectionQrInputs() {
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                 <Checkbox
                                                     checked={isAllChecked}
-                                                    onChange={(e) => {
-                                                        if (isAllChecked) {
-                                                            setIsAllChecked(false)
-                                                            for (let m of listeDemande) {
-                                                                m.is_selected = false
-                                                            }
-                                                        } else {
-                                                            setIsAllChecked(true)
-                                                            for (let m of listeDemande) {
-                                                                m.is_selected = true
-                                                            }
-                                                        }
+                                                    onChange={() => {
+                                                        const newValue = !isAllChecked;
+
+                                                        const updatedList = listeDemande.map(item => ({
+                                                            ...item,
+                                                            is_selected: newValue
+                                                        }));
+
+                                                        setListeDemande(updatedList);
+                                                        setIsAllChecked(newValue);
                                                     }}
                                                 />
                                             </TableCell>
@@ -368,7 +356,6 @@ export default function SelectionQrInputs() {
                                                     {item.quantiteQr}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     <button
                                                         className="text-black hover:text-blue-700"
@@ -378,17 +365,21 @@ export default function SelectionQrInputs() {
                                                     </button>
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     <Checkbox
                                                         checked={item.is_selected}
                                                         onChange={() => {
-                                                            if(item.is_selected) {
-                                                                listeDemande[index].is_selected = false
-                                                                setIsAllChecked(false)
-                                                            } else {
-                                                                listeDemande[index].is_selected = true
-                                                            }
+                                                            const updatedList = listeDemande.map((item, i) =>
+                                                                i === index
+                                                                    ? { ...item, is_selected: !item.is_selected }
+                                                                    : item
+                                                            );
+
+                                                            setListeDemande(updatedList);
+
+                                                            // Update "select all" checkbox
+                                                            const allChecked = updatedList.every(item => item.is_selected);
+                                                            setIsAllChecked(allChecked);
                                                         }}
                                                     />
                                                 </TableCell>
@@ -398,6 +389,33 @@ export default function SelectionQrInputs() {
                                 </Table>
                             </div>
                         </div>
+                        {selectedMarchands.length > 0 ? (
+                            <>
+                                <div className="mt-3">
+                                    <div className="text-center">
+                                        {loadingValidation ? (
+                                            <>
+                                                <div>
+                                                    <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="w-full flex justify-center items-center">
+                                                    <button className="w-1/5 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                        onClick={handleConfirmValidate}
+                                                    >
+                                                        Valider
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <></>
+                        )}
                     </div>
                 </div>
             </div>
