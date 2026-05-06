@@ -876,10 +876,6 @@ const downloadQrCodes = async (req, res) => {
 
         // Set ZIP headers
         res.setHeader("Content-Type", "application/zip");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="qr_codes_${idDemande}_${idGeneration}.zip"`
-        );
 
         const archive = archiver("zip", {
             zlib: { level: 9 },

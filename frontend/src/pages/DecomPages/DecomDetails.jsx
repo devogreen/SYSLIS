@@ -59,6 +59,7 @@ export default function DecomDetails() {
     const [isLivreur, setIsLivreur] = useState(false)
     const [isReceveur, setIsReceveur] = useState(false)
     const [isVerificateur, setIsVerificateur] = useState(false)
+    const [isValidateur, setIsValidateur] = useState(false)
 
     const [listeDecom, setListeDecom] = useState([])
     const [quantiteDecom, setQuantiteDecom] = useState(0)
@@ -156,6 +157,9 @@ export default function DecomDetails() {
 
                     if (nomRoles.includes('verification_decom')) {
                         setIsVerificateur(true)
+                    }
+                    if (nomRoles.includes('cloture_decom')) {
+                        setIsValidateur(true)
                     }
                     setChecking(true)
                 } else if (statut == 'retourne' && reception && reception.type == 'retour') {
@@ -322,6 +326,7 @@ export default function DecomDetails() {
                 userId,
                 commentaire: messageCloture,
                 listeDecom,
+                isReg,
             }
             const id = idDecom
 
@@ -500,7 +505,7 @@ export default function DecomDetails() {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                        {listeChecking.length == 0 ? (
+                                                                        {listeChecking.length == 0 && isValidateur ? (
                                                                             <>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                     onClick={() => {

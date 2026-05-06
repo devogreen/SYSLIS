@@ -131,18 +131,20 @@ const faireDecom = async (req, res) => {
                 skipDuplicates: true
             });
 
-            // 2. Update ALL (existing + newly created)
-            await tx.parc_tpe.updateMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                data: {
-                    updated_by: utilisateur.id_user,
-                    updated_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: 8,
-                }
-            });
+            if (!isReg) {
+                // 2. Update ALL (existing + newly created)
+                await tx.parc_tpe.updateMany({
+                    where: {
+                        serial_number: { in: serials }
+                    },
+                    data: {
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: 8,
+                    }
+                });
+            }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
             allTpes = await tx.parc_tpe.findMany({
@@ -725,12 +727,13 @@ const receptionDecom = async (req, res) => {
             ? JSON.parse(decom.liste_decom)
             : decom.liste_decom;
 
+        const addOneSecond = (date) => new Date(new Date(date).getTime() + 2000);
 
         let isReg = false
         let dateAction = new Date()
         const dateVer = new Date(date_reception)
         if (!isNaN(dateVer.valueOf())) {
-            dateAction = new Date(date_reception)
+            dateAction = addOneSecond(date_reception)
             isReg = true
         }
 
@@ -821,20 +824,22 @@ const receptionDecom = async (req, res) => {
                 });
             }
 
-            // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-            await Promise.all(
-                toUpdate.map(item =>
-                    tx.parc_tpe.update({
-                        where: { serial_number: item.terminalSN },
-                        data: {
-                            updated_by: utilisateur.id_user,
-                            updated_at: dateAction,
-                            last_modified_at: dateAction,
-                            statut_id: 9,
-                        }
-                    })
-                )
-            );
+            if (!isReg) {
+                // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+                await Promise.all(
+                    toUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: { serial_number: item.terminalSN },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: 9,
+                            }
+                        })
+                    )
+                );
+            }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
             const allTpes = await tx.parc_tpe.findMany({
@@ -1479,6 +1484,7 @@ const clotureDecom = async (req, res) => {
             userId,
             commentaire,
             listeDecom,
+            isReg,
         } = req.body
 
         const decom = await prisma.form_decom.findUnique({
@@ -1524,7 +1530,7 @@ const clotureDecom = async (req, res) => {
 
         const dateAction = new Date()
 
-        const addOneSecond = (date) => new Date(new Date(date).getTime() + 1000);
+        const addOneSecond = (date) => new Date(new Date(date).getTime() + 5000);
 
         const cloturation = await prisma.$transaction(async (tx) => {
             const retourDecomForm = await tx.forms.create({
@@ -1603,20 +1609,22 @@ const clotureDecom = async (req, res) => {
                 });
             }
 
-            // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-            await Promise.all(
-                toUpdate.map(item =>
-                    prisma.parc_tpe.update({
-                        where: { serial_number: item.serial_number },
-                        data: {
-                            updated_by: utilisateur.id_user,
-                            updated_at: item.updated_at ? addOneSecond(item.updated_at) : addOneSecond(dateAction),
-                            last_modified_at: item.last_modified_at ? addOneSecond(item.last_modified_at) : addOneSecond(dateAction),
-                            statut_id: statutMap[item.statut],
-                        }
-                    })
-                )
-            );
+            if (!isReg) {
+                // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
+                await Promise.all(
+                    toUpdate.map(item =>
+                        prisma.parc_tpe.update({
+                            where: { serial_number: item.serial_number },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: item.updated_at ? addOneSecond(item.updated_at) : addOneSecond(dateAction),
+                                last_modified_at: item.last_modified_at ? addOneSecond(item.last_modified_at) : addOneSecond(dateAction),
+                                statut_id: statutMap[item.statut],
+                            }
+                        })
+                    )
+                );
+            }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
             const allTpes = await prisma.parc_tpe.findMany({
