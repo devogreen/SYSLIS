@@ -876,10 +876,6 @@ const downloadQrCodes = async (req, res) => {
 
         // Set ZIP headers
         res.setHeader("Content-Type", "application/zip");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="qr_codes_${idDemande}_${idGeneration}.zip"`
-        );
 
         const archive = archiver("zip", {
             zlib: { level: 9 },
@@ -2229,6 +2225,93 @@ const getAllMarchandsQr = async (req, res) => {
     }
 }
 
+// Fonction pour obtenir le cumul des QR Codes par étape (soumis, générés, imprimés, livrés, reçus) sur une période donnée.
+const getCumulQrCodes = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        const dateFilter = {
+            gte: new Date(startDate + 'T00:00:00'),
+            lte: new Date(endDate + 'T23:59:59')
+        };
+
+        const soumis = await prisma.demande_qr.aggregate({
+            where: {
+                forms: {
+                    is_deleted: false,
+                    last_modified_at: dateFilter
+                }
+            },
+            _sum: {
+                quantite_qr: true
+            }
+        });
+
+        const genere = await prisma.generation_qr.aggregate({
+            where: {
+                forms: {
+                    is_deleted: false,
+                    last_modified_at: dateFilter
+                }
+            },
+            _sum: {
+                quantite_qr: true
+            }
+        });
+
+        const imprime = await prisma.impression_qr.aggregate({
+            where: {
+                forms: {
+                    is_deleted: false,
+                    last_modified_at: dateFilter
+                }
+            },
+            _sum: {
+                quantite_qr: true
+            }
+        });
+
+        const livree = await prisma.livraison_qr.aggregate({
+            where: {
+                forms: {
+                    is_deleted: false,
+                    last_modified_at: dateFilter
+                }
+            },
+            _sum: {
+                quantite_qr: true
+            }
+        });
+
+        const recue = await prisma.reception_qr.aggregate({
+            where: {
+                forms: {
+                    is_deleted: false,
+                    last_modified_at: dateFilter
+                }
+            },
+            _sum: {
+                quantite_qr: true
+            }
+        });
+
+        res.status(200).json({
+            message: 'Cumul QR codes par étape',
+            data: {
+                soumis: soumis._sum.quantite_qr || 0,
+                genere: genere._sum.quantite_qr || 0,
+                imprime: imprime._sum.quantite_qr || 0,
+                livree: livree._sum.quantite_qr || 0,
+                recue: recue._sum.quantite_qr || 0,
+            }
+        });
+
+    } catch (error) {
+        console.error('Erreur getCumulQrCodes:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+};
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2248,4 +2331,5 @@ module.exports = {
     regularisationReceptionDemandeQr,
     extractMarchandsQr,
     getAllMarchandsQr,
+    getCumulQrCodes,
 }

@@ -447,13 +447,7 @@ export default function DemandeQrDetails() {
             a.href = url;
 
             // Extract filename from headers if backend sends it
-            const contentDisposition = response.headers["content-disposition"];
-            let fileName = "qr_codes";
-
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="?(.+)"?/);
-                if (match?.[1]) fileName = match[1];
-            }
+            const fileName = `qr_codes_${idDemande}_${idGeneration}.zip`;
 
             a.download = fileName;
             document.body.appendChild(a);

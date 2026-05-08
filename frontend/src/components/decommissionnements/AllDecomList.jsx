@@ -73,15 +73,18 @@ export default function AllDecomList() {
             : null
     );
 
+    const [isNotReg, setIsNotReg] = useState(savedFilters?.isNotReg || false)
+
     useEffect(() => {
         saveFilters({
             globalFilter,
             selectedStatus,
             isReg,
+            isNotReg,
             datesDecom: datesDecom?.map(d => d?.toISOString()),
             datesReception: datesReception?.map(d => d?.toISOString()),
         });
-    }, [globalFilter, selectedStatus, isReg, datesDecom, datesReception]);
+    }, [globalFilter, selectedStatus, isReg, isNotReg, datesDecom, datesReception]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -103,7 +106,8 @@ export default function AllDecomList() {
     const handleClearFilters = () => {
         setGlobalFilter("");
         setSelectedStatus([]);
-        setIsReg(false)
+        setIsReg(false);
+        setIsNotReg(false);
         setDatesDecom(null);
         setDatesReception(null);
         sessionStorage.removeItem(FILTERS_KEY);
@@ -224,12 +228,13 @@ export default function AllDecomList() {
 
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesReg = isReg ? form.is_reg : true;
+        const matchesNotReg = isNotReg ? !form?.is_reg && !item.is_reg : true;
         const matchesDatesDecom = datesDecom ? (datesDecom[0] <= dateDecom && nextDayDecom >= dateDecom) : true;
         const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesReg && matchesDatesDecom && matchesDatesReception && matchesGlobalFilter;
+        return matchesStatus && matchesReg && matchesNotReg && matchesDatesDecom && matchesDatesReception && matchesGlobalFilter;
     });
 
     const totalTPE = filteredDecom.reduce((sum, item) => sum + Number(item.quantite || 0), 0);
@@ -310,6 +315,18 @@ export default function AllDecomList() {
                                     }
                                 }}
                                 label="Régularisations" />
+                        </div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isNotReg}
+                                onChange={(e) => {
+                                    if (isNotReg) {
+                                        setIsNotReg(false)
+                                    } else {
+                                        setIsNotReg(true)
+                                    }
+                                }}
+                                label="Sans Régularisations" />
                         </div>
                     </div>
                 </div>

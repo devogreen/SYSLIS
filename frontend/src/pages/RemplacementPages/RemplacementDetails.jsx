@@ -229,7 +229,9 @@ export default function RemplacementDetails() {
             fd.append('remplacement_id', id)
             fd.append('commentaire', messageReception);
             fd.append('user_id', userId);
-            fd.append('date_validation', selectedDateReception);
+            if (isReg && selectedDateReception) {
+                fd.append('date_validation', selectedDateReception);
+            }
             if (sign) {
                 const blob = await fetch(sign).then(res => res.blob());
                 fd.append('signature', blob, 'signature.png');

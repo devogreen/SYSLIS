@@ -127,6 +127,7 @@ const navItems: NavItem[] = [
       { name: "REG Demande Stock", path: "/regularisation-demande", roles: [3], pro: false },
       { name: "REG Demande QRC", path: "/regularisation-demande-qr", roles: [21], pro: false },
       { name: "REG Remplacement", path: "/regularisation-remplacement", roles: [1], pro: false },
+      { name: "REG Décommissionnement", path: "/regularisation-decom", roles: [23], pro: false },
     ],
   },
 
@@ -424,7 +425,7 @@ const AppSidebar: React.FC = () => {
         </nav>
         <div className="text-center text-xs font-bold text-gray-500">
           <span>
-            v.1.14.0
+            v.1.15.0
           </span>
         </div>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}

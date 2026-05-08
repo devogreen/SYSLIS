@@ -21,6 +21,7 @@ import { FilesHandler } from "../../backend/filesHandler/FilesHandler";
 import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
 import { Stock } from "../../backend/stock/Stock";
+import { set } from "date-fns";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -58,6 +59,7 @@ export default function DecomDetails() {
     const [isLivreur, setIsLivreur] = useState(false)
     const [isReceveur, setIsReceveur] = useState(false)
     const [isVerificateur, setIsVerificateur] = useState(false)
+    const [isValidateur, setIsValidateur] = useState(false)
 
     const [listeDecom, setListeDecom] = useState([])
     const [quantiteDecom, setQuantiteDecom] = useState(0)
@@ -82,6 +84,12 @@ export default function DecomDetails() {
     const [listeChecking, setListeChecking] = useState([])
 
     const [pieces, setPieces] = useState([])
+
+    const [dateRegul, setDateRegul] = useState(null)
+    const [selectedDateReception, setSelectedDateReception] = useState(null)
+    const [selectedDateCloture, setSelectedDateCloture] = useState(null)
+
+    const [errorReception, setErrorReception] = useState('')
 
 
     const formatDate = (date) => {
@@ -120,6 +128,7 @@ export default function DecomDetails() {
                 const regularisation = decomForm.is_reg
                 if (regularisation) {
                     setIsReg(true)
+                    setDateRegul(decomForm.last_modified_at)
                 }
 
                 const rolesData = await userData.getUserRoles(userId)
@@ -149,6 +158,9 @@ export default function DecomDetails() {
                     if (nomRoles.includes('verification_decom')) {
                         setIsVerificateur(true)
                     }
+                    if (nomRoles.includes('cloture_decom')) {
+                        setIsValidateur(true)
+                    }
                     setChecking(true)
                 } else if (statut == 'retourne' && reception && reception.type == 'retour') {
                     setStatutDecom('retourné')
@@ -165,6 +177,7 @@ export default function DecomDetails() {
                 if (statut == 'recu' || statut == 'clos') {
                     const listeSn = await decomData.getSnDecom(idDecom)
                     setListeDecom(listeSn)
+                    console.log('Liste SN: ', listeSn)
                     const listeChecking = listeSn.filter((item) => {
                         return item.statut == 'checking'
                     })
@@ -227,12 +240,28 @@ export default function DecomDetails() {
     }
 
     const handleReception = async () => {
+        if (isReg) {
+            if (!selectedDateReception) {
+                setErrorReception('Veuillez sélectionner une date de réception pour cette régularisation.')
+                return
+            }
+        }
         setIsModalReceptionOpen(false)
         try {
             setLoadingReception(true)
-            const payload = {
-                userId,
-                commentaire: messageReception,
+            setErrorReception('')
+            let payload = {}
+            if (isReg && selectedDateReception) {
+                payload = {
+                    userId,
+                    commentaire: messageReception,
+                    date_reception: selectedDateReception ? selectedDateReception.toISOString() : null,
+                }
+            } else {
+                payload = {
+                    userId,
+                    commentaire: messageReception,
+                }
             }
             const id = idDecom
 
@@ -290,11 +319,14 @@ export default function DecomDetails() {
 
     const handleClotureDecom = async () => {
         setIsModalClotureOpen(false)
+        // console.log("Liste checking avant cloture: ", listeDecom)
         try {
             setLoadingVerification(true)
             const payload = {
                 userId,
                 commentaire: messageCloture,
+                listeDecom,
+                isReg,
             }
             const id = idDecom
 
@@ -454,13 +486,26 @@ export default function DecomDetails() {
                                                             ) : (
                                                                 <>
                                                                     <div>
-                                                                        <div className="space-y-0.5">
-                                                                            <Link to={`/verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                                <span className='mr-4'><i className="pi pi-clipboard"></i></span>
-                                                                                <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
-                                                                            </Link>
-                                                                        </div>
-                                                                        {listeChecking.length == 0 ? (
+                                                                        {isReg ? (
+                                                                            <>
+                                                                                <div className="space-y-0.5">
+                                                                                    <Link to={`/reg-verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                        <span className='mr-4'><i className="pi pi-clipboard"></i></span>
+                                                                                        <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
+                                                                                    </Link>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="space-y-0.5">
+                                                                                    <Link to={`/verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                        <span className='mr-4'><i className="pi pi-clipboard"></i></span>
+                                                                                        <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
+                                                                                    </Link>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        {listeChecking.length == 0 && isValidateur ? (
                                                                             <>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                     onClick={() => {
@@ -877,6 +922,26 @@ export default function DecomDetails() {
                     <div className="text-center text-sm font-medium">
                         <span>Confirmer la réception de {quantiteDecom} TPE(s) à décommissionner</span>
                     </div>
+                    {isReg ? (
+                        <>
+                            <div className='w-full'>
+                                <Label>Date Réception <span className="text-red-700">*</span></Label>
+                                <Calendar
+                                    value={selectedDateReception}
+                                    locale="fr"
+                                    onChange={(e) => setSelectedDateReception(e.value)}
+                                    dateFormat="dd/mm/yy"
+                                    placeholder="dd/mm/yyyy"
+                                    minDate={new Date(dateRegul)}
+                                    maxDate={new Date()}
+                                    className="w-full"
+                                    style={{ fontSize: '2px' }}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <></>
+                    )}
                     <div>
                         <Label>Commentaire</Label>
                         <TextArea
@@ -885,6 +950,9 @@ export default function DecomDetails() {
                             rows={3}
                             placeholder="Ajoutez un commentaire"
                         />
+                    </div>
+                    <div className="text-center">
+                        <span className="text-red-700 text-xs">{errorReception}</span>
                     </div>
                     <div>
                         <div className="w-full flex justify-center items-center">
