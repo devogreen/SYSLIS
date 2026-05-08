@@ -399,7 +399,7 @@ const deliver = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (nouvelleLivraison.type_livraison_id != 5 && nouvelleLivraison.type_livraison_id != 7 && nouvelleLivraison.type_livraison_id != 8) {
         // Récupérer les SN de la liste
@@ -959,7 +959,7 @@ const updateLivraison = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (updated.type_livraison_id != 5 && updated.type_livraison_id != 7 && updated.type_livraison_id != 8) {
         // Récupérer les SN de la liste

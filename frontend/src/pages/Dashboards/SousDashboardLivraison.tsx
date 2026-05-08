@@ -1,8 +1,8 @@
 // @ts-ignore
 import React, { useState, useEffect } from 'react';
 import DatePicker from '../../components/form/date-picker';
-import { 
-  startOfWeek, endOfWeek, format, getWeek 
+import {
+  startOfWeek, endOfWeek, format, getWeek
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -33,20 +33,20 @@ interface Stats {
 
 interface HierarchyNode {
   count: number;
+  /** Somme des quantités TPE livrées (statut_livraison === 'livre') */
+  tpeLivrees?: number;
   months?: Record<string, HierarchyNode>;
   weeks?: Record<string, HierarchyNode>;
   days?: Record<string, Livraison[]>;
 }
 
+
 export default function SousDashboardLivraison() {
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
-  const [startDate, setStartDate] = useState<Date>(
-    startOfWeek(new Date(), { weekStartsOn: 1 })
-  );
-  const [endDate, setEndDate] = useState<Date>(
-    endOfWeek(new Date(), { weekStartsOn: 1 })
-  );
+  // Par défaut : afficher toutes les données depuis le début (valeur minimale)
+  const [startDate, setStartDate] = useState<Date>(new Date('2000-01-01'));
+  const [endDate, setEndDate] = useState<Date>(endOfWeek(new Date(), { weekStartsOn: 1 }));
 
   const [stats, setStats] = useState<Stats>({
     attente: 0,
@@ -139,20 +139,36 @@ export default function SousDashboardLivraison() {
             const dayKey = format(date, 'dd-MM');
 
             if (!hierarchy[yearKey]) {
-              hierarchy[yearKey] = { count: 0, months: {} };
+              hierarchy[yearKey] = { count: 0, tpeLivrees: 0, months: {} };
             }
             hierarchy[yearKey].count += 1;
 
             if (!hierarchy[yearKey].months![monthKey]) {
-              hierarchy[yearKey].months![monthKey] = { count: 0, weeks: {} };
+              hierarchy[yearKey].months![monthKey] = { count: 0, tpeLivrees: 0, weeks: {} };
             }
             hierarchy[yearKey].months![monthKey].count += 1;
 
+
+            const qte = livraison.qte_totale_livraison || 0;
+            if (livraison.statut_livraison === 'livre') {
+              hierarchy[yearKey].tpeLivrees = (hierarchy[yearKey].tpeLivrees || 0) + qte;
+              hierarchy[yearKey].months![monthKey].tpeLivrees = (hierarchy[yearKey].months![monthKey].tpeLivrees || 0) + qte;
+              // Quantité TPE livrée au niveau année/mois
+              // (le bloc week calcule via .count pour éviter l'accès à un nœud non initialisé)
+              
+            }
+
+
             if (!hierarchy[yearKey].months![monthKey].weeks![weekKey]) {
-              hierarchy[yearKey].months![monthKey].weeks![weekKey] = { count: 0, days: {} };
+              hierarchy[yearKey].months![monthKey].weeks![weekKey] = { count: 0, days: {}, tpeLivrees: 0 };
             }
             hierarchy[yearKey].months![monthKey].weeks![weekKey].count += 1;
-            
+            // Quantité TPE livrée au niveau semaine
+            if (livraison.statut_livraison === 'livre') {
+              hierarchy[yearKey].months![monthKey].weeks![weekKey].tpeLivrees =
+                (hierarchy[yearKey].months![monthKey].weeks![weekKey].tpeLivrees || 0) + qte;
+            }
+
             if (!hierarchy[yearKey].months![monthKey].weeks![weekKey].days![dayKey]) {
               hierarchy[yearKey].months![monthKey].weeks![weekKey].days![dayKey] = [];
             }
@@ -255,7 +271,7 @@ export default function SousDashboardLivraison() {
       {/* Hierarchical Livraisons View: Year > Month > Week > Day (FULLY FIXED) */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-          📋 Hiérarchie Livraisons 
+          📋 Hiérarchie Livraisons
           <span className="text-sm font-normal text-gray-500">(Année → Mois → Semaine → Jour)</span>
         </h3>
         <div className="space-y-2 max-h-[70vh] overflow-y-auto">
@@ -270,9 +286,10 @@ export default function SousDashboardLivraison() {
                   >
                     <span className="font-semibold text-lg">{yearKey}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-blue-600">{yearData.count} liv.</span>
-                      <span className={`text-xl transition-transform ${hierarchyOpen[`year-${yearKey}`] ? 'rotate-90' : ''}`}>
-                        ▼
+                      <span className="text-sm font-medium text-blue-600">{yearData.tpeLivrees || 0} TPE livrées</span>
+                      <span className={`w-5 h-5 flex items-center justify-center rounded-full text-white text-xs font-bold
+                                ${hierarchyOpen[`year-${yearKey}`] ? 'bg-red-500' : 'bg-green-500'}`}>
+                        {hierarchyOpen[`year-${yearKey}`] ? '-' : '+'}
                       </span>
                     </div>
                   </button>
@@ -289,16 +306,17 @@ export default function SousDashboardLivraison() {
                             >
                               <span>{monthName}</span>
                               <div className="flex items-center gap-2">
-                                <span className="font-medium">{monthData.count} liv.</span>
-                                <span className={`text-lg transition-transform ${hierarchyOpen[`month-${yearKey}-${monthKey}`] ? 'rotate-90' : ''}`}>
-                                  ►
+                                <span className="font-medium">{monthData.tpeLivrees || 0} TPE</span>
+                                <span className={`w-4 h-4 flex items-center justify-center rounded-full text-white text-[10px] font-bold
+                                    ${hierarchyOpen[`month-${yearKey}-${monthKey}`] ? 'bg-red-500' : 'bg-green-500'}`}>
+                                  {hierarchyOpen[`month-${yearKey}-${monthKey}`] ? '-' : '+'}
                                 </span>
                               </div>
                             </button>
                             {hierarchyOpen[`month-${yearKey}-${monthKey}`] && (
                               <div className="ml-3 mt-1 space-y-1">
                                 {Object.entries(monthData.weeks || {})
-                                  .sort(([wa], [wb]) => parseInt(wa.replace('W','')) - parseInt(wb.replace('W','')))
+                                  .sort(([wa], [wb]) => parseInt(wa.replace('W', '')) - parseInt(wb.replace('W', '')))
                                   .map(([weekKey, weekData]) => (
                                     <div key={weekKey} className="border-l border-blue-200 pl-2">
                                       <button
@@ -307,9 +325,11 @@ export default function SousDashboardLivraison() {
                                       >
                                         <span>Semaine {weekKey}</span>
                                         <div className="flex items-center gap-1">
-                                          <span className="font-semibold text-blue-700">{weekData.count} liv.</span>
-                                          <span className={`text-sm transition-transform ${hierarchyOpen[`week-${yearKey}-${monthKey}-${weekKey}`] ? 'rotate-90' : ''}`}>
-                                            ▶
+                                          {/* Total TPE livrées sur la semaine */}
+                                          <span className="font-semibold text-blue-700">{weekData.tpeLivrees || 0} TPE </span>
+                                          <span className={`w-4 h-4 flex items-center justify-center rounded-full text-white text-[10px] font-bold
+                                              ${hierarchyOpen[`week-${yearKey}-${monthKey}-${weekKey}`] ? 'bg-red-500' : 'bg-green-500'}`}>
+                                            {hierarchyOpen[`week-${yearKey}-${monthKey}-${weekKey}`] ? '-' : '+'}
                                           </span>
                                         </div>
                                       </button>
@@ -318,7 +338,7 @@ export default function SousDashboardLivraison() {
                                           {Object.entries(weekData.days || {}).map(([dayKey, dayLivraisons]) => (
                                             <div key={dayKey} className="bg-white border rounded-lg p-3 shadow-sm">
                                               <div className="font-medium text-xs text-gray-700 mb-2">
-                                                {dayKey.replace('-', '/')} ({dayLivraisons.length} liv.)
+                                                {dayKey.replace('-', '/')} ({dayLivraisons.length} livraison.)
                                               </div>
                                               <div className="overflow-x-auto">
                                                 <table className="w-full text-xs">
@@ -339,11 +359,10 @@ export default function SousDashboardLivraison() {
                                                         <td className="px-2 py-1 font-semibold text-xs">{livraison.qte_totale_livraison}</td>
                                                         <td className="px-2 py-1 font-semibold text-xs">{livraison.nom_livreur}</td>
                                                         <td className="px-2 py-1">
-                                                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                                            livraison.statut_livraison === 'livre' ? 'bg-green-100 text-green-800' :
+                                                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${livraison.statut_livraison === 'livre' ? 'bg-green-100 text-green-800' :
                                                             livraison.statut_livraison === 'en_cours' || livraison.statut_livraison === 'en_attente' ? 'bg-yellow-100 text-yellow-800' :
-                                                            'bg-gray-100 text-gray-800'
-                                                          }`}>
+                                                              'bg-gray-100 text-gray-800'
+                                                            }`}>
                                                             {livraison.statut_livraison}
                                                           </span>
                                                         </td>
