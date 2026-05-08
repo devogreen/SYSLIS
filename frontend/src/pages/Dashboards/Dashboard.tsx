@@ -12,6 +12,7 @@ import { Stock } from '../../backend/stock/Stock.js'
 // @ts-ignore
 import urlBase from '../../backend/const.js'
 
+// @ts-ignore
 type StockTotals = { total_lot: number; total_carton: number; total_piece: number; total: number };
 
 interface GeneralStats {

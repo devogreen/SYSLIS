@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from '../../components/form/date-picker';
 import {
+  // @ts-ignore
   startOfWeek, endOfWeek, format, getWeek
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
