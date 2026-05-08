@@ -2230,66 +2230,56 @@ const getCumulQrCodes = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
 
-        const dateFilter = {
-            gte: new Date(startDate + 'T00:00:00'),
-            lte: new Date(endDate + 'T23:59:59')
+        // Si une des dates manque, on calcule "depuis toujours" (sans filtre date)
+        const hasDates = Boolean(startDate && endDate);
+
+        const dateFilter = hasDates
+            ? {
+                gte: new Date(startDate + 'T00:00:00'),
+                lte: new Date(endDate + 'T23:59:59')
+            }
+            : null;
+
+        const buildWhere = () => {
+            // toutes les requêtes filtrent is_deleted=false et (optionnellement) par last_modified_at
+            return {
+                forms: {
+                    is_deleted: false,
+                    ...(dateFilter ? { last_modified_at: dateFilter } : {})
+                }
+            };
         };
 
         const soumis = await prisma.demande_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const genere = await prisma.generation_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const imprime = await prisma.impression_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const livree = await prisma.livraison_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const recue = await prisma.reception_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
@@ -2311,6 +2301,7 @@ const getCumulQrCodes = async (req, res) => {
         res.status(500).json({ message: 'Erreur serveur' });
     }
 };
+
 
 module.exports = {
     getAllTypePaiement,

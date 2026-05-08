@@ -98,6 +98,7 @@ export default function SousDashboardQRcode() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 1) Stats globales (pour les tuiles "Total des demandes")
         let statsUrl = `${urlBase}/api/stats/general`;
         if (startDate && endDate) {
           const formattedStartDate = getFormattedDate(startDate);
@@ -120,22 +121,33 @@ export default function SousDashboardQRcode() {
         };
         setStats(computedStats);
 
-        // qr_quantities est déjà cumulatif (calculé côté backend “depuis toujours”)
-        const qrQtyData = statsResponse.data.qr_quantities || {};
+        // 2) Quantités par étape : utiliser getCumulQrCodes
+        let cumulUrl = `${urlBase}/api/demandeQr/getCumulQrCodes`;
+        if (startDate && endDate) {
+          const formattedStartDate = getFormattedDate(startDate);
+          const formattedEndDate = getFormattedDate(endDate);
+          cumulUrl += `?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+        }
+        
+        const cumulResponse = await axios.get(cumulUrl);
+        const cumulData = cumulResponse.data?.data || {};
+        console.log(cumulData);
 
         setQrQuantities({
           total:
-            (qrQtyData.soumise || 0) +
-            (qrQtyData.generee || 0) +
-            (qrQtyData.imprimee || 0) +
-            (qrQtyData.livree || 0) +
-            (qrQtyData.recue || 0),
-          soumise: qrQtyData.soumise || 0,
-          generee: qrQtyData.generee || 0,
-          imprimee: qrQtyData.imprimee || 0,
-          livree: qrQtyData.livree || 0,
-          recue: qrQtyData.recue || 0
+            (cumulData.soumis || 0) +
+            (cumulData.genere || 0) +
+            (cumulData.imprime || 0) +
+            (cumulData.livree || 0) +
+            (cumulData.recue || 0),
+          soumise: cumulData.soumis || 0,
+          generee: cumulData.genere || 0,
+          imprimee: cumulData.imprime || 0,
+          livree: cumulData.livree || 0,
+          recue: cumulData.recue || 0
         });
+
+
 
         try {
           const qrListResponse = await axios.get(`${urlBase}/api/demandeQr/getAllDemandesQr`);
@@ -284,8 +296,8 @@ export default function SousDashboardQRcode() {
 {/* Quantité de QR Codes */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
         <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">Quantité de QR Codes</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-          <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          {/* <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-700">Total QR Codes</p>
@@ -297,7 +309,7 @@ export default function SousDashboardQRcode() {
                 </svg>
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="group p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-l-4 border-gray-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
