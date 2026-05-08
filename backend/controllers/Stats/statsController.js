@@ -1175,7 +1175,6 @@ const getTpeLivresParType = async (req, res) => {
   }
 };
 
-
 module.exports = {
     nbdeliverycharger,
     nbexitcharger,
