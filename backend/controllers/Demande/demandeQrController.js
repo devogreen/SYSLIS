@@ -2203,14 +2203,64 @@ const extractMarchandsQr = async (req, res) => {
 const getAllMarchandsQr = async (req, res) => {
     try {
         const marchandsQr = await prisma.marchands_qr.findMany({
-            include: {
-                demande_qr: {
-                    include: {
-                        forms: true
+            select: {
+                id: true,
+                nom_marchand: true,
+                chaine: true,
+                quantite_qr: true,
+                quantite_sn: true,
+                type_qr: true,
+                format: true,
+                created_at: true,
+                type_id: true,
+                format_id: true,
+                created_at: true,
+                is_deleted: true,
+                type_paiement: {
+                    select: {
+                        nom: true
                     },
                 },
-                type_paiement: true,
-                format_qr: true,
+                format_qr: {
+                    select: {
+                        format: true,
+                    }
+                },
+                demande_qr: {
+                    select: {
+                        id: true,
+                        forms: {
+                            select: {
+                                created_at: true,
+                                nom_user: true,
+                            },
+                        },
+                        livraison_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                        reception_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                    },
+                },
             },
             orderBy: {
                 created_at: 'desc',
@@ -2302,7 +2352,130 @@ const getCumulQrCodes = async (req, res) => {
     }
 };
 
+// Fonction pour extraire les données des demandes QR en format Excel, selon des filtres de date et de statut.
+const exportDemandesQrToExcel = async (req, res) => {
+    try {
+        const {
+            listId,
+        } = req.body
 
+        const workbook = new ExcelJS.Workbook();
+
+        const resumeSheet = workbook.addWorksheet("Résumé");
+
+        const resumeHeaders = [
+            "ID Demande",
+            "Date demande",
+            "Quantité QR Codes",
+            "Quantité Marchands",
+            "Statut",
+            "Date Génération",
+            "Date Impression",
+            "Date Livraison",
+            "Date Réception",
+        ]
+
+        const headerRow = resumeSheet.addRow(resumeHeaders);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const allDetailSheet = workbook.addWorksheet("Détails")
+        const allDetailHeader = [
+            "ID Demande",
+            "Point Marchand",
+            "Chaîne",
+            "Format",
+            "Type QR",
+            "Nbre TPE",
+            "Nbre de Copie",
+            "Statut",
+            "Date demande",
+        ]
+        const allDetailRow = allDetailSheet.addRow(allDetailHeader)
+
+        allDetailRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        for (const id of listId) {
+            const demande = await prisma.demande_qr.findUnique({
+                where: {
+                    id: parseInt(id)
+                },
+                include: {
+                    forms: true,
+                    generation_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    impression_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    livraison_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    reception_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                },
+            })
+            const details = typeof demande.liste_demande === "string"
+                ? JSON.parse(demande.liste_demande)
+                : demande.liste_demande;
+
+            resumeSheet.addRow([
+                demande.id,
+                demande.forms.last_modified_at ? demande.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.quantite_qr,
+                demande.quantite_marchand,
+                demande.statut,
+                demande.generation_qr?.forms?.last_modified_at ? demande.generation_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.impression_qr?.forms?.last_modified_at ? demande.impression_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.livraison_qr?.forms?.last_modified_at ? demande.livraison_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.reception_qr?.forms?.last_modified_at ? demande.reception_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+            ])
+
+            details.forEach((item) => {
+                allDetailSheet.addRow([
+                    demande.id,
+                    item.pointMarchand,
+                    item.chaine,
+                    item.format,
+                    item.typeQr,
+                    item.quantiteTerminal,
+                    item.quantiteQr,
+                    demande.statut,
+                    demande.last_modified_at ? demande.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                ])
+            })
+        }
+    } catch (error) {
+        console.error('Erreur exportDemandesQrToExcel:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
