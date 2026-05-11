@@ -2203,14 +2203,65 @@ const extractMarchandsQr = async (req, res) => {
 const getAllMarchandsQr = async (req, res) => {
     try {
         const marchandsQr = await prisma.marchands_qr.findMany({
-            include: {
-                demande_qr: {
-                    include: {
-                        forms: true
+            select: {
+                id: true,
+                nom_marchand: true,
+                chaine: true,
+                quantite_qr: true,
+                quantite_sn: true,
+                type_qr: true,
+                format: true,
+                created_at: true,
+                type_id: true,
+                format_id: true,
+                created_at: true,
+                is_deleted: true,
+                demande_id: true,
+                type_paiement: {
+                    select: {
+                        nom: true
                     },
                 },
-                type_paiement: true,
-                format_qr: true,
+                format_qr: {
+                    select: {
+                        format: true,
+                    }
+                },
+                demande_qr: {
+                    select: {
+                        id: true,
+                        forms: {
+                            select: {
+                                created_at: true,
+                                nom_user: true,
+                            },
+                        },
+                        livraison_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                        reception_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                    },
+                },
             },
             orderBy: {
                 created_at: 'desc',
