@@ -875,11 +875,7 @@ const downloadQrCodes = async (req, res) => {
         }
 
         // Set ZIP headers
-        res.setHeader("Content-Type", "application/zip");   
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="qr_codes_${idDemande}_${idGeneration}.zip"`
-        );
+        res.setHeader("Content-Type", "application/zip");
 
         const archive = archiver("zip", {
             zlib: { level: 9 },
@@ -2207,14 +2203,65 @@ const extractMarchandsQr = async (req, res) => {
 const getAllMarchandsQr = async (req, res) => {
     try {
         const marchandsQr = await prisma.marchands_qr.findMany({
-            include: {
-                demande_qr: {
-                    include: {
-                        forms: true
+            select: {
+                id: true,
+                nom_marchand: true,
+                chaine: true,
+                quantite_qr: true,
+                quantite_sn: true,
+                type_qr: true,
+                format: true,
+                created_at: true,
+                type_id: true,
+                format_id: true,
+                created_at: true,
+                is_deleted: true,
+                demande_id: true,
+                type_paiement: {
+                    select: {
+                        nom: true
                     },
                 },
-                type_paiement: true,
-                format_qr: true,
+                format_qr: {
+                    select: {
+                        format: true,
+                    }
+                },
+                demande_qr: {
+                    select: {
+                        id: true,
+                        forms: {
+                            select: {
+                                created_at: true,
+                                nom_user: true,
+                            },
+                        },
+                        livraison_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                        reception_qr: {
+                            select: {
+                                id: true,
+                                demande_id: true,
+                                forms: {
+                                    select: {
+                                        last_modified_at: true,
+                                        nom_user: true,
+                                    },
+                                }
+                            },
+                        },
+                    },
+                },
             },
             orderBy: {
                 created_at: 'desc',
@@ -2234,66 +2281,56 @@ const getCumulQrCodes = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
 
-        const dateFilter = {
-            gte: new Date(startDate + 'T00:00:00'),
-            lte: new Date(endDate + 'T23:59:59')
+        // Si une des dates manque, on calcule "depuis toujours" (sans filtre date)
+        const hasDates = Boolean(startDate && endDate);
+
+        const dateFilter = hasDates
+            ? {
+                gte: new Date(startDate + 'T00:00:00'),
+                lte: new Date(endDate + 'T23:59:59')
+            }
+            : null;
+
+        const buildWhere = () => {
+            // toutes les requêtes filtrent is_deleted=false et (optionnellement) par last_modified_at
+            return {
+                forms: {
+                    is_deleted: false,
+                    ...(dateFilter ? { last_modified_at: dateFilter } : {})
+                }
+            };
         };
 
         const soumis = await prisma.demande_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const genere = await prisma.generation_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const imprime = await prisma.impression_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const livree = await prisma.livraison_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
         });
 
         const recue = await prisma.reception_qr.aggregate({
-            where: {
-                forms: {
-                    is_deleted: false,
-                    last_modified_at: dateFilter
-                }
-            },
+            where: buildWhere(),
             _sum: {
                 quantite_qr: true
             }
@@ -2315,6 +2352,7 @@ const getCumulQrCodes = async (req, res) => {
         res.status(500).json({ message: 'Erreur serveur' });
     }
 };
+
 
 module.exports = {
     getAllTypePaiement,

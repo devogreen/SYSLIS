@@ -875,14 +875,16 @@ const getGeneralStats = async (req, res) => {
         const statsTypesLivraisons = {};
 
         livraisons.forEach(l => {
-            // console.log("TEST DE FONCTION")
             // ✅ on filtre uniquement les livraisons livrées
             if (l.statut_livraison === "livre") {
                 const type = l.type_livraison_commerciale?.nom_type_livraison || "Inconnu";
-                statsTypesLivraisons[type] = (statsTypesLivraisons[type] || 0) + 1;
+                // Retour compatible UI: valeur = quantité livrée (qte_totale_livraison)
+                statsTypesLivraisons[type] = (statsTypesLivraisons[type] || 0) + (l.qte_totale_livraison || 0);
             }
         });
+
         // console.log('Types livraisons:', statsTypesLivraisons);
+
 
         const statsLivraisons = {
             total: livraisons.length,
@@ -949,60 +951,88 @@ const getGeneralStats = async (req, res) => {
             console.error('Stocks aggregate error:', err);
         }
 
-        // QR Codes stats - group by statut with date filter via forms.created_at
+        // QR Codes stats
+        // Objectif: affichage cumulatif “depuis début de période” quand startDate/endDate sont fournis,
+        // sinon “depuis toujours”.
+        // - soumise: somme demande_qr.quantite_qr (filtrée par forms.created_at si période)
+        // - generee: somme generation_qr.quantite_qr (filtrée par generation_qr.forms.last_modified_at si période)
+        // - imprimee: somme impression_qr.quantite_qr (filtrée par impression_qr.forms.last_modified_at si période)
+        // - livree: somme livraison_qr.quantite_qr (filtrée par livraison_qr.forms.last_modified_at si période)
+        // - recue: somme reception_qr.quantite_qr (filtrée par reception_qr.forms.last_modified_at si période)
+
+        const safeNum = (v) => (typeof v === 'number' && !Number.isNaN(v) ? v : 0);
+
         let statsQrMap = { soumise: 0, generee: 0, imprimee: 0, livree: 0, recue: 0 };
         let statsQrQuantitiesMap = { soumise: 0, generee: 0, imprimee: 0, livree: 0, recue: 0 };
-        if (startDate && endDate) {
-            try {
-                const qrStats = await prisma.demande_qr.groupBy({
-                    by: ['statut'],
-                    where: {
-                        forms: {
-                            is_deleted: false,
-                            created_at: {
-                                gte: new Date(startDate + 'T00:00:00'),
-                                lte: new Date(endDate + 'T23:59:59')
-                            }
-                        }
-                    },
-                    _count: { id: true },
+
+        const start = startDate ? new Date(startDate + 'T00:00:00') : null;
+        const end = endDate ? new Date(endDate + 'T23:59:59') : null;
+
+        // filtre dates optionnel
+        const formsDateFilterCreated = start && end
+            ? { created_at: { gte: start, lte: end }, is_deleted: false }
+            : { is_deleted: false };
+
+        const formsDateFilterModified = start && end
+            ? { last_modified_at: { gte: start, lte: end }, is_deleted: false }
+            : { is_deleted: false };
+
+        try {
+            const [soumiseAgg, genereeAgg, imprimeeAgg, livreeAgg, recueAgg] = await Promise.all([
+                prisma.demande_qr.aggregate({
+                    where: { forms: formsDateFilterCreated },
                     _sum: { quantite_qr: true }
-                });
-                statsQrMap = qrStats.reduce((acc, curr) => ({
-                    ...acc,
-                    [curr.statut]: curr._count.id
-                }), statsQrMap);
-                statsQrQuantitiesMap = qrStats.reduce((acc, curr) => ({
-                    ...acc,
-                    [curr.statut]: curr._sum.quantite_qr || 0
-                }), statsQrQuantitiesMap);
-            } catch (err) {
-                console.error('QR stats groupBy error:', err);
-            }
-        } else {
-            try {
-                const qrStats = await prisma.demande_qr.groupBy({
-                    by: ['statut'],
-                    where: {
-                        forms: {
-                            is_deleted: false
-                        }
-                    },
-                    _count: { id: true },
+                }),
+                prisma.generation_qr.aggregate({
+                    where: { forms: formsDateFilterModified },
                     _sum: { quantite_qr: true }
-                });
-                statsQrMap = qrStats.reduce((acc, curr) => ({
-                    ...acc,
-                    [curr.statut]: curr._count.id
-                }), statsQrMap);
-                statsQrQuantitiesMap = qrStats.reduce((acc, curr) => ({
-                    ...acc,
-                    [curr.statut]: curr._sum.quantite_qr || 0
-                }), statsQrQuantitiesMap);
-            } catch (err) {
-                console.error('QR stats groupBy error (no filter):', err);
-            }
+                }),
+                prisma.impression_qr.aggregate({
+                    where: { forms: formsDateFilterModified },
+                    _sum: { quantite_qr: true }
+                }),
+                prisma.livraison_qr.aggregate({
+                    where: { forms: formsDateFilterModified },
+                    _sum: { quantite_qr: true }
+                }),
+                prisma.reception_qr.aggregate({
+                    where: { forms: formsDateFilterModified },
+                    _sum: { quantite_qr: true }
+                }),
+            ]);
+
+            statsQrQuantitiesMap = {
+                soumise: safeNum(soumiseAgg?._sum?.quantite_qr),
+                generee: safeNum(genereeAgg?._sum?.quantite_qr),
+                imprimee: safeNum(imprimeeAgg?._sum?.quantite_qr),
+                livree: safeNum(livreeAgg?._sum?.quantite_qr),
+                recue: safeNum(recueAgg?._sum?.quantite_qr),
+                total: 0
+            };
+
+            // statsQrMap: on garde l’ancien calcul (nombre de lignes par statut) mais filtré par période si fournie
+            const whereQrGroupBy = {
+                forms: start && end
+                    ? { is_deleted: false, created_at: { gte: start, lte: end } }
+                    : { is_deleted: false }
+            };
+
+            const qrStats = await prisma.demande_qr.groupBy({
+                by: ['statut'],
+                where: whereQrGroupBy,
+                _count: { id: true },
+                _sum: { quantite_qr: true }
+            });
+
+            statsQrMap = qrStats.reduce((acc, curr) => ({
+                ...acc,
+                [curr.statut]: curr._count.id
+            }), statsQrMap);
+        } catch (err) {
+            console.error('QR stats aggregate error:', err);
         }
+
+
 
         const statsDemandesMap = statsDemandes.reduce((acc, curr) => ({ 
             ...acc, 

@@ -445,14 +445,7 @@ export default function DemandeDetails() {
             const a = document.createElement("a");
             a.href = url;
 
-            // Extract filename from headers if backend sends it
-            const contentDisposition = response.headers["content-disposition"];
             let fileName = "download";
-
-            if (contentDisposition) {
-                const match = contentDisposition.match(/filename="?(.+)"?/);
-                if (match?.[1]) fileName = match[1];
-            }
 
             a.download = fileName;
             document.body.appendChild(a);

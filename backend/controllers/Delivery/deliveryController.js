@@ -399,7 +399,7 @@ const deliver = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (nouvelleLivraison.type_livraison_id != 5 && nouvelleLivraison.type_livraison_id != 7 && nouvelleLivraison.type_livraison_id != 8) {
         // Récupérer les SN de la liste
@@ -959,7 +959,7 @@ const updateLivraison = async (req, res) => {
 
       /*******************     GESTION PARC TPE     *******************/
 
-      let = allTpes = null
+      let allTpes = null
 
       if (updated.type_livraison_id != 5 && updated.type_livraison_id != 7 && updated.type_livraison_id != 8) {
         // Récupérer les SN de la liste
@@ -2350,11 +2350,11 @@ const makeRemplacement = async (req, res) => {
       /*******************     GESTION PARC TPE     *******************/
 
       let allTpes = null
-      let allOldTpes = null
+      // let allOldTpes = null
 
       // Récupérer les SN de la liste
       const serials = produits.map(item => item.nouvelSN);
-      const oldSerials = produits.map(item => item.ancienSN);
+      // const oldSerials = produits.map(item => item.ancienSN);
 
       /**NOUVEAU TPE**/
 
@@ -2408,58 +2408,57 @@ const makeRemplacement = async (req, res) => {
 
       /**ANCIEN SN**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: oldSerials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        })),
-        skipDuplicates: true
-      });
+      // // 1. Create only missing ones
+      // await tx.parc_tpe.createMany({
+      //   data: oldSerials.map(item => ({
+      //     serial_number: item,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   })),
+      //   skipDuplicates: true
+      // });
 
-      // 2. Update ALL (existing + newly created)
-      await tx.parc_tpe.updateMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        data: {
-          updated_by: utilisateur.id_user,
-          updated_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        }
-      });
+      // // 2. Update ALL (existing + newly created)
+      // await tx.parc_tpe.updateMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   data: {
+      //     updated_by: utilisateur.id_user,
+      //     updated_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   }
+      // });
 
-      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-      allOldTpes = await tx.parc_tpe.findMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
+      // // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      // allOldTpes = await tx.parc_tpe.findMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   select: {
+      //     id: true,
+      //     serial_number: true
+      //   }
+      // });
 
-      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-      await tx.history_tpe.createMany({
-        data: allOldTpes.map(tpe => ({
-          id_tpe: tpe.id,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          statut_id: 3,
-          form_id: remplacementForm.id,
-        }))
-      });
+      // // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      // await tx.history_tpe.createMany({
+      //   data: allOldTpes.map(tpe => ({
+      //     id_tpe: tpe.id,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     statut_id: 3,
+      //     form_id: remplacementForm.id,
+      //   }))
+      // });
 
       return {
         remplacementForm,
         nouveauRemplacement,
         allTpes,
-        allOldTpes,
       }
     })
 
@@ -2679,6 +2678,7 @@ const validateRemplacement = async (req, res) => {
       console.error("Utilisateur non trouvé !")
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
+
     let isReg = false
     let dateAction = new Date()
     const dateVer = new Date(date_validation)
@@ -3357,11 +3357,11 @@ const updateRemplacement = async (req, res) => {
       /*******************     GESTION PARC TPE     *******************/
 
       let allTpes = null
-      let allOldTpes = null
+      // let allOldTpes = null
 
       // Récupérer les SN de la liste
       const serials = produits.map(item => item.nouvelSN);
-      const oldSerials = produits.map(item => item.ancienSN);
+      // const oldSerials = produits.map(item => item.ancienSN);
 
       /**NOUVEAU TPE**/
 
@@ -3414,52 +3414,52 @@ const updateRemplacement = async (req, res) => {
 
       /**ANCIEN SN**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: oldSerials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        })),
-        skipDuplicates: true
-      });
+      // // 1. Create only missing ones
+      // await tx.parc_tpe.createMany({
+      //   data: oldSerials.map(item => ({
+      //     serial_number: item,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   })),
+      //   skipDuplicates: true
+      // });
 
-      // 2. Update ALL (existing + newly created)
-      await tx.parc_tpe.updateMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        data: {
-          updated_by: utilisateur.id_user,
-          updated_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        }
-      });
+      // // 2. Update ALL (existing + newly created)
+      // await tx.parc_tpe.updateMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   data: {
+      //     updated_by: utilisateur.id_user,
+      //     updated_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   }
+      // });
 
-      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-      allOldTpes = await tx.parc_tpe.findMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
+      // // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      // allOldTpes = await tx.parc_tpe.findMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   select: {
+      //     id: true,
+      //     serial_number: true
+      //   }
+      // });
 
-      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-      await tx.history_tpe.createMany({
-        data: allOldTpes.map(tpe => ({
-          id_tpe: tpe.id,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          statut_id: 3,
-          form_id: remplacementForm.id,
-        }))
-      });
+      // // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      // await tx.history_tpe.createMany({
+      //   data: allOldTpes.map(tpe => ({
+      //     id_tpe: tpe.id,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     statut_id: 3,
+      //     form_id: remplacementForm.id,
+      //   }))
+      // });
 
       return {
         remplacementForm,
@@ -4033,11 +4033,11 @@ const regRemplacement = async (req, res) => {
       /*******************     GESTION PARC TPE     *******************/
 
       let allTpes = null
-      let allOldTpes = null
+      // let allOldTpes = null
 
       // Récupérer les SN de la liste
       const serials = produits.map(item => item.nouvelSN);
-      const oldSerials = produits.map(item => item.ancienSN);
+      // const oldSerials = produits.map(item => item.ancienSN);
 
       /**NOUVEAU TPE**/
 
@@ -4091,58 +4091,57 @@ const regRemplacement = async (req, res) => {
 
       /**ANCIEN SN**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: oldSerials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        })),
-        skipDuplicates: true
-      });
+      // // 1. Create only missing ones
+      // await tx.parc_tpe.createMany({
+      //   data: oldSerials.map(item => ({
+      //     serial_number: item,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   })),
+      //   skipDuplicates: true
+      // });
 
-      // 2. Update ALL (existing + newly created)
-      await tx.parc_tpe.updateMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        data: {
-          updated_by: utilisateur.id_user,
-          updated_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 3,
-        }
-      });
+      // // 2. Update ALL (existing + newly created)
+      // await tx.parc_tpe.updateMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   data: {
+      //     updated_by: utilisateur.id_user,
+      //     updated_at: dateAction,
+      //     last_modified_at: dateAction,
+      //     statut_id: 3,
+      //   }
+      // });
 
-      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-      allOldTpes = await tx.parc_tpe.findMany({
-        where: {
-          serial_number: { in: oldSerials }
-        },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
+      // // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+      // allOldTpes = await tx.parc_tpe.findMany({
+      //   where: {
+      //     serial_number: { in: oldSerials }
+      //   },
+      //   select: {
+      //     id: true,
+      //     serial_number: true
+      //   }
+      // });
 
-      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-      await tx.history_tpe.createMany({
-        data: allOldTpes.map(tpe => ({
-          id_tpe: tpe.id,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          statut_id: 3,
-          form_id: remplacementForm.id,
-        }))
-      });
+      // // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+      // await tx.history_tpe.createMany({
+      //   data: allOldTpes.map(tpe => ({
+      //     id_tpe: tpe.id,
+      //     created_by: utilisateur.id_user,
+      //     created_at: dateAction,
+      //     statut_id: 3,
+      //     form_id: remplacementForm.id,
+      //   }))
+      // });
 
       return {
         remplacementForm,
         nouveauRemplacement,
         allTpes,
-        allOldTpes,
       }
     })
 

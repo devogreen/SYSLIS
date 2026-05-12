@@ -1,7 +1,7 @@
 
 // @ts-ignore
 import React, { useState, useEffect } from 'react';
-import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
+import { startOfMonth, endOfMonth, format, getWeek } from 'date-fns';
 import DatePicker from '../../components/form/date-picker';
 import { RefreshTimeIcon } from '../../icons';
 import type { LivraisonType } from '../../types';
@@ -11,6 +11,9 @@ import { Stock } from '../../backend/stock/Stock.js'
 
 // @ts-ignore
 import urlBase from '../../backend/const.js'
+
+// @ts-ignore
+type StockTotals = { total_lot: number; total_carton: number; total_piece: number; total: number };
 
 interface GeneralStats {
   typesLivraisons: any;
@@ -26,16 +29,35 @@ interface GeneralStats {
 
 export default function Dashboard() {
 
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [stats, setStats] = useState<GeneralStats | null>(null);
+
+  const statsSafe: GeneralStats =
+    (stats as GeneralStats | null) ?? {
+      typesLivraisons: {},
+      livraisons: { total: 0, attente: 0, livrees: 0, retours: 0 },
+      demandes: {},
+      demandesValideesNonRecues: 0,
+      stocks: { quantite_piece: 0, quantite_carton: 0, quantite_lot: 0 },
+      qr_codes: {},
+      remplacementsLivres: 0,
+      livraisonsParType: []
+    };
+
+
   // @ts-ignore
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const stockData = new Stock();
 
   const currentWeek = getWeek(new Date(), { weekStartsOn: 1 });
   // const getFormattedDate = (date) => format(date, 'yyyy-MM-dd');
-  const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
+  const getFormattedDate = (date: Date | null): string => (date ? format(date, 'yyyy-MM-dd') : '');
 
-  const [startDate, setStartDate] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [endDate, setEndDate] = useState(endOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [stats, setStats] = useState<GeneralStats | null>(null);
+  // Total produits = somme des quantités livrées (qte_totale_livraison) via l’API général
+  const totalProduit = stats?.livraisons?.livrees ?? 0;
+
+
   // @ts-ignore
   const [livraisonsParType, setLivraisonsParType] = useState<LivraisonType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,7 +76,9 @@ export default function Dashboard() {
     setLoading(true);
     try {
       // Stats générales d'abord
-      const url = `${urlBase}/api/stats/general?startDate=${getFormattedDate(startDate)}&endDate=${getFormattedDate(endDate)}`;
+      const effectiveStartDate = startDate || startOfMonth(new Date());
+      const effectiveEndDate = endDate || endOfMonth(new Date());
+      const url = `${urlBase}/api/stats/general?startDate=${getFormattedDate(effectiveStartDate)}&endDate=${getFormattedDate(effectiveEndDate)}`;
       // const url = statsData.getGeneralStats(getFormattedDate(startDate), getFormattedDate(endDate));
       const response = await fetch(url);
       if (response.ok) {
@@ -106,7 +130,7 @@ export default function Dashboard() {
             Semaine {currentWeek}
           </div>
           <div className="text-sm opacity-70">
-            Du {getFormattedDate(startDate)} au {getFormattedDate(endDate)}
+            {startDate && endDate ? `Du ${getFormattedDate(startDate)} au ${getFormattedDate(endDate)}` : 'Sélectionnez les dates'}
           </div>
         </div>
       </div>
@@ -135,14 +159,13 @@ export default function Dashboard() {
             value={getFormattedDate(endDate)}
             // @ts-ignore
             onChange={(selectedDates: Date[], dateStr: string) => {
-              const originalOnChange = (selectedDates: Date[]) => {
-                if (selectedDates && selectedDates[0]) {
-                  const d = new Date(selectedDates[0]);
-                  d.setDate(d.getDate() + 1);
-                  setEndDate(d);
-                }
-              };
-              originalOnChange(selectedDates);
+              if (dateStr) {
+                const d = new Date(dateStr);
+                d.setDate(d.getDate() + 1);
+                setEndDate(d);
+              } else {
+                setEndDate(null);
+              }
             }}
             className="flex-1 min-w-[200px]"
           />
@@ -160,6 +183,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      
       {/* <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {data.map((item, index) => (
           <div key={index} className="bg-white p-4 rounded-xl shadow">
@@ -197,28 +221,28 @@ export default function Dashboard() {
           {/* Cartes des stats */}
           <div className="flex flex-wrap gap-4">
             {/* QR Codes reçus */}
-            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+            {/* <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">Demandes QR reçues</p>
               <p className="text-xl font-bold ">{stats?.qr_codes?.recue ?? 0}</p>
-            </div>
+            </div> */}
 
             {/* TPE GIM livrés */}
-            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+            {/* <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">TPE GIM livrés</p>
               <p className="text-xl font-bold ">{stats?.livraisons?.livrees}</p>
-            </div>
+            </div> */}
 
             {/* MAJ livrées */}
-            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+            {/* <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">MAJ livrées</p>
               <p className="text-xl font-bold">{stats?.typesLivraisons?.["MAJ"] ?? 0}</p>
-            </div>
+            </div> */}
 
             {/* TPE remplacés livrés */}
-            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+            {/* <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">TPE remplacés livrés</p>
               <p className="text-xl font-bold">{stats?.remplacementsLivres ?? 0}</p>
-            </div>
+            </div> */}
 
             {/* Types de livraisons dynamiques */}
             {stats?.typesLivraisons &&
@@ -228,8 +252,11 @@ export default function Dashboard() {
                   className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between"
                 >
                   <p className="text-gray-500 text-sm">{type}</p>
+                  {/* Affichage du nombre de produits livrés pour ce type (livraisons livrées) */}
+                  {/* Pour afficher la quantité, il faut que le backend retourne qte_totale_livraison par type.
+                      Pour l’instant, `stats.typesLivraisons` semble être un comptage de livraisons (lignes) => nombre de produits livrés. */}
                   <p className="text-xl font-bold">{total as number}</p>
-                  <p className="text-gray-500 text-xs">Livrés</p>
+                  <p className="text-gray-500 text-xs">Quantité livrée</p>
                 </div>
               ))}
           </div>
@@ -280,7 +307,8 @@ export default function Dashboard() {
         </div> */}
       </div>
       {/* 🏗️ MAIN STATS GRID */}
-      {stats ? (
+      {totalProduit !== 0 ? (
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-6">
           {/* DEMANDES */}
           <div className="group p-8 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 rounded-2xl shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
@@ -288,8 +316,9 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-lg font-bold text-green-800">📋 Demandes</h3>
                 <div className="text-3xl font-black text-green-600 mt-2">
-                  {Object.values(stats.demandes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+                  {Object.values(statsSafe.demandes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
                 </div>
+
               </div>
               <div className="p-3 bg-green-200 rounded-2xl">
                 <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,9 +327,10 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="space-y-1 text-sm">
-              <div>⏳ En cours: <span className="font-semibold">{stats.demandes?.en_cours || 0}</span></div>
-              <div>✅ Valides: <span className="font-semibold text-green-600">{stats.demandes?.valide || 0}</span></div>
-              <div>📦 Non Receptionnés: <span className="font-semibold text-orange-600">{stats?.demandesValideesNonRecues ?? 0}</span></div>
+              <div>⏳ En cours: <span className="font-semibold">{statsSafe.demandes?.en_cours || 0}</span></div>
+              <div>✅ Valides: <span className="font-semibold text-green-600">{statsSafe.demandes?.valide || 0}</span></div>
+              <div>📦 Non Receptionnés: <span className="font-semibold text-orange-600">{statsSafe?.demandesValideesNonRecues ?? 0}</span></div>
+
             </div>
           </div>
 
@@ -346,9 +376,10 @@ export default function Dashboard() {
               </div>
               </div>
               <div className="space-y-1 text-sm">
-                <div>📦 Lots: <span className="font-semibold">{stats.stocks?.quantite_lot || 0}</span></div>
-                <div>📦 Cartons: <span className="font-semibold">{stats.stocks?.quantite_carton || 0}</span></div>
-                <div>🔧 Pièces: <span className="font-semibold">{stats.stocks?.quantite_piece || 0}</span></div>
+                <div>📦 Lots: <span className="font-semibold">{statsSafe.stocks?.quantite_lot || 0}</span></div>
+                <div>📦 Cartons: <span className="font-semibold">{statsSafe.stocks?.quantite_carton || 0}</span></div>
+                <div>🔧 Pièces: <span className="font-semibold">{statsSafe.stocks?.quantite_piece || 0}</span></div>
+
               </div>
           </div>
 
@@ -358,7 +389,8 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-lg font-bold text-purple-800">📱 QR Codes</h3>
                   <div className="text-3xl font-black text-purple-600 mt-2">
-                    {Object.values(stats.qr_codes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+                    {Object.values(statsSafe.qr_codes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+
                   </div>
                 </div>
                 <div className="p-3 bg-purple-200 rounded-2xl">
@@ -368,8 +400,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="space-y-1 text-sm">
-                <div>📤 Soumises: <span className="font-semibold">{stats.qr_codes?.soumise || 0}</span></div>
-                <div>✅ Reçues: <span className="font-semibold text-green-600">{stats.qr_codes?.recue || 0}</span></div>
+                <div>📤 Soumises: <span className="font-semibold">{statsSafe.qr_codes?.soumise || 0}</span></div>
+                <div>✅ Reçues: <span className="font-semibold text-green-600">{statsSafe.qr_codes?.recue || 0}</span></div>
+
               </div>
             </div>
           </div>

@@ -54,7 +54,8 @@ interface GlobalStockTotals {
 }
 
 export default function SousDashboardStocks() {
-  const [startDate, setStartDate] = useState<Date>(new Date());
+  // Par défaut : afficher toutes les données depuis le début
+  const [startDate, setStartDate] = useState<Date>(new Date('2000-01-01'));
   const [endDate, setEndDate] = useState<Date>(new Date());
   // @ts-ignore
   const [items, setItems] = useState<Item[]>([]);

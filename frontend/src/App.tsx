@@ -222,6 +222,11 @@ import ManipulationTpeForm from "./pages/Forms/GestionTpeForms/ManipulationTpeFo
 import RegRemplacementForm from "./pages/Forms/RemplacementForms/RegRemplacementForm"
 
 // @ts-ignore
+import RegDecomForm from "./pages/Forms/DecomForms/RegDecomForm"
+// @ts-ignore
+import RegVerificationForm from "./pages/Forms/DecomForms/RegVerificationForm"
+
+// @ts-ignore
 import SelectionQrForm from "./pages/Forms/DemandesQrForms/SelectionQrForm"
 
 export default function App() {
@@ -306,6 +311,8 @@ export default function App() {
               <Route path="/decom-details/:id" element={<DecomDetails />} />
               <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
               <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
+              <Route path="/regularisation-decom" element={<RegDecomForm />} />
+              <Route path="/reg-verification-decom/:id" element={<RegVerificationForm />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

@@ -37,7 +37,8 @@ interface Stats {
 export default function SousDashboardRemplacement() {
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
 
-  const [startDate, setStartDate] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  // Par défaut : afficher toutes les données depuis le début
+  const [startDate, setStartDate] = useState<Date>(new Date('2000-01-01'));
   const [endDate, setEndDate] = useState<Date>(endOfWeek(new Date(), { weekStartsOn: 1 }));
   const [stats, setStats] = useState<Stats>({ total: 0, en_attente: 0, livre: 0, refuse: 0 });
   const [recentRemplacements, setRecentRemplacements] = useState<Remplacement[]>([]);
@@ -95,6 +96,7 @@ export default function SousDashboardRemplacement() {
           // Recent 10
           const recent = filteredRemplacements.slice(0, 10);
           setRecentRemplacements(recent);
+
 
           console.log('Sample Remplacement:', recent[0]);
         }
@@ -241,11 +243,19 @@ export default function SousDashboardRemplacement() {
                       #{remplacement.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {details.map((d: any) => d.old_model).join(', ') || 'N/A'}
+                      {(Array.isArray(details) ? details : [])
+                        .map((d: any) => d?.ancienSN)
+                        .filter(Boolean)
+                        .join(', ') || 'N/A'}
                     </td>
+                  
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {details.map((d: any) => d.new_model).join(', ') || 'N/A'}
+                      {(Array.isArray(details) ? details : [])
+                        .map((d: any) => d?.nouvelSN)
+                        .filter(Boolean)
+                        .join(', ') || 'N/A'}
                     </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                       {remplacement.quantite}
                     </td>

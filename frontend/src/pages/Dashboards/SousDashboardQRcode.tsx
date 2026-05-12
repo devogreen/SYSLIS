@@ -6,7 +6,7 @@ import DatePicker from '../../components/form/date-picker';
 import { format } from 'date-fns';
 import axios from 'axios';
 // @ts-ignore
-import urlBase from '../../backend/const.js'
+import urlBase from '../../backend/const.js';
 
 type DateValue = string | Date | Date[];
 
@@ -37,10 +37,11 @@ declare global {
 }
 
 export default function SousDashboardQRcode() {
-  const getFormattedDate = (date: Date | null) => date ? format(date, 'yyyy-MM-dd') : '';
+  const getFormattedDate = (date: Date | null) => (date ? format(date, 'yyyy-MM-dd') : '');
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+
   const [stats, setStats] = useState<QRStats>({
     total: 0,
     soumise: 0,
@@ -49,6 +50,8 @@ export default function SousDashboardQRcode() {
     livree: 0,
     recue: 0
   });
+
+  // Ce bloc est uniquement pour afficher la progression logique
   const [qrQuantities, setQrQuantities] = useState<QRStats>({
     total: 0,
     soumise: 0,
@@ -57,19 +60,15 @@ export default function SousDashboardQRcode() {
     livree: 0,
     recue: 0
   });
-  const [recentDemandes, setRecentDemandes] = useState([]);
-  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
-  // @ts-ignore
+
+  const [recentDemandes, setRecentDemandes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // @ts-ignore
   const handleStartDateChange = (value: DateValue) => {
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        setStartDate(null);
-      } else {
-        setStartDate(new Date(value[0]));
-      }
+      if (value.length === 0) setStartDate(null);
+      else setStartDate(new Date(value[0]));
     } else if (value instanceof Date) {
       setStartDate(value);
     } else if (typeof value === 'string' && value) {
@@ -82,11 +81,8 @@ export default function SousDashboardQRcode() {
   // @ts-ignore
   const handleEndDateChange = (value: DateValue) => {
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        setEndDate(null);
-      } else {
-        setEndDate(new Date(value[0]));
-      }
+      if (value.length === 0) setEndDate(null);
+      else setEndDate(new Date(value[0]));
     } else if (value instanceof Date) {
       setEndDate(value);
     } else if (typeof value === 'string' && value) {
@@ -96,21 +92,13 @@ export default function SousDashboardQRcode() {
     }
   };
 
-  // @ts-ignore
-  const handleResetDates = () => {
-    setStartDate(null);
-    setEndDate(null);
-  };
-
-  // @ts-ignore
-  const handleRefresh = () => {
-    window.location.reload();
-  };
+  const handleRefresh = () => window.location.reload();
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 1) Stats globales (pour les tuiles "Total des demandes")
         let statsUrl = `${urlBase}/api/stats/general`;
         if (startDate && endDate) {
           const formattedStartDate = getFormattedDate(startDate);
@@ -133,16 +121,33 @@ export default function SousDashboardQRcode() {
         };
         setStats(computedStats);
 
-        const qrQtyData = statsResponse.data.qr_quantities || {};
-        const totalQty = Object.values(qrQtyData as Record<string, number>).reduce((sum, val) => sum + (val || 0), 0);
+        // 2) Quantités par étape : utiliser getCumulQrCodes
+        let cumulUrl = `${urlBase}/api/demandeQr/getCumulQrCodes`;
+        if (startDate && endDate) {
+          const formattedStartDate = getFormattedDate(startDate);
+          const formattedEndDate = getFormattedDate(endDate);
+          cumulUrl += `?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+        }
+        
+        const cumulResponse = await axios.get(cumulUrl);
+        const cumulData = cumulResponse.data?.data || {};
+        console.log(cumulData);
+
         setQrQuantities({
-          total: totalQty,
-          soumise: qrQtyData.soumise || 0,
-          generee: qrQtyData.generee || 0,
-          imprimee: qrQtyData.imprimee || 0,
-          livree: qrQtyData.livree || 0,
-          recue: qrQtyData.recue || 0
+          total:
+            (cumulData.soumis || 0) +
+            (cumulData.genere || 0) +
+            (cumulData.imprime || 0) +
+            (cumulData.livree || 0) +
+            (cumulData.recue || 0),
+          soumise: cumulData.soumis || 0,
+          generee: cumulData.genere || 0,
+          imprimee: cumulData.imprime || 0,
+          livree: cumulData.livree || 0,
+          recue: cumulData.recue || 0
         });
+
+
 
         try {
           const qrListResponse = await axios.get(`${urlBase}/api/demandeQr/getAllDemandesQr`);
@@ -160,11 +165,6 @@ export default function SousDashboardQRcode() {
     fetchData();
   }, [startDate, endDate]);
 
-  // @ts-ignore
-  const toggleWeekDetails = (week: string) => {
-    setSelectedWeek(selectedWeek === week ? null : week);
-  };
-
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">
@@ -174,7 +174,6 @@ export default function SousDashboardQRcode() {
         Dashboard QR Codes
       </h1>
 
-      {/* Date Picker */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
         <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,16 +202,11 @@ export default function SousDashboardQRcode() {
             🔄 Actualiser
           </button>
         </div>
-        {loading && (
-          <p className="text-center mt-4 text-blue-600 animate-pulse">Chargement des données QR...</p>
-        )}
+        {loading && <p className="text-center mt-4 text-blue-600 animate-pulse">Chargement des données QR...</p>}
       </div>
 
-      {/* Total des demandes */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
-        <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">
-          Total des demandes
-        </h2>
+        <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">Total des demandes</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
           <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
@@ -299,14 +293,11 @@ export default function SousDashboardQRcode() {
           </div>
         </div>
       </div>
-
-      {/* Quantité de QR Codes */}
+{/* Quantité de QR Codes */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
-        <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">
-          Quantité de QR Codes
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-          <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+        <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">Quantité de QR Codes</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+          {/* <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-700">Total QR Codes</p>
@@ -318,7 +309,7 @@ export default function SousDashboardQRcode() {
                 </svg>
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="group p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-l-4 border-gray-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
@@ -391,10 +382,9 @@ export default function SousDashboardQRcode() {
           </div>
         </div>
       </div>
-      
-      {/* Recent QR Demandes Table */}
+
       <div className="bg-white rounded-2xl shadow-xl p-6">
-        <h3 className="text-xl font-bold mb-6">📋 Dernières Demandes QR</h3>
+        <h3 className="text-xl font-bold mb-6">📋 Dernières Demandes QR (10)</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -406,31 +396,34 @@ export default function SousDashboardQRcode() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recentDemandes.slice(0, 5).map((demande: any) => {
-                const statusMap = {
-                  'soumise': { text: 'Soumise', color: 'bg-yellow-100 text-yellow-800' },
-                  'generee': { text: 'Générée', color: 'bg-blue-100 text-blue-800' },
-                  'imprimee': { text: 'Imprimée', color: 'bg-orange-100 text-orange-800' },
-                  'livree': { text: 'Livrée', color: 'bg-emerald-100 text-emerald-800' },
-                  'recue': { text: 'Reçue', color: 'bg-green-100 text-green-800' },
-                } as Record<string, { text: string; color: string }>;
-                const status = statusMap[demande.statut as string] || { text: demande.statut as string, color: 'bg-gray-100 text-gray-800' };
+              {recentDemandes.slice(0, 10).map((demande: any) => {
+                const statusMap: Record<string, { text: string; color: string }> = {
+                  soumise: { text: 'Soumise', color: 'bg-yellow-100 text-yellow-800' },
+                  generee: { text: 'Générée', color: 'bg-blue-100 text-blue-800' },
+                  imprimee: { text: 'Imprimée', color: 'bg-orange-100 text-orange-800' },
+                  livree: { text: 'Livrée', color: 'bg-emerald-100 text-emerald-800' },
+                  recue: { text: 'Reçue', color: 'bg-green-100 text-green-800' }
+                };
+
+                const status = statusMap[demande.statut] || {
+                  text: demande.statut,
+                  color: 'bg-gray-100 text-gray-800'
+                };
+
                 return (
                   <tr key={demande.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      #{demande.id}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{demande.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}`}>
                         {status.text}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {demande.forms?.last_modified_at ? format(new Date(demande.forms.last_modified_at), 'yyyy-MM-dd') : 'N/A'}
+                      {demande.forms?.last_modified_at
+                        ? format(new Date(demande.forms.last_modified_at), 'yyyy-MM-dd')
+                        : 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {demande.quantite_qr} QR
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{demande.quantite_qr} QR</td>
                   </tr>
                 );
               })}
