@@ -112,6 +112,8 @@ export default function DemandeQrInputs() {
     const [selectedExcelFile, setSelectedExcelFile] = useState(null)
     const [marchandsExcel, setMarchandsExcel] = useState([])
 
+    const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -377,6 +379,38 @@ export default function DemandeQrInputs() {
             setLoadindExtract(false)
         }
     }
+
+    const handleDownloadTemplate = async () => {
+        setLoadingDownloadTemplate(true)
+        try {
+            const response = await demandeData.downloadTemplateQr();
+
+            const url = window.URL.createObjectURL(response.data);
+
+            const a = document.createElement("a");
+            a.href = url;
+
+            let fileName = "template_demandeQr";
+
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Download error:", error);
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement !",
+                icon: "warning"
+            });
+        } finally {
+            setLoadingDownloadTemplate(false)
+        }
+    }
+
     const handleChangeNumberQr = (id, value) => {
         console.log(id)
         setMarchandsFields((prev) =>
@@ -387,6 +421,7 @@ export default function DemandeQrInputs() {
             )
         )
     }
+
     const handleNumberChange = (value) => {
         setQuantite(value)
         setQuantiteQr(value * quantiteTerminal)
@@ -577,6 +612,7 @@ export default function DemandeQrInputs() {
             pointMarchand: selectedMarchand,
             quantiteTerminal,
             quantiteQr,
+            nbreCopie: quantite,
         }
 
         setListeLivraison((prev) => [...prev, newElement]);
@@ -596,6 +632,7 @@ export default function DemandeQrInputs() {
             pointMarchand: item.POINT_MARCHAND,
             quantiteTerminal: item.sn_count,
             quantiteQr: item.quantiteQr,
+            nbreCopie: quantite,
         }))
         let listeQr = 0
         for (let item of liste) {
@@ -807,7 +844,7 @@ export default function DemandeQrInputs() {
                                                                         setParExcel(true)
                                                                     }
                                                                 }}
-                                                                label="Extraction Excel" />
+                                                                label="Upload Excel" />
                                                         </div>
                                                         <div className="flex items-center gap-3 my-2">
                                                             <Checkbox
@@ -827,6 +864,26 @@ export default function DemandeQrInputs() {
                                                 {parExcel ? (
                                                     <>
                                                         <div className="space-y-5">
+                                                            <div>
+                                                                {loadingDownloadTemplate ? (
+                                                                    <>
+                                                                        <div>
+                                                                            <ProgressSpinner style={{ width: '25px', height: '25px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className="space-x-1.5 text-cyan-500" onClick={handleDownloadTemplate}>
+                                                                            <span className="text-sm font-medium">
+                                                                                Télécharger template
+                                                                            </span>
+                                                                            <span className="">
+                                                                                <i className="pi pi-download"></i>
+                                                                            </span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                             <div>
                                                                 <Label>Fichier Excel</Label>
                                                                 <div className="flex space-x-1.5">
@@ -1116,6 +1173,11 @@ export default function DemandeQrInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Index
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                 Type QR
                                             </TableCell>
                                             <TableCell
@@ -1136,12 +1198,17 @@ export default function DemandeQrInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                Nbre TPE
+                                                Nbre TPE(s)
                                             </TableCell>
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                Nbre de copie
+                                                Nbre de copie(s)
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Total Qr
                                             </TableCell>
                                             <TableCell
                                                 isHeader
@@ -1154,6 +1221,9 @@ export default function DemandeQrInputs() {
                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                         {listeLivraison.map((item, index) => (
                                             <TableRow>
+                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                    {index + 1}
+                                                </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.typeQr}
                                                 </TableCell>
@@ -1168,6 +1238,9 @@ export default function DemandeQrInputs() {
                                                 </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.quantiteTerminal}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                    {item.nbreCopie}
                                                 </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.quantiteQr}

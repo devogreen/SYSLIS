@@ -218,4 +218,15 @@ export class DemandeQr {
             throw error.response.data
         }
     }
+
+    async downloadTemplateQr() {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/downloadTemplateQr`, {
+                responseType: "blob",
+            })
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Download failed" };
+        }
+    }
 }

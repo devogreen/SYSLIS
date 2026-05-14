@@ -2141,7 +2141,8 @@ const extractMarchandsQr = async (req, res) => {
             "CHAINE",
             "POINT MARCHAND",
             "NBRE TPE",
-            "NBRE COPIE"
+            "NBRE COPIE",
+            "TOTAL",
         ];
 
         for (const header of requiredHeaders) {
@@ -2166,6 +2167,7 @@ const extractMarchandsQr = async (req, res) => {
                 marchand: String(getCellValue(row.getCell(headers["POINT MARCHAND"]))),
                 nbreTpe: Number(getCellValue(row.getCell(headers["NBRE TPE"]))),
                 nbreCopie: Number(getCellValue(row.getCell(headers["NBRE COPIE"]))),
+                total: Number(getCellValue(row.getCell(headers["TOTAL"]))),
             }
 
             const key = `${marchand.typeQr}-${marchand.format}-${marchand.marchand}`;
@@ -2353,6 +2355,20 @@ const getCumulQrCodes = async (req, res) => {
     }
 };
 
+// Fonction pour télécharger le template de demande de QR Codes au format Excel.
+const downloadTemplateQr = async (req, res) => {
+    try {
+        const templateFile = 'template_demandeQr.xlsx';
+        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
+        res.download(filePath);
+
+        console.log('Template de demande de QR Codes téléchargé avec succès !');
+    } catch (error) {
+        console.error('Erreur downloadTemplateQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 
 module.exports = {
     getAllTypePaiement,
@@ -2374,4 +2390,5 @@ module.exports = {
     extractMarchandsQr,
     getAllMarchandsQr,
     getCumulQrCodes,
+    downloadTemplateQr,
 }
