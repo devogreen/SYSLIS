@@ -2098,9 +2098,17 @@ const regularisationReceptionDemandeQr = async (req, res) => {
 // Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
 function getCellValue(cell) {
     if (!cell || cell.value == null) return "";
+
+    // Gestion du rich text
     if (typeof cell.value === "object" && cell.value.richText) {
-        return cell.value.richText.map(t => t.text).join("");
+        return cell.value.richText.map(t => t.text).join("").trim();
     }
+
+    // Gestion des formules Excel
+    if (typeof cell.value === "object" && cell.value.formula) {
+        return cell.value.result ?? "";
+    }
+
     return String(cell.value).trim();
 }
 // Fonction d'extraction de fichier excel pour régularisation des demandes QR CODES.
@@ -2121,7 +2129,7 @@ const extractMarchandsQr = async (req, res) => {
 
         // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.worksheets[0];
 
         if (!worksheet) {
@@ -2160,15 +2168,37 @@ const extractMarchandsQr = async (req, res) => {
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
 
-            const marchand = {
-                typeQr: String(getCellValue(row.getCell(headers["TYPE"]))),
-                format: String(getCellValue(row.getCell(headers["FORMAT"]))),
-                chaine: String(getCellValue(row.getCell(headers["CHAINE"]))),
-                marchand: String(getCellValue(row.getCell(headers["POINT MARCHAND"]))),
-                nbreTpe: Number(getCellValue(row.getCell(headers["NBRE TPE"]))),
-                nbreCopie: Number(getCellValue(row.getCell(headers["NBRE COPIE"]))),
-                total: Number(getCellValue(row.getCell(headers["TOTAL"]))),
+            const typeQr = String(getCellValue(row.getCell(headers["TYPE"])) || "").trim();
+            const format = String(getCellValue(row.getCell(headers["FORMAT"])) || "").trim();
+            const chaine = String(getCellValue(row.getCell(headers["CHAINE"])) || "").trim();
+            const marchandName = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
+
+            const nbreTpe = Number(getCellValue(row.getCell(headers["NBRE TPE"])) || 0);
+            const nbreCopie = Number(getCellValue(row.getCell(headers["NBRE COPIE"])) || 0);
+            const total = Number(getCellValue(row.getCell(headers["TOTAL"])) || 0);
+
+            // Ignore les lignes vides ou inutiles
+            if (
+                !typeQr ||
+                !format ||
+                !chaine ||
+                !marchandName ||
+                nbreTpe === 0 ||
+                nbreCopie === 0 ||
+                total === 0
+            ) {
+                return;
             }
+
+            const marchand = {
+                typeQr,
+                format,
+                chaine,
+                marchand: marchandName,
+                nbreTpe,
+                nbreCopie,
+                total,
+            };
 
             const key = `${marchand.typeQr}-${marchand.format}-${marchand.marchand}`;
             if (uniqueKeys.has(key)) {

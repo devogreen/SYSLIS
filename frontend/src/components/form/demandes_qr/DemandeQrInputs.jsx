@@ -96,7 +96,7 @@ export default function DemandeQrInputs() {
     const [optionsQr, setOptionsQr] = useState([])
     const [selectedNomQr, setSelectedNomQr] = useState('')
 
-    const [listeFormats, setListeForms] = useState([])
+    const [listeFormats, setListeFormats] = useState([])
     const [optionsFormats, setOptionsFormats] = useState([])
     const [selectedFormat, setSelectedFormat] = useState(null)
     const [format, setFormat] = useState('')
@@ -201,7 +201,7 @@ export default function DemandeQrInputs() {
                 setOptionsQr(optionsQr)
 
                 const formatQrData = await demandeData.getAllFormatsQr()
-                setListeForms(formatQrData)
+                setListeFormats(formatQrData)
                 const optionsFormats = formatQrData.map((item) => ({
                     label: item.format,
                     value: item.id,
@@ -352,16 +352,22 @@ export default function DemandeQrInputs() {
 
             const response = await demandeData.extractMarchandsQr(fd)
             const marchands = response.data
-            const listeLivraisonData = marchands.map((item, index) => ({
-                typeQrId: item.typeQr == "Orange Money" ? 1 : item.typeQr == "MTN Money" ? 2 : item.typeQr == "Moov Money" ? 3 : null,
-                typeQr: item.typeQr,
-                formatId: item.format == 'A3' ? 1 : item.format == 'A4' ? 2 : item.format == 'A5' ? 3 : item.format == 'A6' ? 4 : item.format == 'A7' ? 5 : null,
-                format: item.format,
-                chaine: item.chaine,
-                pointMarchand: item.marchand,
-                quantiteTerminal: item.nbreTpe,
-                quantiteQr: item.nbreCopie,
-            }))
+            const listeLivraisonData = marchands.map((item, index) => {
+                const typeQr = listeQr.find((qr) => qr.nom == item.typeQr)
+                const format = listeFormats.find((format) => format.format == item.format)
+                return ({
+                    typeQrId: typeQr ? typeQr.id : null,
+                    typeQr: item.typeQr,
+                    formatId: format ? format.id : null,
+                    format: item.format,
+                    chaine: item.chaine,
+                    pointMarchand: item.marchand,
+                    quantiteTerminal: item.nbreTpe,
+                    quantiteQr: item.total,
+                    nbreCopie: item.nbreCopie,
+                })
+            })
+            console.log(listeLivraisonData)
             setMarchandsExcel(listeLivraisonData)
             Swal.fire({
                 title: "Succès",

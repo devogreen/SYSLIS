@@ -1204,6 +1204,11 @@ export default function DemandeQrDetails() {
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                Index
+                                                            </TableCell>
+                                                            <TableCell
+                                                                isHeader
+                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                 Type QR
                                                             </TableCell>
                                                             <TableCell
@@ -1224,12 +1229,17 @@ export default function DemandeQrDetails() {
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                Nbre TPE
+                                                                Nbre TPE(s)
                                                             </TableCell>
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                Nbre de copie
+                                                                Nbre de copie(s)
+                                                            </TableCell>
+                                                            <TableCell
+                                                                isHeader
+                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                Total QR
                                                             </TableCell>
                                                         </TableRow>
                                                     </TableHeader>
@@ -1237,6 +1247,9 @@ export default function DemandeQrDetails() {
                                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                                         {listeDemande.map((item, index) => (
                                                             <TableRow>
+                                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                                    {index + 1}
+                                                                </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.typeQr}
                                                                 </TableCell>
@@ -1251,6 +1264,9 @@ export default function DemandeQrDetails() {
                                                                 </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.quantiteTerminal}
+                                                                </TableCell>
+                                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                                    {item.nbreCopie}
                                                                 </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.quantiteQr}
@@ -1536,7 +1552,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateDemandeReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
@@ -1594,7 +1610,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateLivraisonReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
