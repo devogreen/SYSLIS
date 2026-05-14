@@ -699,14 +699,16 @@ model form_signatures {
 }
 
 model generation_qr {
-  id            Int             @id @default(autoincrement())
-  form_id       Int
-  quantite_qr   Int?
-  demande_id    Int
-  demande_qr    demande_qr      @relation(fields: [demande_id], references: [id], map: "generation_qr_ibfk_2")
-  forms         forms           @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "generation_qr_ibfk_3")
-  impression_qr impression_qr[]
-  qr_codes      qr_codes[]
+  id                Int             @id @default(autoincrement())
+  form_id           Int
+  quantite_qr       Int?
+  demande_id        Int
+  quantite_marchand Int?
+  liste_demande     String?         @db.LongText
+  demande_qr        demande_qr      @relation(fields: [demande_id], references: [id], map: "generation_qr_ibfk_2")
+  forms             forms           @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "generation_qr_ibfk_3")
+  impression_qr     impression_qr[]
+  qr_codes          qr_codes[]
 
   @@index([demande_id], map: "demande_id")
   @@index([form_id], map: "form_id")

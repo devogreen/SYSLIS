@@ -62,7 +62,11 @@ export default function SelectionQrInputs() {
 
     const [isAllChecked, setIsAllChecked] = useState(false)
 
+    const [statutDemande, setStatutDemande] = useState('')
+
     const [isModalConfirmModifOpen, setIsModalConfirmModifOpen] = useState(false)
+    const [isModalConfirmValidateOpen, setIsModalConfirmValidateOpen] = useState(false)
+    const [isModalConfirmGenerateOpen, setIsModalConfirmGenerateOpen] = useState(false)
 
 
     const isOnlyDigits = (str) => /^\d+$/.test(str);
@@ -89,8 +93,13 @@ export default function SelectionQrInputs() {
                     navigate('/toutes-les-demandes-qr')
                     return;
                 }
+                let listeDemande = []
 
-                const listeDemande = JSON.parse(demande.liste_demande)
+                if (demande.statut == 'soumise') {
+                    setStatutDemande('soumise')
+                    listeDemande = JSON.parse(demande.liste_demande)
+                }
+
                 setListeDemande(listeDemande)
                 setTotalListe(listeDemande.length)
                 // setTotalQr(Number(demande.quantite_qr))
@@ -150,7 +159,21 @@ export default function SelectionQrInputs() {
     }
 
     const handleConfirmValidate = () => {
+        setErrorAjout('')
+        // setIsModalConfirmValidateOpen(true)
+        if (statutDemande == 'soumise') {
+            setIsModalConfirmGenerateOpen(true)
+        }
+    }
 
+    const handleValidate = async () => {
+        setIsModalConfirmValidateOpen(false)
+        try {
+            setLoadingValidation(true)
+            console.log('Liste validée: ', listeDemande)
+        } finally {
+            setLoadingValidation(false)
+        }
     }
 
     return (
@@ -454,6 +477,110 @@ export default function SelectionQrInputs() {
                     </div>
                 </div>
             </Modal>
+            <Modal isOpen={isModalConfirmGenerateOpen} onClose={() => setIsModalConfirmGenerateOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-3">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Upload</span>
+                    </div>
+                    <div>
+                        <Label>Commentaire</Label>
+                        <TextArea
+                            value={commentaireGenerator}
+                            onChange={(value) => setCommentaireGenerator(value)}
+                            rows={3}
+                            placeholder="Ajoutez un commentaire"
+                        />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-xs">
+                            Total marchand par type QR: <span className="font-semibold">{marchandsParType.length}</span>
+                        </span>
+                        <span className="text-xs">
+                            QR Codes files uploaded: <span className="font-semibold">{selectedFiles.length}</span>
+                        </span>
+                    </div>
+                    <div>
+                        <div>
+                            <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                            <div
+                                {...getRootProps()}
+                                className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
+                            >
+                                <input {...getInputProps()} />
+                                <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
+                            </div>
+                            <div className="max-h-38 overflow-y-auto">
+                                {selectedFiles.length > 0 ? (
+                                    <div className="mt-3">
+                                        {selectedFiles.map((selectedFile, index) => (
+                                            <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
+                                                <span>
+                                                    <i className="pi pi-file-check"></i>
+                                                </span>
+                                                <span className=" text-center" style={{ fontSize: '9px' }}>
+                                                    {selectedFile.name}
+                                                </span>
+                                                <button onClick={() => handleDeleteFile(index)}>
+                                                    <span className="text-error-600"><i className="pi pi-times"></i></span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <></>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <span className="text-error-500 text-xs">
+                            {errorGenerate}
+                        </span>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleUploadQr}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalConfirmValidateOpen} onClose={() => setIsModalConfirmValidateOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-5">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Validation</span>
+                    </div>
+                    <div className="">
+                        <div className="text-xs text-center space-y-1">
+                            <div>
+                                <span>Total validation : </span>
+                                <span className="font-bold text-sm">{selectedMarchands.length} sur {listeDemande.length}</span>
+                            </div>
+                            {/* <div>
+                                <span>Marchands : </span>
+                                <span className="font-bold text-sm">{nbreMarchand}</span>
+                            </div> */}
+                            <div>
+                                <span>Total QR Codes : </span>
+                                <span className="font-bold text-sm">{totalQr}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleValidate}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+
         </>
     )
 }

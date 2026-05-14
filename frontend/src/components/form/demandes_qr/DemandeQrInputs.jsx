@@ -624,7 +624,7 @@ export default function DemandeQrInputs() {
             for (let item of liste) {
                 listeQr += item.quantiteQr
             }
-    
+
             setListeLivraison((prev) => [...prev, ...liste]);
             setQuantiteTotale((prev) => prev + liste.length);
             setTotalQr((prev) => prev + listeQr);
@@ -905,12 +905,24 @@ export default function DemandeQrInputs() {
                                                     <>
                                                         <div>
                                                             <Label>Type QR Code <span className="text-red-700">*</span></Label>
-                                                            <Select
-                                                                options={optionsQr}
-                                                                placeholder="Choisir une option"
-                                                                className="dark:bg-dark-900"
-                                                                onChange={handleSelectType}
-                                                            />
+                                                            {/* <Select
+                                                        options={optionsQr}
+                                                        placeholder="Choisir une option"
+                                                        className="dark:bg-dark-900"
+                                                        onChange={handleSelectType}
+                                                    /> */}
+                                                            {listeQr.map((item) => {
+                                                                return (
+                                                                    <>
+                                                                        <div key={item.id} className="flex items-center gap-3 my-2">
+                                                                            <Checkbox
+                                                                                checked={selectedTypes.some((type) => type.id === item.id)}
+                                                                                onChange={() => handleSelectType({ id: item.id, nom: item.nom })}
+                                                                                label={item.nom} />
+                                                                        </div>
+                                                                    </>
+                                                                )
+                                                            })}
                                                         </div>
                                                         <div>
                                                             <Label>Format <span className="text-red-700">*</span></Label>
@@ -1140,6 +1152,11 @@ export default function DemandeQrInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Index
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                 Type QR
                                             </TableCell>
                                             <TableCell
@@ -1178,6 +1195,9 @@ export default function DemandeQrInputs() {
                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                         {listeLivraison.map((item, index) => (
                                             <TableRow>
+                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                    {index + 1}
+                                                </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.typeQr}
                                                 </TableCell>
