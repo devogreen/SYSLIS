@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from '../../components/form/date-picker';
 import {
-  startOfWeek, endOfWeek, format, getWeek
+  endOfWeek, format, getWeek
 } from 'date-fns';
+
 import { fr } from 'date-fns/locale';
 
 // @ts-ignore
@@ -29,7 +30,9 @@ interface Stats {
   attente: number;
   livrees: number;
   returns: number;
+  totalLivraisons: number;
 }
+
 
 interface HierarchyNode {
   count: number;
@@ -52,7 +55,9 @@ export default function SousDashboardLivraison() {
     attente: 0,
     livrees: 0,
     returns: 0,
+    totalLivraisons: 0,
   });
+
 
   // @ts-ignore
   const [weeklyData, setWeeklyData] = useState<Record<string, Livraison[]>>({});
@@ -116,10 +121,12 @@ export default function SousDashboardLivraison() {
           // Compute stats from filtered data
           const computedStats = {
             attente: filteredLivraisons.filter(l => l.statut_livraison === 'en_cours' || l.statut_livraison === 'en_attente').length,
-            livrees: filteredLivraisons.filter(l => l.statut_livraison === 'livre').length,
+            livrees: filteredLivraisons.filter(l => l.statut_livraison === 'livre').reduce((acc, l) => acc + (l.qte_totale_livraison || 0), 0),
+            totalLivraisons: filteredLivraisons.filter(l => l.type_livraison_commerciale?.nom_type_livraison === 'Livraison TPE').length || filteredLivraisons.length,
             returns: filteredLivraisons.filter(l => l.validations && l.validations.some(v => v.etat_validation === 'retourne')).length,
           };
           setStats(computedStats);
+
 
           // DEBUG: Log sample data structure for type_livraison_commerciale issue
           if (filteredLivraisons.length > 0) {
@@ -242,8 +249,10 @@ export default function SousDashboardLivraison() {
         <div className="group p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-700 opacity-80">Livrées</p>
-              <p className="text-4xl font-bold text-green-600">{stats.livrees}</p>
+              <p className="text-sm font-medium text-green-700 opacity-80">TPE livrées </p>
+              <p className="text-4xl font-bold text-green-600">
+                {stats.livrees} <span className="text-base text-green-800 opacity-70"></span>
+              </p>
             </div>
             <div className="p-3 bg-green-200 rounded-full">
               <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,6 +261,7 @@ export default function SousDashboardLivraison() {
             </div>
           </div>
         </div>
+
 
         <div className="group p-6 bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
           <div className="flex items-center justify-between">

@@ -1,7 +1,8 @@
 
 // @ts-ignore
 import React, { useState, useEffect } from 'react';
-import { startOfMonth, endOfMonth, format, getWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, getWeek } from 'date-fns';
+
 import DatePicker from '../../components/form/date-picker';
 import { RefreshTimeIcon } from '../../icons';
 import type { LivraisonType } from '../../types';
@@ -12,7 +13,7 @@ import { Stock } from '../../backend/stock/Stock.js'
 // @ts-ignore
 import urlBase from '../../backend/const.js'
 
-type StockTotals = { total_lot: number; total_carton: number; total_piece: number; total: number };
+
 
 interface GeneralStats {
   typesLivraisons: any;
@@ -28,8 +29,9 @@ interface GeneralStats {
 
 export default function Dashboard() {
 
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [endDate, setEndDate] = useState<Date | null>(endOfWeek(new Date(), { weekStartsOn: 1 }));
+
   const [stats, setStats] = useState<GeneralStats | null>(null);
 
   const statsSafe: GeneralStats =
