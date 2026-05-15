@@ -638,7 +638,7 @@ export default function DemandeQrInputs() {
             pointMarchand: item.POINT_MARCHAND,
             quantiteTerminal: item.sn_count,
             quantiteQr: item.quantiteQr,
-            nbreCopie: quantite,
+            nbreCopie: item.nbreQr,
         }))
         let listeQr = 0
         for (let item of liste) {
