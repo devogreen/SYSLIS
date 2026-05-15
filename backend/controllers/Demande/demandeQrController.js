@@ -2399,22 +2399,8 @@ const downloadTemplateQr = async (req, res) => {
     }
 }
 
-// Fonction pour télécharger le template de demande de QR Codes au format Excel.
-const downloadTemplateQr = async (req, res) => {
-    try {
-        const templateFile = 'template_demandeQr.xlsx';
-        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
-        res.download(filePath);
-
-        console.log('Template de demande de QR Codes téléchargé avec succès !');
-    } catch (error) {
-        console.error('Erreur downloadTemplateQr:', error);
-        res.status(500).json({ message: 'Erreur serveur' });
-    }
-}
-
 // Fonction pour extraire les données des demandes QR en format Excel, selon des filtres de date et de statut.
-const exportDemandesQrToExcel = async (req, res) => {
+const exportTotalDemandesQrToExcel = async (req, res) => {
     try {
         const {
             listId,
@@ -2533,10 +2519,91 @@ const exportDemandesQrToExcel = async (req, res) => {
             })
         }
     } catch (error) {
-        console.error('Erreur exportDemandesQrToExcel:', error);
+        console.error('Erreur exportTotalDemandesQrToExcel:', error);
         res.status(500).json({ message: 'Erreur serveur' });
     }
 }
+
+// Fonction pour extraire les données d'une demande QR spécifique en format Excel, avec tous les détails de la demande.
+const exportOneDemandeQrToExcel = async (req, res) => {
+    try {
+        const {
+            idDemande,
+        } = req.params
+        const demande = await prisma.demande_qr.findUnique({
+            where: {
+                id: parseInt(idDemande),
+            },
+        })
+
+        if (!demande) {
+            console.error('Demande introuvable !')
+            return res.status(404).json({ message: "Demande introuvable !" });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+
+        const allDetailSheet = workbook.addWorksheet("Liste Demande")
+        const allDetailHeader = [
+            "Index",
+            "Point Marchand",
+            "Chaîne",
+            "Format",
+            "Type QR",
+            "Nbre TPE",
+            "Nbre de Copie",
+            "Total QR",
+        ]
+        const allDetailRow = allDetailSheet.addRow(allDetailHeader)
+
+        allDetailRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const listeDemande = typeof demande.liste_demande === "string"
+            ? JSON.parse(demande.liste_demande)
+            : demande.liste_demande;
+
+        listeDemande.forEach((item, index) => {
+            allDetailSheet.addRow([
+                index + 1,
+                item.pointMarchand,
+                item.chaine,
+                item.format,
+                item.typeQr,
+                item.quantiteTerminal,
+                item.nbreCopie,
+                item.quantiteQr,
+            ])
+        })
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=demandeQr_${idDemande}.xlsx`
+        );
+        res.send(buffer);
+
+        console.log('Export de la demande de QR Codes téléchargé avec succès !');
+
+    } catch (error) {
+        console.error('Erreur exportOneDemandeQrToExcel:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2558,4 +2625,6 @@ module.exports = {
     getAllMarchandsQr,
     getCumulQrCodes,
     downloadTemplateQr,
+    exportTotalDemandesQrToExcel,
+    exportOneDemandeQrToExcel,
 }

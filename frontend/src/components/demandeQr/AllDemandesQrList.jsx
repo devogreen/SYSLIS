@@ -532,14 +532,14 @@ export default function AllDemandesQrList() {
                             {totalQr} QR Codes(s)
                         </span>
                     </div>
-                    <div className="flex text-xs space-x-1.5">
+                    {/* <div className="flex text-xs space-x-1.5">
                         <div>
                             <button className="text-cyan-600 border rounded-2xl p-1 border-cyan-600">Total demandes QR Codes</button>
                         </div>
                         <div>
                             <button className="text-cyan-800 border rounded-2xl p-1 border-cyan-800">Total QR Codes</button>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
                 <div className="card">
                     <DataTable

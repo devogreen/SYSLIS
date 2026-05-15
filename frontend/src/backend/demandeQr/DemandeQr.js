@@ -229,4 +229,26 @@ export class DemandeQr {
             throw error.response?.data || { message: "Download failed" };
         }
     }
+
+    async exportTotalDemandesQrToExcel() {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/exportTotalDemandesQrToExcel`, {
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Export failed" };
+        }
+    };
+
+    async exportOneDemandeQrToExcel(idDemande) {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/exportOneDemandeQrToExcel/${idDemande}`, {
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Export failed" };
+        }
+    }
 }
