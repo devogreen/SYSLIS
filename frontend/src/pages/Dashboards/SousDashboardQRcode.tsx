@@ -207,8 +207,8 @@ export default function SousDashboardQRcode() {
 
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
         <h2 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">Total des demandes</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-          <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          {/* <div className="group p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-700">Total des demandes</p>
@@ -220,7 +220,7 @@ export default function SousDashboardQRcode() {
                 </svg>
               </div>
             </div>
-          </div>
+          </div> */}
 
           <div className="group p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-l-4 border-gray-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
             <div className="flex items-center justify-between">

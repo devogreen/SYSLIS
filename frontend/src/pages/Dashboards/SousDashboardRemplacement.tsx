@@ -28,11 +28,13 @@ interface Remplacement {
 }
 
 interface Stats {
-  total: number;
+  total: number; // nombre de formulaires
+  totalTpe: number; // somme des quantités (TPE) remplacés
   en_attente: number;
   livre: number;
   refuse: number;
 }
+
 
 export default function SousDashboardRemplacement() {
   const getFormattedDate = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -40,7 +42,7 @@ export default function SousDashboardRemplacement() {
   // Par défaut : afficher toutes les données depuis le début
   const [startDate, setStartDate] = useState<Date>(new Date('2000-01-01'));
   const [endDate, setEndDate] = useState<Date>(endOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [stats, setStats] = useState<Stats>({ total: 0, en_attente: 0, livre: 0, refuse: 0 });
+  const [stats, setStats] = useState<Stats>({ total: 0, totalTpe: 0, en_attente: 0, livre: 0, refuse: 0 });
   const [recentRemplacements, setRecentRemplacements] = useState<Remplacement[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -84,14 +86,27 @@ export default function SousDashboardRemplacement() {
             return dateRemplacement >= startDate && dateRemplacement <= endDate;
           });
 
-          // Compute stats
+          // Compute stats (total formulaires + somme des quantités TPE)
+          const totalTpe = filteredRemplacements.reduce((sum, r) => sum + Number(r.quantite || 0), 0);
+          const totalTpeEnAttente = filteredRemplacements
+            .filter(r => r.statut === 'en_attente')
+            .reduce((sum, r) => sum + Number(r.quantite || 0), 0);
+          const totalTpeLivre = filteredRemplacements
+            .filter(r => r.statut === 'livre')
+            .reduce((sum, r) => sum + Number(r.quantite || 0), 0);
+          const totalTpeRefuse = filteredRemplacements
+            .filter(r => r.statut === 'refuse' || r.statut === 'annule')
+            .reduce((sum, r) => sum + Number(r.quantite || 0), 0);
+
           const computedStats: Stats = {
             total: filteredRemplacements.length,
-            en_attente: filteredRemplacements.filter(r => r.statut === 'en_attente').length,
-            livre: filteredRemplacements.filter(r => r.statut === 'livre').length,
-            refuse: filteredRemplacements.filter(r => r.statut === 'refuse' || r.statut === 'annule').length,
+            totalTpe,
+            en_attente: totalTpeEnAttente,
+            livre: totalTpeLivre,
+            refuse: totalTpeRefuse,
           };
           setStats(computedStats);
+
 
           // Recent 10
           const recent = filteredRemplacements.slice(0, 10);
@@ -149,8 +164,8 @@ export default function SousDashboardRemplacement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* <div className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-purple-700">Total</p>
@@ -162,7 +177,7 @@ export default function SousDashboardRemplacement() {
               </svg>
             </div>
           </div>
-        </div>
+        </div> */}
 
         <div className="p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 border-l-4 border-yellow-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
@@ -181,8 +196,10 @@ export default function SousDashboardRemplacement() {
         <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-400 rounded-xl shadow-lg hover:shadow-xl transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-700">Livrées</p>
-              <p className="text-4xl font-bold text-green-600">{stats.livre}</p>
+              <p className="text-sm font-medium text-green-700">TPE remplacés</p>
+              <p className="text-4xl font-bold text-green-600">{stats.totalTpe || 0}</p>
+
+
             </div>
             <div className="p-3 bg-green-200 rounded-full">
               <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
