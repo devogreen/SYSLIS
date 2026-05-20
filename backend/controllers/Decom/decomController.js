@@ -144,6 +144,52 @@ const faireDecom = async (req, res) => {
                         statut_id: 8,
                     }
                 });
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: { in: serials }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = serials.filter(item => {
+                    const lastModified = tpeDateMap.get(item);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) < new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item
+                            },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: 8,
+                            }
+                        })
+                    )
+                );
             }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
@@ -830,6 +876,54 @@ const receptionDecom = async (req, res) => {
                     toUpdate.map(item =>
                         tx.parc_tpe.update({
                             where: { serial_number: item.terminalSN },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: 9,
+                            }
+                        })
+                    )
+                );
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: {
+                            in: toUpdate.map(item => item.terminalSN)
+                        }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = toUpdate.filter(item => {
+                    const lastModified = tpeDateMap.get(item.terminalSN);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) <= new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item.terminalSN
+                            },
                             data: {
                                 updated_by: utilisateur.id_user,
                                 updated_at: dateAction,
@@ -1570,7 +1664,7 @@ const clotureDecom = async (req, res) => {
             const serials = listeVerified.map(item => item.serial_number);
 
             // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await prisma.parc_tpe.findMany({
+            const existingTpes = await tx.parc_tpe.findMany({
                 where: {
                     serial_number: { in: serials }
                 },
@@ -1598,7 +1692,7 @@ const clotureDecom = async (req, res) => {
 
             // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
             if (toCreate.length > 0) {
-                await prisma.parc_tpe.createMany({
+                await tx.parc_tpe.createMany({
                     data: toCreate.map(item => ({
                         serial_number: item.serial_number,
                         created_by: utilisateur.id_user,
@@ -1613,7 +1707,7 @@ const clotureDecom = async (req, res) => {
                 // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
                 await Promise.all(
                     toUpdate.map(item =>
-                        prisma.parc_tpe.update({
+                        tx.parc_tpe.update({
                             where: { serial_number: item.serial_number },
                             data: {
                                 updated_by: utilisateur.id_user,
@@ -1624,10 +1718,58 @@ const clotureDecom = async (req, res) => {
                         })
                     )
                 );
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: {
+                            in: toUpdate.map(item => item.serial_number)
+                        }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = toUpdate.filter(item => {
+                    const lastModified = tpeDateMap.get(item.serial_number);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) <= new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item.serial_number
+                            },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: statutMap[item.statut],
+                            }
+                        })
+                    )
+                );
             }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await prisma.parc_tpe.findMany({
+            const allTpes = await tx.parc_tpe.findMany({
                 where: {
                     serial_number: { in: serials }
                 },
@@ -1637,10 +1779,17 @@ const clotureDecom = async (req, res) => {
                 }
             });
 
+            const uniqueMap = new Map();
+
+            listeVerified.forEach(item => {
+                uniqueMap.set(item.serial_number, item);
+            });
+
+            const uniqueListeVerified = [...uniqueMap.values()];
             // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await prisma.history_tpe.createMany({
+            await tx.history_tpe.createMany({
                 data: allTpes.map(tpe => {
-                    const item = listeVerified.find(
+                    const item = uniqueListeVerified.find(
                         i => i.serial_number === tpe.serial_number
                     );
 

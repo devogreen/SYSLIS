@@ -51,6 +51,7 @@ export default function DemandeQrInputs() {
 
     const [loadingData, setLoadingData] = useState(false)
     const [loadingValidation, setLoadingValidation] = useState(false)
+    const [loadindExtract, setLoadindExtract] = useState(false)
 
     const [errorForm, setErrorForm] = useState('')
     const [errorAjout, setErrorAjout] = useState('')
@@ -71,6 +72,7 @@ export default function DemandeQrInputs() {
 
     const [isModalParMarchand, setIsModalParMarchand] = useState(false)
     const [isModalParChaineOpen, setIsModalParChaineOpen] = useState(false)
+    const [isModalParExcelOpen, setIsModalParExcelOpen] = useState(false)
 
     const [chaineGroup, setChaineGroup] = useState([])
 
@@ -94,7 +96,7 @@ export default function DemandeQrInputs() {
     const [optionsQr, setOptionsQr] = useState([])
     const [selectedNomQr, setSelectedNomQr] = useState('')
 
-    const [listeFormats, setListeForms] = useState([])
+    const [listeFormats, setListeFormats] = useState([])
     const [optionsFormats, setOptionsFormats] = useState([])
     const [selectedFormat, setSelectedFormat] = useState(null)
     const [format, setFormat] = useState('')
@@ -103,6 +105,14 @@ export default function DemandeQrInputs() {
     const [nbreMarchand, setNbreMarchand] = useState(savedListe?.nbreMarchand || 0)
 
     const [selectedFiles, setSelectedFiles] = useState([])
+
+    const [parExcel, setParExcel] = useState(false)
+    const [parManuel, setParManuel] = useState(false)
+
+    const [selectedExcelFile, setSelectedExcelFile] = useState(null)
+    const [marchandsExcel, setMarchandsExcel] = useState([])
+
+    const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -191,7 +201,7 @@ export default function DemandeQrInputs() {
                 setOptionsQr(optionsQr)
 
                 const formatQrData = await demandeData.getAllFormatsQr()
-                setListeForms(formatQrData)
+                setListeFormats(formatQrData)
                 const optionsFormats = formatQrData.map((item) => ({
                     label: item.format,
                     value: item.id,
@@ -291,16 +301,122 @@ export default function DemandeQrInputs() {
         setSelectedFiles(updatedFiles);
     }, [selectedFiles]);
 
-    const { getRootProps, getInputProps } = useDropzone({
+    const onDropExcel = useCallback(async (acceptedFiles) => {
+        setSelectedExcelFile(acceptedFiles[0])
+    }, [selectedExcelFile]);
+
+    const { getRootProps: getFilesRootProps,
+        getInputProps: getFilesInputProps,
+    } = useDropzone({
         onDrop,
         multiple: true,
     });
+
+    const {
+        getRootProps: getExcelRootProps,
+        getInputProps: getExcelInputProps,
+    } = useDropzone({
+        onDrop: onDropExcel,
+        multiple: false,
+        accept: {
+            "application/vnd.ms-excel": [".xls"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+        }
+    });
+
 
     const handleDeleteFile = (indexToRemove) => {
         setSelectedFiles((prev) =>
             prev.filter((_, index) => index !== indexToRemove)
         );
     };
+
+    const handleExtractExcelData = async () => {
+        try {
+            setErrorAjout('')
+            setMarchandsExcel([])
+
+            if (!selectedExcelFile) {
+                Swal.fire({
+                    title: "Attention",
+                    text: "Veuillez sélectionner un fichier Excel !",
+                    icon: "warning"
+                })
+                return
+            }
+            setLoadindExtract(true)
+
+            const fd = new FormData()
+            fd.append('file', selectedExcelFile)
+            fd.append('userId', userId)
+
+            const response = await demandeData.extractMarchandsQr(fd)
+            const marchands = response.data
+            const listeLivraisonData = marchands.map((item, index) => {
+                const typeQr = listeQr.find((qr) => qr.nom == item.typeQr)
+                const format = listeFormats.find((format) => format.format == item.format)
+                return ({
+                    typeQrId: typeQr ? typeQr.id : null,
+                    typeQr: item.typeQr,
+                    formatId: format ? format.id : null,
+                    format: item.format,
+                    chaine: item.chaine,
+                    pointMarchand: item.marchand,
+                    quantiteTerminal: item.nbreTpe,
+                    quantiteQr: item.total,
+                    nbreCopie: item.nbreCopie,
+                })
+            })
+            console.log(listeLivraisonData)
+            setMarchandsExcel(listeLivraisonData)
+            Swal.fire({
+                title: "Succès",
+                text: "Données Excel extraites avec succès !",
+                icon: "success"
+            })
+        } catch (error) {
+            console.error("Erreur lors de l'extraction des données Excel:", error);
+            Swal.fire({
+                title: "Attention",
+                text: error.message,
+                icon: "warning"
+            })
+        } finally {
+            setLoadindExtract(false)
+        }
+    }
+
+    const handleDownloadTemplate = async () => {
+        setLoadingDownloadTemplate(true)
+        try {
+            const response = await demandeData.downloadTemplateQr();
+
+            const url = window.URL.createObjectURL(response.data);
+
+            const a = document.createElement("a");
+            a.href = url;
+
+            let fileName = "template_demandeQr";
+
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Download error:", error);
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement !",
+                icon: "warning"
+            });
+        } finally {
+            setLoadingDownloadTemplate(false)
+        }
+    }
+
     const handleChangeNumberQr = (id, value) => {
         console.log(id)
         setMarchandsFields((prev) =>
@@ -311,6 +427,7 @@ export default function DemandeQrInputs() {
             )
         )
     }
+
     const handleNumberChange = (value) => {
         setQuantite(value)
         setQuantiteQr(value * quantiteTerminal)
@@ -468,6 +585,27 @@ export default function DemandeQrInputs() {
         setIsModalParChaineOpen(true)
     }
 
+    const handleCheckAjoutParExcel = () => {
+        if (!selectedDateDemande) {
+            setErrorAjout('Vous devez choisir la date de la demande !')
+            return
+        }
+        if (marchandsExcel.length == 0) {
+            setErrorAjout('Vous devez extraire les données du fichier Excel !')
+            return
+        }
+        for (let m of marchandsExcel) {
+            const isDuplicate = listeLivraison.some(item => {
+                return item.pointMarchand == m.pointMarchand && item.typeQrId == m.typeQrId && item.formatId == m.formatId
+            });
+            if (isDuplicate) {
+                setErrorAjout("Vous avez déjà ajouté ce type de QR avec ce format pour ce marchand !");
+                return;
+            }
+        }
+        setIsModalParExcelOpen(true)
+    }
+
     const handleAjoutParMarchand = (value) => {
         setErrorAjout('')
         setIsModalParMarchand(false)
@@ -480,6 +618,7 @@ export default function DemandeQrInputs() {
             pointMarchand: selectedMarchand,
             quantiteTerminal,
             quantiteQr,
+            nbreCopie: quantite,
         }
 
         setListeLivraison((prev) => [...prev, newElement]);
@@ -499,6 +638,7 @@ export default function DemandeQrInputs() {
             pointMarchand: item.POINT_MARCHAND,
             quantiteTerminal: item.sn_count,
             quantiteQr: item.quantiteQr,
+            nbreCopie: item.nbreQr,
         }))
         let listeQr = 0
         for (let item of liste) {
@@ -508,6 +648,21 @@ export default function DemandeQrInputs() {
         setListeLivraison((prev) => [...prev, ...liste]);
         setQuantiteTotale((prev) => prev + liste.length);
         setTotalQr((prev) => prev + listeQr);
+    }
+
+    const handleAjoutParExcel = () => {
+        setErrorAjout('')
+        setIsModalParExcelOpen(false)
+
+        let listeQr = 0
+        for (let item of marchandsExcel) {
+            listeQr += item.quantiteQr
+        }
+        setQuantiteTotale((prev) => prev + marchandsExcel.length);
+        setTotalQr((prev) => prev + listeQr);
+        setListeLivraison((prev) => [...prev, ...marchandsExcel]);
+        setSelectedExcelFile(null)
+        setMarchandsExcel([])
     }
 
     const handleDelete = (indexToRemove) => {
@@ -643,21 +798,12 @@ export default function DemandeQrInputs() {
                                                     <span className="text-sm font-semibold">Informations générales</span>
                                                 </div>
                                                 <div>
-                                                    <Label>Commentaire</Label>
-                                                    <TextArea
-                                                        type="text"
-                                                        placeholder="Ajoutez un commentaire"
-                                                        value={commentaire}
-                                                        onChange={(value) => setCommentaire(value)}
-                                                    />
-                                                </div>
-                                                <div>
                                                     <Label>Importer des fichiers</Label>
                                                     <div
-                                                        {...getRootProps()}
+                                                        {...getFilesRootProps()}
                                                         className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
                                                     >
-                                                        <input {...getInputProps()} />
+                                                        <input {...getFilesInputProps()} />
                                                         <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
                                                     </div>
                                                     <div className="max-h-38 overflow-y-auto">
@@ -683,204 +829,321 @@ export default function DemandeQrInputs() {
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <Label>Type QR Code <span className="text-red-700">*</span></Label>
-                                                    <Select
-                                                        options={optionsQr}
-                                                        placeholder="Choisir une option"
-                                                        className="dark:bg-dark-900"
-                                                        onChange={handleSelectType}
+                                                    <Label>Commentaire</Label>
+                                                    <TextArea
+                                                        type="text"
+                                                        placeholder="Ajoutez un commentaire"
+                                                        value={commentaire}
+                                                        onChange={(value) => setCommentaire(value)}
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label>Format <span className="text-red-700">*</span></Label>
-                                                    <Select
-                                                        options={optionsFormats}
-                                                        placeholder="Choisir une option"
-                                                        className="dark:bg-dark-900"
-                                                        onChange={handleSelectFormat}
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-3 my-2">
-                                                        <Checkbox
-                                                            checked={parChaine}
-                                                            onChange={(e) => {
-                                                                if (parChaine) {
-                                                                    setParChaine(false)
-                                                                } else {
-                                                                    setParChaine(true)
-                                                                    setParMarchand(false)
-                                                                }
-                                                            }}
-                                                            label="Par Chaîne" />
-                                                    </div>
-                                                    <div className="flex items-center gap-3 my-2">
-                                                        <Checkbox
-                                                            checked={parMarchand}
-                                                            onChange={(e) => {
-                                                                if (parMarchand) {
-                                                                    setParMarchand(false)
-                                                                } else {
-                                                                    setParMarchand(true)
-                                                                    setParChaine(false)
-                                                                }
-                                                            }}
-                                                            label="Par Marchand" />
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-3 my-2">
+                                                            <Checkbox
+                                                                checked={parExcel}
+                                                                onChange={(e) => {
+                                                                    if (parExcel) {
+                                                                        setParExcel(false)
+                                                                    } else {
+                                                                        setParManuel(false)
+                                                                        setParExcel(true)
+                                                                    }
+                                                                }}
+                                                                label="Upload Excel" />
+                                                        </div>
+                                                        <div className="flex items-center gap-3 my-2">
+                                                            <Checkbox
+                                                                checked={parManuel}
+                                                                onChange={(e) => {
+                                                                    if (parManuel) {
+                                                                        setParManuel(false)
+                                                                    } else {
+                                                                        setParManuel(true)
+                                                                        setParExcel(false)
+                                                                    }
+                                                                }}
+                                                                label="Manuellement" />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div>
-                                                    {parChaine ? (
-                                                        <>
-                                                            <div className="space-y-5">
-                                                                <div>
-                                                                    <Label>Chaîne </Label>
-                                                                    <Dropdown
-                                                                        options={optionsChaine}
-                                                                        optionLabel="Label"
-                                                                        placeholder="Choisir chaîne"
-                                                                        filter
-                                                                        filterBy="label"
-                                                                        itemTemplate={chaineTemplate}
-                                                                        className="w-full"
-                                                                        onChange={handleSelectChaine}
-                                                                        value={selectedChaine}
-                                                                        valueTemplate={selectedChaineTemplate}
-                                                                    />
-                                                                </div>
-                                                                <div>
-                                                                    <Label>Quantité / TPE</Label>
-                                                                    <Input
-                                                                        type="number"
-                                                                        className="dark:bg-dark-900"
-                                                                        value={quantite}
-                                                                        onChange={(e) => {
-                                                                            const value = Number(e.target.value)
-                                                                            if (value >= 1) {
-                                                                                handleNumberChange(value)
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <div className="space-y-4">
-                                                                    {marchandFields.map((item, index) => {
-                                                                        return (
-                                                                            <>
-                                                                                <div className="space-y-3" key={index}>
+                                                {parExcel ? (
+                                                    <>
+                                                        <div className="space-y-5">
+                                                            <div>
+                                                                {loadingDownloadTemplate ? (
+                                                                    <>
+                                                                        <div>
+                                                                            <ProgressSpinner style={{ width: '25px', height: '25px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className="space-x-1.5 text-cyan-500" onClick={handleDownloadTemplate}>
+                                                                            <span className="text-sm font-medium">
+                                                                                Télécharger template
+                                                                            </span>
+                                                                            <span className="">
+                                                                                <i className="pi pi-download"></i>
+                                                                            </span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <Label>Fichier Excel</Label>
+                                                                <div className="flex space-x-1.5">
+                                                                    <div
+                                                                        {...getExcelRootProps()}
+                                                                        className="border border-dashed p-2 rounded-lg text-center cursor-pointer border-green-500 w-full"
+                                                                    >
+                                                                        <input {...getExcelInputProps()} />
+                                                                        <p className="text-xs font-light text-green-500">Faites glisser le fichier ici, ou cliquer pour le sélectionner.</p>
+                                                                    </div>
+                                                                    {selectedExcelFile ? (
+                                                                        <>
+                                                                            {loadindExtract ? (
+                                                                                <>
                                                                                     <div>
-                                                                                        <Label>Point Marchand <span className="font-bold">{index + 1}</span></Label>
-                                                                                        <Input
-                                                                                            type="text"
-                                                                                            className="cursor-not-allowed"
-                                                                                            readOnly
-                                                                                            value={item.POINT_MARCHAND}
-                                                                                        />
+                                                                                        <ProgressSpinner style={{ width: '10px', height: '10px' }} strokeWidth="8" animationDuration=".5s" />
                                                                                     </div>
-                                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                                        <div>
-                                                                                            <Label>Quantité / TPE <span className="text-red-700">*</span></Label>
-                                                                                            <Input
-                                                                                                type="number"
-                                                                                                className="dark:bg-dark-900"
-                                                                                                value={item.nbreQr}
-                                                                                                onChange={(e) => {
-                                                                                                    const value = Number(e.target.value)
-                                                                                                    if (value >= 1) {
-                                                                                                        handleChangeNumberQr(item.id, value)
-                                                                                                    }
-                                                                                                }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <Label>Nbr QR CODE(s)</Label>
-                                                                                            <Input
-                                                                                                type="number"
-                                                                                                className="dark:bg-dark-900 cursor-not-allowed"
-                                                                                                readOnly
-                                                                                                value={item.sn_count * item.nbreQr}
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </>
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                                <div>
-                                                                    <div className="w-full flex justify-center items-center">
-                                                                        <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                                            onClick={handleCheckAjoutParChaine}
-                                                                        >
-                                                                            Ajouter
-                                                                        </button>
-                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={handleExtractExcelData}
+                                                                                        className="border rounded-lg text-center p-1.5 hover:text-cyan-600 hover:border-cyan-500"
+                                                                                    >
+                                                                                        <span>
+                                                                                            <i className="pi pi-external-link"></i>
+                                                                                        </span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                        </>
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    {parMarchand ? (
-                                                        <>
-                                                            <div className="space-y-4">
-                                                                <div>
-                                                                    <Label>Point Marchand <span className="text-red-700">*</span></Label>
-                                                                    <Dropdown
-                                                                        options={optionsMarchands}
-                                                                        optionLabel="Label"
-                                                                        placeholder="Choisir marchand"
-                                                                        filter
-                                                                        filterBy="label"
-                                                                        itemTemplate={marchandsTemplate}
-                                                                        className="w-full"
-                                                                        onChange={handleSelectMarchand}
-                                                                        value={selectedMarchand}
-                                                                        valueTemplate={selectedMarchandTemplate}
-                                                                    />
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    <div>
-                                                                        <Label>Quantité / TPE <span className="text-red-700">*</span></Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            className="dark:bg-dark-900"
-                                                                            value={quantite}
-                                                                            onChange={(e) => {
-                                                                                const value = Number(e.target.value)
-                                                                                if (value >= 1) {
-                                                                                    setQuantite(value)
-                                                                                    handleNumberChange(value)
-                                                                                }
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                    <div>
-                                                                        <Label>Nbr QR CODE(s)</Label>
-                                                                        <Input
-                                                                            type="number"
-                                                                            className="dark:bg-dark-900 cursor-not-allowed"
-                                                                            value={quantiteTerminal * quantite}
-                                                                            readOnly
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div>
-                                                                    <div className="w-full flex justify-center items-center">
-                                                                        <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                                            onClick={handleCheckAjoutParMarchand}
-                                                                        >
-                                                                            Ajouter
-                                                                        </button>
-                                                                    </div>
+                                                            <div>
+                                                                <div className="w-full flex justify-center items-center">
+                                                                    <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                        onClick={handleCheckAjoutParExcel}
+                                                                    >
+                                                                        Ajouter
+                                                                    </button>
                                                                 </div>
                                                             </div>
-                                                        </>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                                {parManuel ? (
+                                                    <>
+                                                        <div>
+                                                            <Label>Type QR Code <span className="text-red-700">*</span></Label>
+                                                            <Select
+                                                                options={optionsQr}
+                                                                placeholder="Choisir une option"
+                                                                className="dark:bg-dark-900"
+                                                                onChange={handleSelectType}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label>Format <span className="text-red-700">*</span></Label>
+                                                            <Select
+                                                                options={optionsFormats}
+                                                                placeholder="Choisir une option"
+                                                                className="dark:bg-dark-900"
+                                                                onChange={handleSelectFormat}
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <div className="flex items-center gap-3 my-2">
+                                                                <Checkbox
+                                                                    checked={parChaine}
+                                                                    onChange={(e) => {
+                                                                        if (parChaine) {
+                                                                            setParChaine(false)
+                                                                        } else {
+                                                                            setParChaine(true)
+                                                                            setParMarchand(false)
+                                                                        }
+                                                                    }}
+                                                                    label="Par Chaîne" />
+                                                            </div>
+                                                            <div className="flex items-center gap-3 my-2">
+                                                                <Checkbox
+                                                                    checked={parMarchand}
+                                                                    onChange={(e) => {
+                                                                        if (parMarchand) {
+                                                                            setParMarchand(false)
+                                                                        } else {
+                                                                            setParMarchand(true)
+                                                                            setParChaine(false)
+                                                                        }
+                                                                    }}
+                                                                    label="Par Marchand" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            {parChaine ? (
+                                                                <>
+                                                                    <div className="space-y-5">
+                                                                        <div>
+                                                                            <Label>Chaîne </Label>
+                                                                            <Dropdown
+                                                                                options={optionsChaine}
+                                                                                optionLabel="Label"
+                                                                                placeholder="Choisir chaîne"
+                                                                                filter
+                                                                                filterBy="label"
+                                                                                itemTemplate={chaineTemplate}
+                                                                                className="w-full"
+                                                                                onChange={handleSelectChaine}
+                                                                                value={selectedChaine}
+                                                                                valueTemplate={selectedChaineTemplate}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <Label>Quantité / TPE</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                className="dark:bg-dark-900"
+                                                                                value={quantite}
+                                                                                onChange={(e) => {
+                                                                                    const value = Number(e.target.value)
+                                                                                    if (value >= 1) {
+                                                                                        handleNumberChange(value)
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-4">
+                                                                            {marchandFields.map((item, index) => {
+                                                                                return (
+                                                                                    <>
+                                                                                        <div className="space-y-3" key={index}>
+                                                                                            <div>
+                                                                                                <Label>Point Marchand <span className="font-bold">{index + 1}</span></Label>
+                                                                                                <Input
+                                                                                                    type="text"
+                                                                                                    className="cursor-not-allowed"
+                                                                                                    readOnly
+                                                                                                    value={item.POINT_MARCHAND}
+                                                                                                />
+                                                                                            </div>
+                                                                                            <div className="grid grid-cols-2 gap-2">
+                                                                                                <div>
+                                                                                                    <Label>Quantité / TPE <span className="text-red-700">*</span></Label>
+                                                                                                    <Input
+                                                                                                        type="number"
+                                                                                                        className="dark:bg-dark-900"
+                                                                                                        value={item.nbreQr}
+                                                                                                        onChange={(e) => {
+                                                                                                            const value = Number(e.target.value)
+                                                                                                            if (value >= 1) {
+                                                                                                                handleChangeNumberQr(item.id, value)
+                                                                                                            }
+                                                                                                        }}
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <Label>Nbr QR CODE(s)</Label>
+                                                                                                    <Input
+                                                                                                        type="number"
+                                                                                                        className="dark:bg-dark-900 cursor-not-allowed"
+                                                                                                        readOnly
+                                                                                                        value={item.sn_count * item.nbreQr}
+                                                                                                    />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </>
+                                                                                )
+                                                                            })}
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="w-full flex justify-center items-center">
+                                                                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                                    onClick={handleCheckAjoutParChaine}
+                                                                                >
+                                                                                    Ajouter
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            {parMarchand ? (
+                                                                <>
+                                                                    <div className="space-y-4">
+                                                                        <div>
+                                                                            <Label>Point Marchand <span className="text-red-700">*</span></Label>
+                                                                            <Dropdown
+                                                                                options={optionsMarchands}
+                                                                                optionLabel="Label"
+                                                                                placeholder="Choisir marchand"
+                                                                                filter
+                                                                                filterBy="label"
+                                                                                itemTemplate={marchandsTemplate}
+                                                                                className="w-full"
+                                                                                onChange={handleSelectMarchand}
+                                                                                value={selectedMarchand}
+                                                                                valueTemplate={selectedMarchandTemplate}
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <div>
+                                                                                <Label>Quantité / TPE <span className="text-red-700">*</span></Label>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    className="dark:bg-dark-900"
+                                                                                    value={quantite}
+                                                                                    onChange={(e) => {
+                                                                                        const value = Number(e.target.value)
+                                                                                        if (value >= 1) {
+                                                                                            handleNumberChange(value)
+                                                                                        }
+                                                                                    }}
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <Label>Nbr QR CODE(s)</Label>
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    className="dark:bg-dark-900 cursor-not-allowed"
+                                                                                    value={quantiteTerminal * quantite}
+                                                                                    readOnly
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="w-full flex justify-center items-center">
+                                                                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                                    onClick={handleCheckAjoutParMarchand}
+                                                                                >
+                                                                                    Ajouter
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <></>
+                                                            )}
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
                                             </div>
                                             <div>
                                                 <div className="text-center">
@@ -916,6 +1179,11 @@ export default function DemandeQrInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Index
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                 Type QR
                                             </TableCell>
                                             <TableCell
@@ -936,12 +1204,17 @@ export default function DemandeQrInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                Nbre TPE
+                                                Nbre TPE(s)
                                             </TableCell>
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                Nbre de copie
+                                                Nbre de copie(s)
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Total Qr
                                             </TableCell>
                                             <TableCell
                                                 isHeader
@@ -954,6 +1227,9 @@ export default function DemandeQrInputs() {
                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                         {listeLivraison.map((item, index) => (
                                             <TableRow>
+                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                    {index + 1}
+                                                </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.typeQr}
                                                 </TableCell>
@@ -968,6 +1244,9 @@ export default function DemandeQrInputs() {
                                                 </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.quantiteTerminal}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                    {item.nbreCopie}
                                                 </TableCell>
                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                     {item.quantiteQr}
@@ -1089,6 +1368,51 @@ export default function DemandeQrInputs() {
                         <div className="w-full flex justify-center items-center">
                             <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
                                 onClick={handleAjoutParChaine}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalParExcelOpen} onClose={() => setIsModalParExcelOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-5">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Confirmation</span>
+                    </div>
+                    <div>
+                        <div className="text-xs text-center space-y-5">
+                            <div className="h-44 overflow-y-auto space-y-5">
+                                {marchandsExcel.map((item) => {
+                                    return (
+                                        <>
+                                            <div>
+                                                <div>
+                                                    <span className="text-sm font-bold" style={{ fontSize: '15px' }}>{item.pointMarchand}</span>
+                                                </div>
+                                                <div>
+                                                    <span>Type QR CODE: </span>
+                                                    <span className="font-bold text-sm">{item.typeQr}</span>
+                                                </div>
+                                                <div>
+                                                    <span>Format: </span>
+                                                    <span className="font-bold text-sm">{item.format}</span>
+                                                </div>
+                                                <div>
+                                                    <span>QR Code(s): </span>
+                                                    <span className="text-sm font-bold">{item.quantiteQr} </span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleAjoutParExcel}
                             >
                                 Valider
                             </button>

@@ -18,7 +18,7 @@ export class ProductDeliveries {
     }
   };
 
-   async regReception(formData) {
+  async regReception(formData) {
     try {
       const response = await axios.post(`${urlBase}/api/delivery/regReception`, formData,
         {

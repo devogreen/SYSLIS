@@ -131,9 +131,16 @@ export default function AllParcTpeList() {
     };
 
     const snTemplate = (tpe) => {
+        const linkSee = `/historique-tpe/${tpe.id}`
         return (
             <div>
-                <span className=''>{tpe.serial_number}</span>
+                <span>
+                    <Link to={linkSee}>
+                        <button>
+                            {tpe.serial_number}
+                        </button>
+                    </Link>
+                </span>
             </div>
         )
     }

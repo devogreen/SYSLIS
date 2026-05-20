@@ -104,6 +104,9 @@ export default function AllMarchandsQrList() {
             : null
     );
 
+    const [optionsDemandes, setOptionsDemandes] = useState([])
+    const [selectedDemandes, setSelectedDemandes] = useState(savedFilters?.selectedDemandes || [])
+
     useEffect(() => {
         saveFilters({
             globalFilter,
@@ -112,8 +115,9 @@ export default function AllMarchandsQrList() {
             datesLivraison: datesLivraison?.map(d => d?.toISOString()),
             datesReception: datesReception?.map(d => d?.toISOString()),
             selectedFormats,
+            selectedDemandes,
         });
-    }, [globalFilter, selectedStatus, selectedTypes, datesLivraison, datesReception, selectedFormats]);
+    }, [globalFilter, selectedStatus, selectedTypes, datesLivraison, datesReception, selectedFormats, selectedDemandes]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -132,6 +136,14 @@ export default function AllMarchandsQrList() {
                     return item.forms.is_deleted == false
                 })
                 setDemandesQr(demandesQrData)
+                const demandesLivrees = demandesQrData.filter((item) => {
+                    return item.statut == 'recue'
+                })
+                const optionsDemandes = demandesLivrees.map((item) => ({
+                    label: `Demande #${item.id} - ${item.quantite_qr} QR Codes`,
+                    value: item.id,
+                }))
+                setOptionsDemandes(optionsDemandes)
 
                 const typesQrData = await demandeData.getAllTypePaiement()
                 setTypesQr(typesQrData)
@@ -294,6 +306,7 @@ export default function AllMarchandsQrList() {
         setSelectedFormats([]);
         setDatesLivraison(null);
         setDatesReception(null);
+        setSelectedDemandes([]);
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -325,6 +338,7 @@ export default function AllMarchandsQrList() {
         dayLivraisonPlus?.setDate(dayLivraisonPlus.getDate() + 1);
         const nextDayLivraison = dayLivraisonPlus ? new Date(dayLivraisonPlus) : null
 
+        const matchesDemande = selectedDemandes.length > 0 ? selectedDemandes.includes(item.demande_id) : true;
         const matchesDatesLivraison = datesLivraison ? (datesLivraison[0] <= dateLivraison && nextDayLivraison >= dateLivraison) : true;
         const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
         const matchesType = selectedTypes.length > 0 ? selectedTypes.includes(item.type_id) : true;
@@ -332,7 +346,7 @@ export default function AllMarchandsQrList() {
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesDatesLivraison && matchesDatesReception && matchesType && matchesFormat && matchesGlobalFilter;
+        return matchesDatesLivraison && matchesDatesReception && matchesType && matchesFormat && matchesDemande && matchesGlobalFilter ;
     });
 
     const totalQr = filteredMarchandsQr.reduce((sum, item) => sum + Number(item.quantite_qr || 0), 0);
@@ -377,6 +391,16 @@ export default function AllMarchandsQrList() {
                             maxSelectedLabels={2}
                             onChange={(e) => setSelectedFormats(e.value)}
                             placeholder="Filtrer par format"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedDemandes}
+                            options={optionsDemandes}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setSelectedDemandes(e.value)}
+                            placeholder="Filtrer par demande"
                             className=""
                         />
                     </div>

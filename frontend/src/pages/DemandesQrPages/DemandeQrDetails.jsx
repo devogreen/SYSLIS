@@ -22,6 +22,8 @@ import SignatureCanvas from "react-signature-canvas";
 import { FilesHandler } from "../../backend/filesHandler/FilesHandler";
 import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
+import * as pdfjsLib from "pdfjs-dist";
+import { set } from "date-fns";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -31,6 +33,11 @@ addLocale('fr', {
     monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
     monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 });
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+).toString();
 
 export default function DemandeQrDetails() {
     const demandeData = new DemandeQr()
@@ -119,9 +126,27 @@ export default function DemandeQrDetails() {
     const [dateLivraisonReg, setDateLivraisonReg] = useState()
     const [dateReceptionReg, setDateReceptionReg] = useState()
 
+    const [loadingExtract, setLoadingExtract] = useState(false)
+
+    const [totalPDFPages, setTotalPDFPages] = useState(0)
+
+    const [totalCaisse, setTotalCaisse] = useState(0)
+
+    const [loadingUpload, setLoadingUpload] = useState(false)
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
+    };
+
+    const getPdfPageCount = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const pdf = await pdfjsLib.getDocument({
+            data: arrayBuffer,
+        }).promise;
+
+        return pdf.numPages;
     };
 
     useEffect(() => {
@@ -165,6 +190,9 @@ export default function DemandeQrDetails() {
 
                 const quantiteQr = demande.quantite_qr
                 setTotalQr(quantiteQr)
+
+                const totalCaisse = listeDemande.reduce((sum, item) => sum + Number(item.quantiteTerminal || 0), 0);
+                setTotalCaisse(totalCaisse)
 
                 const quantiteMarchand = demande.quantite_marchand
                 setTotalMarchand(quantiteMarchand)
@@ -290,7 +318,8 @@ export default function DemandeQrDetails() {
 
     const onDrop = useCallback(async (acceptedFiles) => {
         const updatedFiles = [...selectedFiles];
-
+        let totalPages = 0
+        setLoadingUpload(true)
         for (const file of acceptedFiles) {
 
             // Handle ZIP files
@@ -309,45 +338,74 @@ export default function DemandeQrDetails() {
                                     type: blob.type,
                                 });
                             }
+
                             return null;
                         })
                     );
 
-                    extractedFiles.forEach((extractedFile) => {
+                    for (const extractedFile of extractedFiles) {
+                        let pages = 0
+                        if (!extractedFile) continue;
+
+                        // Only process PDFs
+                        if (extractedFile.name.endsWith(".pdf")) {
+                            pages = await getPdfPageCount(extractedFile);
+                            totalPages += pages;
+                            console.log(
+                                `${extractedFile.name} -> ${pages} pages`
+                            );
+                        }
+
                         if (
-                            extractedFile &&
                             !updatedFiles.find(
                                 (f) =>
                                     f.name === extractedFile.name &&
                                     f.size === extractedFile.size
                             )
                         ) {
-                            updatedFiles.push(extractedFile);
+                            updatedFiles.push({
+                                file: extractedFile,
+                                pageCount: pages,
+                            });
                         }
-                    });
+                    }
 
                 } catch (error) {
                     console.error("ZIP extraction error:", error);
+
                     Swal.fire({
                         title: "Attention",
-                        text: "Erreur d'exctraction de fichiers !",
-                        icon: "warining"
-                    })
+                        text: "Erreur d'extraction de fichiers !",
+                        icon: "warning",
+                    });
                 }
+
             } else {
-                // Normal file
+                let pages = 0
+                // Normal PDF file
+                if (file.name.endsWith(".pdf")) {
+                    pages = await getPdfPageCount(file);
+                    totalPages += pages;
+                    console.log(`${file.name} -> ${pages} pages`);
+                }
+
                 if (
                     !updatedFiles.find(
                         (f) => f.name === file.name && f.size === file.size
                     )
                 ) {
-                    updatedFiles.push(file);
+                    updatedFiles.push({
+                        file: file,
+                        pageCount: pages,
+                    });
                 }
             }
         }
-
         setSelectedFiles(updatedFiles);
-    }, [selectedFiles]);
+        setTotalPDFPages(totalPages);
+        setLoadingUpload(false)
+
+    }, [selectedFiles, totalPDFPages]);
 
     const { getRootProps, getInputProps } = useDropzone({
         onDrop,
@@ -358,6 +416,9 @@ export default function DemandeQrDetails() {
         setSelectedFiles((prev) =>
             prev.filter((_, index) => index !== indexToRemove)
         );
+
+        const element = selectedFiles.at(indexToRemove)
+        setTotalPDFPages((prev) => prev - element.pageCount)
     };
 
     const handleSingleFile = async (id) => {
@@ -411,7 +472,7 @@ export default function DemandeQrDetails() {
             const id = Number(idDemande)
             const fd = new FormData()
             selectedFiles.forEach((file) => {
-                fd.append("qrCodes", file);
+                fd.append("qrCodes", file.file);
             });
             fd.append('userId', Number(userId))
             fd.append('commentaire', commentaireGenerator)
@@ -693,6 +754,41 @@ export default function DemandeQrDetails() {
             setLoadingReception(false)
         }
     }
+
+    const handleExtractXLSX = async () => {
+        try {
+            setLoadingExtract(true);
+
+            const response = await demandeData.exportOneDemandeQrToExcel(idDemande);
+
+            const url = window.URL.createObjectURL(
+                new Blob([response.data])
+            );
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `demandeQr_${idDemande}.xlsx`;
+
+            document.body.appendChild(a);
+            a.click();
+
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.log(error);
+
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement",
+                icon: "warning"
+            });
+
+        } finally {
+            setLoadingExtract(false);
+        }
+    };
+
     return (
         <>
             <PageBreadcrumb pageTitle={`Détails demande QRC ${idDemande}`} />
@@ -1191,16 +1287,43 @@ export default function DemandeQrDetails() {
                                 <div>
                                     <div>
                                         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                                            <div className='p-4 pb-0 text-xs text-gray-600 flex space-x-4 font-semibold'>
-                                                <span>Nombre élément : {totalListe}</span>
-                                                <span>Total Marchand : {totalMarchand}</span>
-                                                <span>Total QR Code : {totalQr}</span>
+                                            <div className="flex justify-between p-4 pb-0">
+                                                <div className='text-xs text-gray-600 flex space-x-4 font-semibold'>
+                                                    <span>Nombre élément : {totalListe}</span>
+                                                    <span>Total Marchand : {totalMarchand}</span>
+                                                    <span>Total QR Code : {totalQr}</span>
+                                                </div>
+                                                <div>
+                                                    {loadingExtract ?
+                                                        (
+                                                            <>
+                                                                <span className='flex items-center justify-center'>
+                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <button className="flex items-center text-red-600 justify-center rounded-full h-4 w-4 p-4 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
+                                                                    onClick={handleExtractXLSX}>
+                                                                    <span className="">
+                                                                        <i className="pi pi-download"></i>
+                                                                    </span>
+                                                                </button>
+                                                            </>
+                                                        )
+                                                    }
+                                                </div>
                                             </div>
                                             <div className="max-w-full overflow-x-auto">
                                                 <Table>
                                                     {/* Table Header */}
                                                     <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
                                                         <TableRow>
+                                                            <TableCell
+                                                                isHeader
+                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                Index
+                                                            </TableCell>
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
@@ -1224,12 +1347,17 @@ export default function DemandeQrDetails() {
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                Nbre TPE
+                                                                Nbre TPE(s)
                                                             </TableCell>
                                                             <TableCell
                                                                 isHeader
                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                Nbre de copie
+                                                                Nbre de copie(s)
+                                                            </TableCell>
+                                                            <TableCell
+                                                                isHeader
+                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                Total QR
                                                             </TableCell>
                                                         </TableRow>
                                                     </TableHeader>
@@ -1237,6 +1365,9 @@ export default function DemandeQrDetails() {
                                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                                         {listeDemande.map((item, index) => (
                                                             <TableRow>
+                                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                                    {index + 1}
+                                                                </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.typeQr}
                                                                 </TableCell>
@@ -1251,6 +1382,9 @@ export default function DemandeQrDetails() {
                                                                 </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.quantiteTerminal}
+                                                                </TableCell>
+                                                                <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                                                                    {item.nbreCopie}
                                                                 </TableCell>
                                                                 <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                                                                     {item.quantiteQr}
@@ -1284,44 +1418,54 @@ export default function DemandeQrDetails() {
                     </div>
                     <div className="flex flex-col">
                         <span className="text-xs">
-                            Total marchand par type QR: <span className="font-semibold">{marchandsParType.length}</span>
+                            Total Caisse: <span className="font-semibold">{totalCaisse}</span>
                         </span>
                         <span className="text-xs">
-                            QR Codes files uploaded: <span className="font-semibold">{selectedFiles.length}</span>
+                            Total QR Codes files uploaded: <span className="font-semibold">{totalPDFPages}</span>
                         </span>
                     </div>
                     <div>
-                        <div>
-                            <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
-                            <div
-                                {...getRootProps()}
-                                className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
-                            >
-                                <input {...getInputProps()} />
-                                <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
-                            </div>
-                            <div className="max-h-38 overflow-y-auto">
-                                {selectedFiles.length > 0 ? (
-                                    <div className="mt-3">
-                                        {selectedFiles.map((selectedFile, index) => (
-                                            <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
-                                                <span>
-                                                    <i className="pi pi-file-check"></i>
-                                                </span>
-                                                <span className=" text-center" style={{ fontSize: '9px' }}>
-                                                    {selectedFile.name}
-                                                </span>
-                                                <button onClick={() => handleDeleteFile(index)}>
-                                                    <span className="text-error-600"><i className="pi pi-times"></i></span>
-                                                </button>
-                                            </div>
-                                        ))}
+                        {loadingUpload ? (
+                            <>
+                                <div className='text-center text-xs'>
+                                    <span>Chargement en cours...</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                    <div
+                                        {...getRootProps()}
+                                        className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
+                                    >
+                                        <input {...getInputProps()} />
+                                        <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
                                     </div>
-                                ) : (
-                                    <></>
-                                )}
-                            </div>
-                        </div>
+                                    <div className="max-h-38 overflow-y-auto">
+                                        {selectedFiles.length > 0 ? (
+                                            <div className="mt-3">
+                                                {selectedFiles.map((selectedFile, index) => (
+                                                    <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
+                                                        <span>
+                                                            <i className="pi pi-file-check"></i>
+                                                        </span>
+                                                        <span className=" text-center" style={{ fontSize: '9px' }}>
+                                                            {selectedFile.file.name}
+                                                        </span>
+                                                        <button onClick={() => handleDeleteFile(index)}>
+                                                            <span className="text-error-600"><i className="pi pi-times"></i></span>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <></>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
@@ -1536,7 +1680,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateDemandeReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
@@ -1594,7 +1738,7 @@ export default function DemandeQrDetails() {
                                 maxDate={new Date()}
                                 minDate={new Date(dateLivraisonReg)}
                                 className="w-full"
-                                style={{fontSize:'2px'}}
+                                style={{ fontSize: '2px' }}
                             />
                         </div>
                         <div className='w-full'>
