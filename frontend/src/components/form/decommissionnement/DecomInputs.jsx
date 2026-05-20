@@ -76,6 +76,20 @@ export default function DecomInputs() {
     const [statutTpe, setStatutTpe] = useState('')
     const [loadingFunction, setLoadingFunction] = useState(false)
 
+    const [parExcel, setParExcel] = useState(false)
+    const [parManuel, setParManuel] = useState(false)
+
+    const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
+
+    const [selectedExcelFile, setSelectedExcelFile] = useState(null)
+
+    const [listeDecomExcel, setListeDecomExcel] = useState([])
+
+    const [isModalParExcelOpen, setIsModalParExcelOpen] = useState(false)
+
+    const [loadingExtract, setLoadindExtract] = useState(false)
+
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -198,10 +212,113 @@ export default function DecomInputs() {
         setSelectedFiles(updatedFiles);
     }, [selectedFiles]);
 
-    const { getRootProps, getInputProps } = useDropzone({
+    const onDropExcel = useCallback(async (acceptedFiles) => {
+        setSelectedExcelFile(acceptedFiles[0])
+    }, [selectedExcelFile]);
+
+    const { getRootProps: getFilesRootProps,
+        getInputProps: getFilesInputProps,
+    } = useDropzone({
         onDrop,
         multiple: true,
     });
+
+    const {
+        getRootProps: getExcelRootProps,
+        getInputProps: getExcelInputProps,
+    } = useDropzone({
+        onDrop: onDropExcel,
+        multiple: false,
+        accept: {
+            "application/vnd.ms-excel": [".xls"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+        }
+    });
+
+    const handleDownloadTemplate = async () => {
+        setLoadingDownloadTemplate(true)
+        try {
+            const response = await decomData.downloadTemplateDecom();
+
+            const url = window.URL.createObjectURL(response.data);
+
+            const a = document.createElement("a");
+            a.href = url;
+
+            let fileName = "template_decommissionnement";
+
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Download error:", error);
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement !",
+                icon: "warning"
+            });
+        } finally {
+            setLoadingDownloadTemplate(false)
+        }
+    }
+
+    const handleExtractExcelData = async () => {
+        try {
+            setErrorAjout('')
+            setListeDecomExcel([])
+
+            if (!selectedExcelFile) {
+                Swal.fire({
+                    title: "Attention",
+                    text: "Veuillez sélectionner un fichier Excel !",
+                    icon: "warning"
+                })
+                return
+            }
+            setLoadindExtract(true)
+
+            const fd = new FormData()
+            fd.append('file', selectedExcelFile)
+            fd.append('userId', userId)
+
+            const response = await decomData.extractDecom(fd)
+            const marchands = response.data
+            const listeDecomData = marchands.map((item, index) => {
+                return ({
+                    pointMarchand: item.pdv,
+                    terminalSN: item.sn,
+                    caisse: item.caisse,
+                    etat: item.etat,
+                    RI: item.ri == 'ok' ? 'OK' : item.ri == 'nok' ? 'NOK' : '',
+                    nomCommercial: item.commercial,
+                    commentaire: item.commentaire,
+                    banque: item.banque,
+                    idGim: item.tid_gim,
+                    idEcobank: item.tid_ecobank,
+                })
+            })
+            console.log(listeDecomData)
+            setListeDecomExcel(listeDecomData)
+            Swal.fire({
+                title: "Succès",
+                text: "Données Excel extraites avec succès !",
+                icon: "success"
+            })
+        } catch (error) {
+            console.error("Erreur lors de l'extraction des données Excel:", error);
+            Swal.fire({
+                title: "Attention",
+                text: error.message,
+                icon: "warning"
+            })
+        } finally {
+            setLoadindExtract(false)
+        }
+    }
 
     const checkValidate = () => {
         if (!terminalSN) {
@@ -229,6 +346,23 @@ export default function DecomInputs() {
         }
 
         return true
+    }
+
+    const handleCheckAjoutParExcel = () => {
+        if (listeDecomExcel.length == 0) {
+            setErrorAjout('Vous devez extraire les données du fichier Excel !')
+            return
+        }
+        for (let m of listeDecomExcel) {
+            const isDuplicate = listeDecom.some(item => {
+                return item.terminalSN == m.terminalSN
+            });
+            if (isDuplicate) {
+                setErrorAjout("Vous avez déjà ajouté ce S/N !");
+                return;
+            }
+        }
+        setIsModalParExcelOpen(true)
     }
 
     const handleConfirm = () => {
@@ -275,6 +409,16 @@ export default function DecomInputs() {
         setIsProblem(false)
         setCommentaire('')
         setStatutTpe('')
+    }
+
+    const handleAjoutParExcel = () => {
+        setErrorAjout('')
+        setIsModalParExcelOpen(false)
+
+        setQuantiteTotale((prev) => prev + listeDecomExcel.length);
+        setListeDecom((prev) => [...prev, ...listeDecomExcel]);
+        setSelectedExcelFile(null)
+        setMarchandsExcel([])
     }
 
     const handleDelete = (indexToRemove) => {
@@ -368,10 +512,10 @@ export default function DecomInputs() {
                                                 <div>
                                                     <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
                                                     <div
-                                                        {...getRootProps()}
+                                                        {...getFilesRootProps()}
                                                         className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
                                                     >
-                                                        <input {...getInputProps()} />
+                                                        <input {...getFilesInputProps()} />
                                                         <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
                                                     </div>
                                                     <div className="max-h-38 overflow-y-auto">
@@ -400,220 +544,334 @@ export default function DecomInputs() {
                                                     <span className="text-sm font-semibold">Informations Terminal</span>
                                                 </div>
                                                 <div>
-                                                    <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
-                                                    <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
-                                                    <Input type="text" id="input" value={terminalSN} onChange={(e) => {
-                                                        const value = e.target.value
-                                                        // Allow only digits
-                                                        if (/^\d*$/.test(value)) {
-                                                            // Only allow up to 10 characters
-                                                            if (value.length <= 10) {
-                                                                // setTerminalSN(value);
-                                                                handleChangeSn(value)
-                                                            }
-                                                        }
-                                                    }} />
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-3 my-2">
+                                                            <Checkbox
+                                                                checked={parExcel}
+                                                                onChange={(e) => {
+                                                                    if (parExcel) {
+                                                                        setParExcel(false)
+                                                                    } else {
+                                                                        setParManuel(false)
+                                                                        setParExcel(true)
+                                                                    }
+                                                                }}
+                                                                label="Upload Excel" />
+                                                        </div>
+                                                        <div className="flex items-center gap-3 my-2">
+                                                            <Checkbox
+                                                                checked={parManuel}
+                                                                onChange={(e) => {
+                                                                    if (parManuel) {
+                                                                        setParManuel(false)
+                                                                    } else {
+                                                                        setParManuel(true)
+                                                                        setParExcel(false)
+                                                                    }
+                                                                }}
+                                                                label="Par S/N" />
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <Label>Point Marchand <span className="text-red-700">*</span></Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={terminalName}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setTerminalName(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label>Caisse <span className="text-red-700">*</span></Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={terminalCaisse}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setTerminalCaisse(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label>Banque</Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={terminalBanque}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setTerminalBanque(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label>TID GIM</Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={idGim}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setIdGim(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label>TID ECOBANK</Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={idEcobank}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setIdEcobank(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div className="pb-3 text-center">
-                                                    <span className="text-sm font-semibold">Etat du terminal</span>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Checkbox
-                                                        checked={isRAS}
-                                                        onChange={(e) => {
-                                                            if (isRAS) {
-                                                                setIsRAS(false)
-                                                            } else {
-                                                                setIsRAS(true)
-                                                                setIsProblem(false)
-                                                            }
-                                                        }}
-                                                        label="R.A.S" />
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <Checkbox
-                                                        checked={isProblem}
-                                                        onChange={(e) => {
-                                                            if (isProblem) {
-                                                                setIsProblem(false)
-                                                            } else {
-                                                                setIsProblem(true)
-                                                                setIsRAS(false)
-                                                            }
-                                                        }}
-                                                        label="Problème signalé" />
-                                                </div>
-                                                {isProblem ? (
+                                                {parManuel ? (
                                                     <>
-                                                        <div className="space-y-4">
-                                                            <div className="flex flex-col">
+                                                        <div className="space-y-6">
+                                                            <div className="space-y-4">
                                                                 <div>
-                                                                    <span className="text-sm">Récupéré avec</span>
+                                                                    <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
+                                                                    <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
+                                                                    <Input type="text" id="input" value={terminalSN} onChange={(e) => {
+                                                                        const value = e.target.value
+                                                                        // Allow only digits
+                                                                        if (/^\d*$/.test(value)) {
+                                                                            // Only allow up to 10 characters
+                                                                            if (value.length <= 10) {
+                                                                                // setTerminalSN(value);
+                                                                                handleChangeSn(value)
+                                                                            }
+                                                                        }
+                                                                    }} />
                                                                 </div>
-                                                                <div className="flex items-center gap-3 my-2">
-                                                                    <Checkbox
-                                                                        checked={hasCarton}
+                                                                <div>
+                                                                    <Label>Point Marchand <span className="text-red-700">*</span></Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={terminalName}
                                                                         onChange={(e) => {
-                                                                            if (hasCarton) {
-                                                                                setHasCarton(false)
+                                                                            const value = e.target.value
+                                                                            setTerminalName(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label>Caisse <span className="text-red-700">*</span></Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={terminalCaisse}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value
+                                                                            setTerminalCaisse(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label>Banque</Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={terminalBanque}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value
+                                                                            setTerminalBanque(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label>TID GIM</Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={idGim}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value
+                                                                            setIdGim(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label>TID ECOBANK</Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={idEcobank}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value
+                                                                            setIdEcobank(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div className="pb-3 text-center">
+                                                                    <span className="text-sm font-semibold">Etat du terminal</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <Checkbox
+                                                                        checked={isRAS}
+                                                                        onChange={(e) => {
+                                                                            if (isRAS) {
+                                                                                setIsRAS(false)
                                                                             } else {
-                                                                                setHasCarton(true)
+                                                                                setIsRAS(true)
+                                                                                setIsProblem(false)
                                                                             }
                                                                         }}
-                                                                        label="Carton" />
+                                                                        label="R.A.S" />
                                                                 </div>
-                                                                <div className="flex items-center gap-3 my-2">
+                                                                <div className="flex items-center gap-3">
                                                                     <Checkbox
-                                                                        checked={hasChargeur}
+                                                                        checked={isProblem}
                                                                         onChange={(e) => {
-                                                                            if (hasChargeur) {
-                                                                                setHasChargeur(false)
+                                                                            if (isProblem) {
+                                                                                setIsProblem(false)
                                                                             } else {
-                                                                                setHasChargeur(true)
+                                                                                setIsProblem(true)
+                                                                                setIsRAS(false)
                                                                             }
                                                                         }}
-                                                                        label="Chargeur" />
+                                                                        label="Problème signalé" />
+                                                                </div>
+                                                                {isProblem ? (
+                                                                    <>
+                                                                        <div className="space-y-4">
+                                                                            <div className="flex flex-col">
+                                                                                <div>
+                                                                                    <span className="text-sm">Récupéré avec</span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                    <Checkbox
+                                                                                        checked={hasCarton}
+                                                                                        onChange={(e) => {
+                                                                                            if (hasCarton) {
+                                                                                                setHasCarton(false)
+                                                                                            } else {
+                                                                                                setHasCarton(true)
+                                                                                            }
+                                                                                        }}
+                                                                                        label="Carton" />
+                                                                                </div>
+                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                    <Checkbox
+                                                                                        checked={hasChargeur}
+                                                                                        onChange={(e) => {
+                                                                                            if (hasChargeur) {
+                                                                                                setHasChargeur(false)
+                                                                                            } else {
+                                                                                                setHasChargeur(true)
+                                                                                            }
+                                                                                        }}
+                                                                                        label="Chargeur" />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                <Label>Autre</Label>
+                                                                                <TextArea
+                                                                                    value={etatTpe}
+                                                                                    onChange={(value) => setEtatTpe(value)}
+                                                                                    rows={2}
+                                                                                    placeholder="Précisez l'état dans lequel le TPE est récupéré"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                    <Checkbox
+                                                                                        checked={isRI}
+                                                                                        onChange={(e) => {
+                                                                                            if (isRI) {
+                                                                                                setIsRI(false)
+                                                                                            } else {
+                                                                                                setIsRI(true)
+                                                                                            }
+                                                                                        }}
+                                                                                        label="Rapport d'Incident" />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        {isRAS ? (
+                                                                            <>
+                                                                                <div>
+                                                                                    <div className="flex flex-col">
+                                                                                        <div>
+                                                                                            <span className="text-sm">Récupéré avec</span>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-3 my-2">
+                                                                                            <Checkbox
+                                                                                                checked={hasCarton}
+                                                                                                onChange={(e) => {
+                                                                                                    if (hasCarton) {
+                                                                                                        setHasCarton(false)
+                                                                                                    } else {
+                                                                                                        setHasCarton(true)
+                                                                                                    }
+                                                                                                }}
+                                                                                                label="Carton" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
+                                                                    </>
+                                                                )}
+                                                                <div>
+                                                                    <Label>Commercial</Label>
+                                                                    <Input type="text" id="input"
+                                                                        className=""
+                                                                        value={nomCommercial}
+                                                                        onChange={(e) => {
+                                                                            const value = e.target.value
+                                                                            setNomCommercial(value)
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <Label>Commentaire TPE</Label>
+                                                                    <TextArea
+                                                                        value={commentaire}
+                                                                        onChange={(value) => setCommentaire(value)}
+                                                                        rows={3}
+                                                                        placeholder="Ajoutez un commentaire"
+                                                                    />
                                                                 </div>
                                                             </div>
                                                             <div>
-                                                                <Label>Autre</Label>
-                                                                <TextArea
-                                                                    value={etatTpe}
-                                                                    onChange={(value) => setEtatTpe(value)}
-                                                                    rows={2}
-                                                                    placeholder="Précisez l'état dans lequel le TPE est récupéré"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <div className="flex items-center gap-3 my-2">
-                                                                    <Checkbox
-                                                                        checked={isRI}
-                                                                        onChange={(e) => {
-                                                                            if (isRI) {
-                                                                                setIsRI(false)
-                                                                            } else {
-                                                                                setIsRI(true)
-                                                                            }
-                                                                        }}
-                                                                        label="Rapport d'Incident" />
+                                                                <div className="w-full flex justify-center items-center">
+                                                                    <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                        onClick={handleConfirm}
+                                                                    >
+                                                                        Ajouter
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {isRAS ? (
-                                                            <>
-                                                                <div>
-                                                                    <div className="flex flex-col">
-                                                                        <div>
-                                                                            <span className="text-sm">Récupéré avec</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-3 my-2">
-                                                                            <Checkbox
-                                                                                checked={hasCarton}
-                                                                                onChange={(e) => {
-                                                                                    if (hasCarton) {
-                                                                                        setHasCarton(false)
-                                                                                    } else {
-                                                                                        setHasCarton(true)
-                                                                                    }
-                                                                                }}
-                                                                                label="Carton" />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
                                                     </>
                                                 )}
-                                                <div>
-                                                    <Label>Commercial</Label>
-                                                    <Input type="text" id="input"
-                                                        className=""
-                                                        value={nomCommercial}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value
-                                                            setNomCommercial(value)
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <Label>Commentaire TPE</Label>
-                                                    <TextArea
-                                                        value={commentaire}
-                                                        onChange={(value) => setCommentaire(value)}
-                                                        rows={3}
-                                                        placeholder="Ajoutez un commentaire"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <div>
-                                                        <div className="w-full flex justify-center items-center">
-                                                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                                onClick={handleConfirm}
-                                                            >
-                                                                Ajouter
-                                                            </button>
+                                                {parExcel ? (
+                                                    <>
+                                                        <div className="space-y-5">
+                                                            <div>
+                                                                {loadingDownloadTemplate ? (
+                                                                    <>
+                                                                        <div>
+                                                                            <ProgressSpinner style={{ width: '25px', height: '25px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className="space-x-1.5 text-cyan-500" onClick={handleDownloadTemplate}>
+                                                                            <span className="text-sm font-medium">
+                                                                                Télécharger template
+                                                                            </span>
+                                                                            <span className="">
+                                                                                <i className="pi pi-download"></i>
+                                                                            </span>
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <Label>Fichier Excel</Label>
+                                                                <div className="flex space-x-1.5">
+                                                                    <div
+                                                                        {...getExcelRootProps()}
+                                                                        className="border border-dashed p-2 rounded-lg text-center cursor-pointer border-green-500 w-full"
+                                                                    >
+                                                                        <input {...getExcelInputProps()} />
+                                                                        <p className="text-xs font-light text-green-500">Faites glisser le fichier ici, ou cliquer pour le sélectionner.</p>
+                                                                    </div>
+                                                                    {selectedExcelFile ? (
+                                                                        <>
+                                                                            {loadingExtract ? (
+                                                                                <>
+                                                                                    <div>
+                                                                                        <ProgressSpinner style={{ width: '10px', height: '10px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        onClick={handleExtractExcelData}
+                                                                                        className="border rounded-lg text-center p-1.5 hover:text-cyan-600 hover:border-cyan-500"
+                                                                                    >
+                                                                                        <span>
+                                                                                            <i className="pi pi-external-link"></i>
+                                                                                        </span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="w-full flex justify-center items-center">
+                                                                    <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                        onClick={handleCheckAjoutParExcel}
+                                                                    >
+                                                                        Ajouter
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                                <div>
                                                     <div>
                                                         <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
                                                             {errorAjout}
@@ -886,6 +1144,47 @@ export default function DecomInputs() {
                         <div className="w-full flex justify-center items-center">
                             <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
                                 onClick={handleAjout}
+                            >
+                                Valider
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalParExcelOpen} onClose={() => setIsModalParExcelOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-5">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Confirmation</span>
+                    </div>
+                    <div>
+                        <div className="text-xs text-center space-y-5">
+                            <div className="h-44 overflow-y-auto space-y-5">
+                                {listeDecomExcel.map((item) => {
+                                    return (
+                                        <>
+                                            <div>
+                                                <div>
+                                                    <span className="text-sm font-bold" style={{ fontSize: '15px' }}>{item.pointMarchand}</span>
+                                                </div>
+                                                <div>
+                                                    <span>S/N: </span>
+                                                    <span className="font-bold text-sm">{item.terminalSN}</span>
+                                                </div>
+                                                <div>
+                                                    <span>Etat: </span>
+                                                    <span className="font-bold text-sm">{item.etat}</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleAjoutParExcel}
                             >
                                 Valider
                             </button>

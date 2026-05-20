@@ -2203,6 +2203,172 @@ const regVerifyDecom = async (req, res) => {
     }
 }
 
+// Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
+function getCellValue(cell) {
+    if (!cell || cell.value == null) return "";
+
+    // Gestion du rich text
+    if (typeof cell.value === "object" && cell.value.richText) {
+        return cell.value.richText.map(t => t.text).join("").trim();
+    }
+
+    // Gestion des formules Excel
+    if (typeof cell.value === "object" && cell.value.formula) {
+        return cell.value.result ?? "";
+    }
+
+    return String(cell.value).trim();
+}
+const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+// Fonction d'extraction d'une liste de décommissionnement par fichier excel
+const extractDecom = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const requiredHeaders = [
+            "PDV",
+            "CAISSE",
+            "SN",
+            "ETAT",
+            "RI",
+            "BANQUE",
+            "TID GIM",
+            "TID ECOBANK",
+            "COMMERCIAL",
+            "COMMENTAIRE",
+        ];
+
+        for (const header of requiredHeaders) {
+            if (!headers[header]) {
+                console.log(`Colonne requise manquante : ${header}`)
+                return res.status(400).json({
+                    message: `Missing required column: ${header}`
+                });
+            }
+        }
+
+        const marchands = [];
+        const uniqueKeys = new Set();
+        let duplicateError = null;
+        let invalidRowError = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const pdv = String(getCellValue(row.getCell(headers["PDV"])) || "").trim();
+            const caisse = String(getCellValue(row.getCell(headers["CAISSE"])) || "").trim();
+            const sn = String(getCellValue(row.getCell(headers["SN"])) || "").trim();
+            const etat = String(getCellValue(row.getCell(headers["ETAT"])) || "").trim();
+            const ri = String(getCellValue(row.getCell(headers["RI"])) || "").trim();
+            const banque = String(getCellValue(row.getCell(headers["BANQUE"])) || "").trim();
+            const tid_gim = String(getCellValue(row.getCell(headers["TID GIM"])) || "").trim();
+            const tid_ecobank = String(getCellValue(row.getCell(headers["TID ECOBANK"])) || "").trim();
+            const commercial = String(getCellValue(row.getCell(headers["COMMERCIAL"])) || "").trim();
+            const commentaire = String(getCellValue(row.getCell(headers["COMMENTAIRE"])) || "").trim();
+
+            // Ignore les lignes vides ou inutiles
+            if (!pdv || !sn || !caisse) {
+                return;
+            }
+            if (sn && (sn.length != 10 || !isOnlyDigits(sn))) {
+                invalidRowError = {
+                    rowNumber,
+                    marchand: { sn }
+                };
+                return;
+            }
+
+            const marchand = {
+                pdv,
+                caisse,
+                sn,
+                etat,
+                ri: ri.toLowerCase() === "ok" ? "ok" : ri.toLowerCase() === "nok" ? "nok" : "",
+                commercial,
+                commentaire,
+                banque,
+                tid_gim,
+                tid_ecobank,
+            };
+
+            const key = `${marchand.sn}`;
+            if (uniqueKeys.has(key)) {
+                duplicateError = {
+                    rowNumber,
+                    marchand
+                };
+                return;
+            }
+            uniqueKeys.add(key);
+            marchands.push(marchand);
+
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon de SN trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le SN ${duplicateError.marchand.sn}`,
+            });
+        }
+
+        if (invalidRowError) {
+            return res.status(400).json({
+                message: `S/N invalide à la ligne ${invalidRowError.rowNumber} pour le TPE ${invalidRowError.marchand.sn}`,
+            });
+        }
+
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: marchands,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour télécharger le template de décommissionnement au format Excel.
+const downloadTemplateDecom = async (req, res) => {
+    try {
+        const templateFile = 'template_decommissionnement.xlsx';
+        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
+        res.download(filePath);
+
+        console.log('Template de décommissionnement téléchargé avec succès !');
+    } catch (error) {
+        console.error('Erreur downloadTemplateDecom:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -2215,4 +2381,6 @@ module.exports = {
     verifyDecom,
     clotureDecom,
     regVerifyDecom,
+    extractDecom,
+    downloadTemplateDecom,
 }
