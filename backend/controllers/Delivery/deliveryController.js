@@ -90,7 +90,7 @@ const regReception = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const typeLivraison = await tx.type_livraison_commerciale.findUnique({
+    const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
       where: {
         id_type_livraison: livraison.type_livraison_id
       }
