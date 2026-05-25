@@ -2098,9 +2098,17 @@ const regularisationReceptionDemandeQr = async (req, res) => {
 // Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
 function getCellValue(cell) {
     if (!cell || cell.value == null) return "";
+
+    // Gestion du rich text
     if (typeof cell.value === "object" && cell.value.richText) {
-        return cell.value.richText.map(t => t.text).join("");
+        return cell.value.richText.map(t => t.text).join("").trim();
     }
+
+    // Gestion des formules Excel
+    if (typeof cell.value === "object" && cell.value.formula) {
+        return cell.value.result ?? "";
+    }
+
     return String(cell.value).trim();
 }
 // Fonction d'extraction de fichier excel pour régularisation des demandes QR CODES.
@@ -2121,7 +2129,7 @@ const extractMarchandsQr = async (req, res) => {
 
         // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.worksheets[0];
 
         if (!worksheet) {
@@ -2141,7 +2149,8 @@ const extractMarchandsQr = async (req, res) => {
             "CHAINE",
             "POINT MARCHAND",
             "NBRE TPE",
-            "NBRE COPIE"
+            "NBRE COPIE",
+            "TOTAL",
         ];
 
         for (const header of requiredHeaders) {
@@ -2159,14 +2168,37 @@ const extractMarchandsQr = async (req, res) => {
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
 
-            const marchand = {
-                typeQr: String(getCellValue(row.getCell(headers["TYPE"]))),
-                format: String(getCellValue(row.getCell(headers["FORMAT"]))),
-                chaine: String(getCellValue(row.getCell(headers["CHAINE"]))),
-                marchand: String(getCellValue(row.getCell(headers["POINT MARCHAND"]))),
-                nbreTpe: Number(getCellValue(row.getCell(headers["NBRE TPE"]))),
-                nbreCopie: Number(getCellValue(row.getCell(headers["NBRE COPIE"]))),
+            const typeQr = String(getCellValue(row.getCell(headers["TYPE"])) || "").trim();
+            const format = String(getCellValue(row.getCell(headers["FORMAT"])) || "").trim();
+            const chaine = String(getCellValue(row.getCell(headers["CHAINE"])) || "").trim();
+            const marchandName = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
+
+            const nbreTpe = Number(getCellValue(row.getCell(headers["NBRE TPE"])) || 0);
+            const nbreCopie = Number(getCellValue(row.getCell(headers["NBRE COPIE"])) || 0);
+            const total = Number(getCellValue(row.getCell(headers["TOTAL"])) || 0);
+
+            // Ignore les lignes vides ou inutiles
+            if (
+                !typeQr ||
+                !format ||
+                !chaine ||
+                !marchandName ||
+                nbreTpe === 0 ||
+                nbreCopie === 0 ||
+                total === 0
+            ) {
+                return;
             }
+
+            const marchand = {
+                typeQr,
+                format,
+                chaine,
+                marchand: marchandName,
+                nbreTpe,
+                nbreCopie,
+                total,
+            };
 
             const key = `${marchand.typeQr}-${marchand.format}-${marchand.marchand}`;
             if (uniqueKeys.has(key)) {
@@ -2353,6 +2385,224 @@ const getCumulQrCodes = async (req, res) => {
     }
 };
 
+// Fonction pour télécharger le template de demande de QR Codes au format Excel.
+const downloadTemplateQr = async (req, res) => {
+    try {
+        const templateFile = 'template_demandeQr.xlsx';
+        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
+        res.download(filePath);
+
+        console.log('Template de demande de QR Codes téléchargé avec succès !');
+    } catch (error) {
+        console.error('Erreur downloadTemplateQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
+// Fonction pour extraire les données des demandes QR en format Excel, selon des filtres de date et de statut.
+const exportTotalDemandesQrToExcel = async (req, res) => {
+    try {
+        const {
+            listId,
+        } = req.body
+
+        const workbook = new ExcelJS.Workbook();
+
+        const resumeSheet = workbook.addWorksheet("Résumé");
+
+        const resumeHeaders = [
+            "ID Demande",
+            "Date demande",
+            "Quantité QR Codes",
+            "Quantité Marchands",
+            "Statut",
+            "Date Génération",
+            "Date Impression",
+            "Date Livraison",
+            "Date Réception",
+        ]
+
+        const headerRow = resumeSheet.addRow(resumeHeaders);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const allDetailSheet = workbook.addWorksheet("Détails")
+        const allDetailHeader = [
+            "ID Demande",
+            "Point Marchand",
+            "Chaîne",
+            "Format",
+            "Type QR",
+            "Nbre TPE",
+            "Nbre de Copie",
+            "Statut",
+            "Date demande",
+        ]
+        const allDetailRow = allDetailSheet.addRow(allDetailHeader)
+
+        allDetailRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        for (const id of listId) {
+            const demande = await prisma.demande_qr.findUnique({
+                where: {
+                    id: parseInt(id)
+                },
+                include: {
+                    forms: true,
+                    generation_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    impression_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    livraison_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                    reception_qr: {
+                        include: {
+                            forms: true
+                        },
+                    },
+                },
+            })
+            const details = typeof demande.liste_demande === "string"
+                ? JSON.parse(demande.liste_demande)
+                : demande.liste_demande;
+
+            resumeSheet.addRow([
+                demande.id,
+                demande.forms.last_modified_at ? demande.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.quantite_qr,
+                demande.quantite_marchand,
+                demande.statut,
+                demande.generation_qr?.forms?.last_modified_at ? demande.generation_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.impression_qr?.forms?.last_modified_at ? demande.impression_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.livraison_qr?.forms?.last_modified_at ? demande.livraison_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                demande.reception_qr?.forms?.last_modified_at ? demande.reception_qr.forms.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+            ])
+
+            details.forEach((item) => {
+                allDetailSheet.addRow([
+                    demande.id,
+                    item.pointMarchand,
+                    item.chaine,
+                    item.format,
+                    item.typeQr,
+                    item.quantiteTerminal,
+                    item.quantiteQr,
+                    demande.statut,
+                    demande.last_modified_at ? demande.last_modified_at.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "",
+                ])
+            })
+        }
+    } catch (error) {
+        console.error('Erreur exportTotalDemandesQrToExcel:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
+// Fonction pour extraire les données d'une demande QR spécifique en format Excel, avec tous les détails de la demande.
+const exportOneDemandeQrToExcel = async (req, res) => {
+    try {
+        const {
+            idDemande,
+        } = req.params
+        const demande = await prisma.demande_qr.findUnique({
+            where: {
+                id: parseInt(idDemande),
+            },
+        })
+
+        if (!demande) {
+            console.error('Demande introuvable !')
+            return res.status(404).json({ message: "Demande introuvable !" });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+
+        const allDetailSheet = workbook.addWorksheet("Liste Demande")
+        const allDetailHeader = [
+            "Index",
+            "Point Marchand",
+            "Chaîne",
+            "Format",
+            "Type QR",
+            "Nbre TPE",
+            "Nbre de Copie",
+            "Total QR",
+        ]
+        const allDetailRow = allDetailSheet.addRow(allDetailHeader)
+
+        allDetailRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const listeDemande = typeof demande.liste_demande === "string"
+            ? JSON.parse(demande.liste_demande)
+            : demande.liste_demande;
+
+        listeDemande.forEach((item, index) => {
+            allDetailSheet.addRow([
+                index + 1,
+                item.pointMarchand,
+                item.chaine,
+                item.format,
+                item.typeQr,
+                item.quantiteTerminal,
+                item.nbreCopie,
+                item.quantiteQr,
+            ])
+        })
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=demandeQr_${idDemande}.xlsx`
+        );
+        res.send(buffer);
+
+        console.log('Export de la demande de QR Codes téléchargé avec succès !');
+
+    } catch (error) {
+        console.error('Erreur exportOneDemandeQrToExcel:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
 
 module.exports = {
     getAllTypePaiement,
@@ -2374,4 +2624,7 @@ module.exports = {
     extractMarchandsQr,
     getAllMarchandsQr,
     getCumulQrCodes,
+    downloadTemplateQr,
+    exportTotalDemandesQrToExcel,
+    exportOneDemandeQrToExcel,
 }

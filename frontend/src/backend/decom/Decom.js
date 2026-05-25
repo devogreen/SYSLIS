@@ -108,5 +108,32 @@ export class Decom {
             throw error.response.data;
         }
     }
+
+    async extractDecom(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/extractDecom`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async downloadTemplateDecom() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/downloadTemplateDecom`, {
+                responseType: "blob",
+            })
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Download failed" };
+        }
+    }
     
 }

@@ -144,6 +144,52 @@ const faireDecom = async (req, res) => {
                         statut_id: 8,
                     }
                 });
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: { in: serials }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = serials.filter(item => {
+                    const lastModified = tpeDateMap.get(item);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) < new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item
+                            },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: 8,
+                            }
+                        })
+                    )
+                );
             }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
@@ -830,6 +876,54 @@ const receptionDecom = async (req, res) => {
                     toUpdate.map(item =>
                         tx.parc_tpe.update({
                             where: { serial_number: item.terminalSN },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: 9,
+                            }
+                        })
+                    )
+                );
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: {
+                            in: toUpdate.map(item => item.terminalSN)
+                        }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = toUpdate.filter(item => {
+                    const lastModified = tpeDateMap.get(item.terminalSN);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) <= new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item.terminalSN
+                            },
                             data: {
                                 updated_by: utilisateur.id_user,
                                 updated_at: dateAction,
@@ -1570,7 +1664,7 @@ const clotureDecom = async (req, res) => {
             const serials = listeVerified.map(item => item.serial_number);
 
             // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await prisma.parc_tpe.findMany({
+            const existingTpes = await tx.parc_tpe.findMany({
                 where: {
                     serial_number: { in: serials }
                 },
@@ -1598,7 +1692,7 @@ const clotureDecom = async (req, res) => {
 
             // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
             if (toCreate.length > 0) {
-                await prisma.parc_tpe.createMany({
+                await tx.parc_tpe.createMany({
                     data: toCreate.map(item => ({
                         serial_number: item.serial_number,
                         created_by: utilisateur.id_user,
@@ -1613,7 +1707,7 @@ const clotureDecom = async (req, res) => {
                 // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
                 await Promise.all(
                     toUpdate.map(item =>
-                        prisma.parc_tpe.update({
+                        tx.parc_tpe.update({
                             where: { serial_number: item.serial_number },
                             data: {
                                 updated_by: utilisateur.id_user,
@@ -1624,10 +1718,58 @@ const clotureDecom = async (req, res) => {
                         })
                     )
                 );
+            } else {
+                // Récupérer les TPE existants avec leur date de modification
+                const existingTpesWithDates = await tx.parc_tpe.findMany({
+                    where: {
+                        serial_number: {
+                            in: toUpdate.map(item => item.serial_number)
+                        }
+                    },
+                    select: {
+                        serial_number: true,
+                        last_modified_at: true,
+                    }
+                });
+
+                // Créer une map pour accès rapide
+                const tpeDateMap = new Map(
+                    existingTpesWithDates.map(tpe => [
+                        tpe.serial_number,
+                        tpe.last_modified_at
+                    ])
+                );
+
+                // Filtrer seulement ceux dont la date est plus ancienne
+                const filteredToUpdate = toUpdate.filter(item => {
+                    const lastModified = tpeDateMap.get(item.serial_number);
+
+                    // Si aucune date existe, on autorise l'update
+                    if (!lastModified) return true;
+
+                    return new Date(lastModified) <= new Date(dateAction);
+                });
+
+                // Faire les updates seulement pour ceux autorisés
+                await Promise.all(
+                    filteredToUpdate.map(item =>
+                        tx.parc_tpe.update({
+                            where: {
+                                serial_number: item.serial_number
+                            },
+                            data: {
+                                updated_by: utilisateur.id_user,
+                                updated_at: dateAction,
+                                last_modified_at: dateAction,
+                                statut_id: statutMap[item.statut],
+                            }
+                        })
+                    )
+                );
             }
 
             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await prisma.parc_tpe.findMany({
+            const allTpes = await tx.parc_tpe.findMany({
                 where: {
                     serial_number: { in: serials }
                 },
@@ -1637,10 +1779,17 @@ const clotureDecom = async (req, res) => {
                 }
             });
 
+            const uniqueMap = new Map();
+
+            listeVerified.forEach(item => {
+                uniqueMap.set(item.serial_number, item);
+            });
+
+            const uniqueListeVerified = [...uniqueMap.values()];
             // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await prisma.history_tpe.createMany({
+            await tx.history_tpe.createMany({
                 data: allTpes.map(tpe => {
-                    const item = listeVerified.find(
+                    const item = uniqueListeVerified.find(
                         i => i.serial_number === tpe.serial_number
                     );
 
@@ -2054,6 +2203,172 @@ const regVerifyDecom = async (req, res) => {
     }
 }
 
+// Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
+function getCellValue(cell) {
+    if (!cell || cell.value == null) return "";
+
+    // Gestion du rich text
+    if (typeof cell.value === "object" && cell.value.richText) {
+        return cell.value.richText.map(t => t.text).join("").trim();
+    }
+
+    // Gestion des formules Excel
+    if (typeof cell.value === "object" && cell.value.formula) {
+        return cell.value.result ?? "";
+    }
+
+    return String(cell.value).trim();
+}
+const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+// Fonction d'extraction d'une liste de décommissionnement par fichier excel
+const extractDecom = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const requiredHeaders = [
+            "PDV",
+            "CAISSE",
+            "SN",
+            "ETAT",
+            "RI",
+            "BANQUE",
+            "TID GIM",
+            "TID ECOBANK",
+            "COMMERCIAL",
+            "COMMENTAIRE",
+        ];
+
+        for (const header of requiredHeaders) {
+            if (!headers[header]) {
+                console.log(`Colonne requise manquante : ${header}`)
+                return res.status(400).json({
+                    message: `Missing required column: ${header}`
+                });
+            }
+        }
+
+        const marchands = [];
+        const uniqueKeys = new Set();
+        let duplicateError = null;
+        let invalidRowError = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const pdv = String(getCellValue(row.getCell(headers["PDV"])) || "").trim();
+            const caisse = String(getCellValue(row.getCell(headers["CAISSE"])) || "").trim();
+            const sn = String(getCellValue(row.getCell(headers["SN"])) || "").trim();
+            const etat = String(getCellValue(row.getCell(headers["ETAT"])) || "").trim();
+            const ri = String(getCellValue(row.getCell(headers["RI"])) || "").trim();
+            const banque = String(getCellValue(row.getCell(headers["BANQUE"])) || "").trim();
+            const tid_gim = String(getCellValue(row.getCell(headers["TID GIM"])) || "").trim();
+            const tid_ecobank = String(getCellValue(row.getCell(headers["TID ECOBANK"])) || "").trim();
+            const commercial = String(getCellValue(row.getCell(headers["COMMERCIAL"])) || "").trim();
+            const commentaire = String(getCellValue(row.getCell(headers["COMMENTAIRE"])) || "").trim();
+
+            // Ignore les lignes vides ou inutiles
+            if (!pdv || !sn || !caisse) {
+                return;
+            }
+            if (sn && (sn.length != 10 || !isOnlyDigits(sn))) {
+                invalidRowError = {
+                    rowNumber,
+                    marchand: { sn }
+                };
+                return;
+            }
+
+            const marchand = {
+                pdv,
+                caisse,
+                sn,
+                etat,
+                ri: ri.toLowerCase() === "ok" ? "ok" : ri.toLowerCase() === "nok" ? "nok" : "",
+                commercial,
+                commentaire,
+                banque,
+                tid_gim,
+                tid_ecobank,
+            };
+
+            const key = `${marchand.sn}`;
+            if (uniqueKeys.has(key)) {
+                duplicateError = {
+                    rowNumber,
+                    marchand
+                };
+                return;
+            }
+            uniqueKeys.add(key);
+            marchands.push(marchand);
+
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon de SN trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le SN ${duplicateError.marchand.sn}`,
+            });
+        }
+
+        if (invalidRowError) {
+            return res.status(400).json({
+                message: `S/N invalide à la ligne ${invalidRowError.rowNumber} pour le TPE ${invalidRowError.marchand.sn}`,
+            });
+        }
+
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: marchands,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour télécharger le template de décommissionnement au format Excel.
+const downloadTemplateDecom = async (req, res) => {
+    try {
+        const templateFile = 'template_decommissionnement.xlsx';
+        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
+        res.download(filePath);
+
+        console.log('Template de décommissionnement téléchargé avec succès !');
+    } catch (error) {
+        console.error('Erreur downloadTemplateDecom:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -2066,4 +2381,6 @@ module.exports = {
     verifyDecom,
     clotureDecom,
     regVerifyDecom,
+    extractDecom,
+    downloadTemplateDecom,
 }

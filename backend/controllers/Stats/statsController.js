@@ -1010,24 +1010,25 @@ const getGeneralStats = async (req, res) => {
                 total: 0
             };
 
-            // statsQrMap: on garde l’ancien calcul (nombre de lignes par statut) mais filtré par période si fournie
-            const whereQrGroupBy = {
-                forms: start && end
-                    ? { is_deleted: false, created_at: { gte: start, lte: end } }
-                    : { is_deleted: false }
+            // statsQrMap alimenté en cumul par étape (pour que les tuiles “Total des demandes” ne bougent plus quand statut change)
+            // On réutilise les agrégats précédents (filtrés par période si startDate/endDate fournis).
+            // CUMUL PAR “DEMANDES” (nombre de lignes / demandes par étape), basé sur l’historique des tables d’étape
+            // On remplace donc le précédent calcul “quantité” utilisé par erreur.
+            const [soumiseCount, genereeCount, imprimeeCount, livreeCount, recueCount] = await Promise.all([
+                prisma.demande_qr.count({ where: { forms: formsDateFilterCreated } }),
+                prisma.generation_qr.count({ where: { forms: formsDateFilterModified } }),
+                prisma.impression_qr.count({ where: { forms: formsDateFilterModified } }),
+                prisma.livraison_qr.count({ where: { forms: formsDateFilterModified } }),
+                prisma.reception_qr.count({ where: { forms: formsDateFilterModified } }),
+            ]);
+
+            statsQrMap = {
+                soumise: soumiseCount,
+                generee: genereeCount,
+                imprimee: imprimeeCount,
+                livree: livreeCount,
+                recue: recueCount,
             };
-
-            const qrStats = await prisma.demande_qr.groupBy({
-                by: ['statut'],
-                where: whereQrGroupBy,
-                _count: { id: true },
-                _sum: { quantite_qr: true }
-            });
-
-            statsQrMap = qrStats.reduce((acc, curr) => ({
-                ...acc,
-                [curr.statut]: curr._count.id
-            }), statsQrMap);
         } catch (err) {
             console.error('QR stats aggregate error:', err);
         }

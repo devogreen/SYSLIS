@@ -1,10 +1,14 @@
 
 // @ts-ignore
 import React, { useState, useEffect } from 'react';
-import { startOfMonth, endOfMonth, format, getWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, getWeek } from 'date-fns';
+
 import DatePicker from '../../components/form/date-picker';
 import { RefreshTimeIcon } from '../../icons';
 import type { LivraisonType } from '../../types';
+
+import axios from 'axios';
+
 
 // @ts-ignore
 import { Stock } from '../../backend/stock/Stock.js'
@@ -12,8 +16,7 @@ import { Stock } from '../../backend/stock/Stock.js'
 // @ts-ignore
 import urlBase from '../../backend/const.js'
 
-// @ts-ignore
-type StockTotals = { total_lot: number; total_carton: number; total_piece: number; total: number };
+
 
 interface GeneralStats {
   typesLivraisons: any;
@@ -26,11 +29,19 @@ interface GeneralStats {
   livraisonsParType?: LivraisonType[];
 }
 
-
+interface QRStats {
+  total: number;
+  soumise: number;
+  generee: number;
+  imprimee: number;
+  livree: number;
+  recue: number;
+}
 export default function Dashboard() {
 
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startDate, setStartDate] = useState<Date | null>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [endDate, setEndDate] = useState<Date | null>(endOfWeek(new Date(), { weekStartsOn: 1 }));
+
   const [stats, setStats] = useState<GeneralStats | null>(null);
 
   const statsSafe: GeneralStats =
@@ -46,6 +57,15 @@ export default function Dashboard() {
     };
 
 
+  // Ce bloc est uniquement pour afficher la progression logique
+    const [qrQuantities, setQrQuantities] = useState<QRStats>({
+      total: 0,
+      soumise: 0,
+      generee: 0,
+      imprimee: 0,
+      livree: 0,
+      recue: 0
+    });
   // @ts-ignore
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const stockData = new Stock();
@@ -74,13 +94,15 @@ export default function Dashboard() {
 
   const fetchStats = async () => {
     setLoading(true);
+
     try {
-      // Stats générales d'abord
+      // 1) Stats générales (pour le reste du dashboard)
       const effectiveStartDate = startDate || startOfMonth(new Date());
       const effectiveEndDate = endDate || endOfMonth(new Date());
+
       const url = `${urlBase}/api/stats/general?startDate=${getFormattedDate(effectiveStartDate)}&endDate=${getFormattedDate(effectiveEndDate)}`;
-      // const url = statsData.getGeneralStats(getFormattedDate(startDate), getFormattedDate(endDate));
       const response = await fetch(url);
+
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -88,11 +110,35 @@ export default function Dashboard() {
         console.error('Stats API error:', response.status);
       }
 
-      // Stock id_piece=2
+      // 2) QR quantités (comme dans SousDashboardQRcode.tsx)
+      let cumulUrl = `${urlBase}/api/demandeQr/getCumulQrCodes`;
+      if (startDate && endDate) {
+        const formattedStartDate = getFormattedDate(startDate);
+        const formattedEndDate = getFormattedDate(endDate);
+        cumulUrl += `?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+      }
+
+      const cumulResponse = await axios.get(cumulUrl);
+      const cumulData = cumulResponse.data?.data || {};
+
+      setQrQuantities({
+        total:
+          (cumulData.soumis || 0) +
+          (cumulData.genere || 0) +
+          (cumulData.imprime || 0) +
+          (cumulData.livree || 0) +
+          (cumulData.recue || 0),
+        soumise: cumulData.soumis || 0,
+        generee: cumulData.genere || 0,
+        imprimee: cumulData.imprime || 0,
+        livree: cumulData.livree || 0,
+        recue: cumulData.recue || 0
+      });
+
+      // 3) Stock id_piece=2
       const itemsRes = await fetch(`${urlBase}/api/stock/getAllItems`);
-      // const itemsRes = await stockData.getAllItems();
       const stocksRes = await fetch(`${urlBase}/api/stock/getAllStocks`);
-      // const stocksRes = await stockData.getAllStocks();
+
       const items = await itemsRes.json();
       const stocks = await stocksRes.json();
 
@@ -110,7 +156,6 @@ export default function Dashboard() {
       setTpeStock(totals);
       setTpeStockId2(totals);
     } catch (error) {
-
       console.error('Stats fetch error:', error);
     } finally {
       setLoading(false);
@@ -261,50 +306,8 @@ export default function Dashboard() {
               ))}
           </div>
         </div>
-        {/* GRID DES STATS */}
-        {/* <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        
 
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">TPE GIM livrés</p>
-            <p className="text-xl font-bold">{stats.tpeGim}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">MAJ livrées</p>
-            <p className="text-xl font-bold">{stats.maj}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">Chargeurs</p>
-            <p className="text-xl font-bold">{stats.chargeur}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">Chargeur OK</p>
-            <p className="text-xl font-bold text-green-600">{stats.chargeurOk}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">Chargeur NOK</p>
-            <p className="text-xl font-bold text-red-600">{stats.chargeurNok}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">TPE RNE</p>
-            <p className="text-xl font-bold">{stats.tpeRne}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">TPE Mobile</p>
-            <p className="text-xl font-bold">{stats.tpeMobile}</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p className="text-gray-500">TPE remplacés</p>
-            <p className="text-xl font-bold">{stats.tpeRemplaces}</p>
-          </div>
-
-        </div> */}
       </div>
       {/* 🏗️ MAIN STATS GRID */}
       {totalProduit !== 0 ? (
@@ -389,9 +392,11 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-lg font-bold text-purple-800">📱 QR Codes</h3>
                   <div className="text-3xl font-black text-purple-600 mt-2">
-                    {Object.values(statsSafe.qr_codes || {}).reduce((a, b) => (a || 0) + (b || 0), 0)}
+                    {qrQuantities.livree}
+
 
                   </div>
+
                 </div>
                 <div className="p-3 bg-purple-200 rounded-2xl">
                   <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
