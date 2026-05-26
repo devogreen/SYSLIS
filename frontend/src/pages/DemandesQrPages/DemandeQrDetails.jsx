@@ -22,8 +22,9 @@ import SignatureCanvas from "react-signature-canvas";
 import { FilesHandler } from "../../backend/filesHandler/FilesHandler";
 import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
-import * as pdfjsLib from "pdfjs-dist";
 import { set } from "date-fns";
+
+import { PDFDocument } from "pdf-lib";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -33,11 +34,6 @@ addLocale('fr', {
     monthNames: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
     monthNamesShort: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
 });
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url
-).toString();
 
 export default function DemandeQrDetails() {
     const demandeData = new DemandeQr()
@@ -142,11 +138,9 @@ export default function DemandeQrDetails() {
     const getPdfPageCount = async (file) => {
         const arrayBuffer = await file.arrayBuffer();
 
-        const pdf = await pdfjsLib.getDocument({
-            data: arrayBuffer,
-        }).promise;
+        const pdf = await PDFDocument.load(arrayBuffer);
 
-        return pdf.numPages;
+        return pdf.getPageCount();
     };
 
     useEffect(() => {
