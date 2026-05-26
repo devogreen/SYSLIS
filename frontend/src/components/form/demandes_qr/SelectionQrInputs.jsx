@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useNavigate, useParams } from "react-router";
 import { Merchants } from "../../../backend/livraisons/Merchants"
 import { DemandeQr } from "../../../backend/demandeQr/DemandeQr";
@@ -81,6 +81,10 @@ export default function SelectionQrInputs() {
     const selectedMarchands = listeDemande.filter(item => item.is_selected);
     const totalQr = selectedMarchands.reduce((sum, item) => sum + Number(item.quantiteQr || 0), 0);
 
+    const targetRef = useRef(null);
+
+    const [commentaireModif, setCommentaireModif] = useState('')
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -127,8 +131,9 @@ export default function SelectionQrInputs() {
     }, [])
 
     const handleSelectMarchand = (value) => {
-        if (selectedMarchand) {
+        if (indexMarchand === value) {
             setSelectedMarchand(null)
+            setIndexMarchand(null)
             return
         }
 
@@ -142,6 +147,11 @@ export default function SelectionQrInputs() {
             setFormatQr(marchandQr.format)
             setIndexMarchand(value)
         }
+
+        targetRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
     }
 
     const checkModif = () => {
@@ -188,7 +198,7 @@ export default function SelectionQrInputs() {
 
     return (
         <>
-            <div className="space-y-3">
+            <div className="space-y-3" ref={targetRef}>
                 <div className="flex justify-center">
                     {loadingData ? (
                         <>
@@ -254,6 +264,17 @@ export default function SelectionQrInputs() {
                                                                             setQuantiteQr(value)
                                                                         }
                                                                     }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div>
+                                                                <Label>Commentaire</Label>
+                                                                <TextArea
+                                                                    value={commentaireModif}
+                                                                    onChange={(value) => setCommentaireModif(value)}
+                                                                    rows={2}
+                                                                    placeholder="Ajouter un commentaire"
                                                                 />
                                                             </div>
                                                         </div>

@@ -61,7 +61,7 @@ export default function VerificationDecomInputs() {
     const [checkMail, setCheckMail] = useState(false)
     const [commentaire, setCommentaire] = useState('')
 
-    const itemRefs = useRef({});
+    const targetRef = useRef(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -101,6 +101,7 @@ export default function VerificationDecomInputs() {
     const handleSelectTerminal = (value) => {
         if (value == indexPiece) {
             setSelectedTpe(null)
+            setIndexPiece(null)
             return
         }
         setIsRAS(false)
@@ -124,7 +125,7 @@ export default function VerificationDecomInputs() {
             }
         }
         setIndexPiece(value)
-        itemRefs.current[value]?.scrollIntoView({
+        targetRef.current?.scrollIntoView({
             behavior: "smooth",
             block: "start",
         });
@@ -239,7 +240,7 @@ export default function VerificationDecomInputs() {
     }
     return (
         <>
-            <div className="space-y-3">
+            <div className="space-y-3" ref={targetRef}>
                 <div className="flex justify-center">
                     {loadingData ? (
                         <>
@@ -263,12 +264,12 @@ export default function VerificationDecomInputs() {
                                                         <div className="text-center">
                                                             <span className="text-sm font-semibold">Informations Terminal</span>
                                                         </div>
-                                                        <div ref={targetRef}>
+                                                        <div>
                                                             <Label className="text-gray-400">Numéro de série <span className="text-gray-700">*</span></Label>
                                                             <Input
                                                                 type="text"
                                                                 id="input"
-                                                                value={selectedTpe.serial_number}
+                                                                value={selectedTpe?.serial_number || ""}
                                                                 disabled
                                                             />
                                                         </div>
@@ -597,8 +598,6 @@ export default function VerificationDecomInputs() {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell
-                                                            key={index}
-                                                            ref={(el) => (itemRefs.current[index] = el)}
                                                             isHeader
                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                             <button
