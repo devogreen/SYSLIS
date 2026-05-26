@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, Link, useNavigate } from "react-router";
 import { Decom } from "../../../backend/decom/decom"
 import { Users } from "../../../backend/users/Users";
@@ -61,6 +61,8 @@ export default function VerificationDecomInputs() {
     const [checkMail, setCheckMail] = useState(false)
     const [commentaire, setCommentaire] = useState('')
 
+    const itemRefs = useRef({});
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -97,7 +99,7 @@ export default function VerificationDecomInputs() {
     }, [])
 
     const handleSelectTerminal = (value) => {
-        if (selectedTpe) {
+        if (value == indexPiece) {
             setSelectedTpe(null)
             return
         }
@@ -109,7 +111,7 @@ export default function VerificationDecomInputs() {
         const terminal = listeDecom.at(value)
         if (terminal) {
             setSelectedTpe(terminal)
-            if(terminal.is_ok) {
+            if (terminal.is_ok) {
                 setIsRAS(true)
             } else if (!terminal.is_ok && terminal.statut == 'parametrage') {
                 setIsProblem(true)
@@ -122,6 +124,10 @@ export default function VerificationDecomInputs() {
             }
         }
         setIndexPiece(value)
+        itemRefs.current[value]?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
     }
 
     const handleSelectPieceDef = (pieceId) => {
@@ -257,7 +263,7 @@ export default function VerificationDecomInputs() {
                                                         <div className="text-center">
                                                             <span className="text-sm font-semibold">Informations Terminal</span>
                                                         </div>
-                                                        <div>
+                                                        <div ref={targetRef}>
                                                             <Label className="text-gray-400">Numéro de série <span className="text-gray-700">*</span></Label>
                                                             <Input
                                                                 type="text"
@@ -591,6 +597,8 @@ export default function VerificationDecomInputs() {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell
+                                                            key={index}
+                                                            ref={(el) => (itemRefs.current[index] = el)}
                                                             isHeader
                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                             <button

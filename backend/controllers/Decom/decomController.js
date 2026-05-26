@@ -783,6 +783,37 @@ const receptionDecom = async (req, res) => {
             isReg = true
         }
 
+        // Récupérer les SN de la liste
+        const serials = listeDecom.map(item => item.terminalSN);
+
+        // Récupérer les TPE déjà enregistrés dans le PARC
+        const existingTpes = await prisma.parc_tpe.findMany({
+            where: {
+                serial_number: { in: serials }
+            },
+            select: {
+                id: true,
+                serial_number: true
+            }
+        });
+
+        // Faire une liste SN, ID pour les TPE déjà enregistrés
+        const existingMap = new Map(
+            existingTpes.map(e => [e.serial_number, e.id])
+        );
+
+        const toCreate = [];
+        const toUpdate = [];
+
+        // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
+        listeDecom.forEach(item => {
+            if (existingMap.has(item.terminalSN)) {
+                toUpdate.push(item);
+            } else {
+                toCreate.push(item);
+            }
+        });
+
         const receptionDecom = await prisma.$transaction(async (tx) => {
             const receptionForm = await tx.forms.create({
                 data: {
@@ -827,36 +858,6 @@ const receptionDecom = async (req, res) => {
                 }))
             })
 
-            // Récupérer les SN de la liste
-            const serials = listeDecom.map(item => item.terminalSN);
-
-            // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-            // Faire une liste SN, ID pour les TPE déjà enregistrés
-            const existingMap = new Map(
-                existingTpes.map(e => [e.serial_number, e.id])
-            );
-
-            const toCreate = [];
-            const toUpdate = [];
-
-            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-            listeDecom.forEach(item => {
-                if (existingMap.has(item.terminalSN)) {
-                    toUpdate.push(item);
-                } else {
-                    toCreate.push(item);
-                }
-            });
-
             // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
             if (toCreate.length > 0) {
                 await tx.parc_tpe.createMany({
@@ -872,19 +873,19 @@ const receptionDecom = async (req, res) => {
 
             if (!isReg) {
                 // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-                await Promise.all(
-                    toUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: { serial_number: item.terminalSN },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: dateAction,
-                                last_modified_at: dateAction,
-                                statut_id: 9,
-                            }
-                        })
-                    )
-                );
+                await tx.parc_tpe.updateMany({
+                    where: {
+                        serial_number: {
+                            in: toUpdate.map(item => item.terminalSN)
+                        }
+                    },
+                    data: {
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: 9,
+                    }
+                });
             } else {
                 // Récupérer les TPE existants avec leur date de modification
                 const existingTpesWithDates = await tx.parc_tpe.findMany({
@@ -956,6 +957,7 @@ const receptionDecom = async (req, res) => {
                     form_id: decomForm.id,
                 }))
             });
+
 
             return {
                 receptionForm, reception

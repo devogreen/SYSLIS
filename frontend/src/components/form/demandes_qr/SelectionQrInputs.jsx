@@ -68,6 +68,13 @@ export default function SelectionQrInputs() {
     const [isModalConfirmValidateOpen, setIsModalConfirmValidateOpen] = useState(false)
     const [isModalConfirmGenerateOpen, setIsModalConfirmGenerateOpen] = useState(false)
 
+    const [commentaireGenerator, setCommentaireGenerator] = useState('')
+
+    const [totalCaisse, setTotalCaisse] = useState(0)
+    const [totalPDFPages, setTotalPDFPages] = useState(0)
+
+    const [loadingUpload, setLoadingUpload] = useState(false)
+
 
     const isOnlyDigits = (str) => /^\d+$/.test(str);
 
@@ -105,6 +112,9 @@ export default function SelectionQrInputs() {
                 // setTotalQr(Number(demande.quantite_qr))
                 const quantiteMarchand = demande.quantite_marchand
                 setTotalMarchand(quantiteMarchand)
+
+                const totalCaisse = listeDemande.reduce((sum, item) => sum + Number(item.quantiteTerminal || 0), 0);
+                setTotalCaisse(totalCaisse)
 
             } catch (error) {
                 console.log('Error fetching data ', error)
@@ -477,7 +487,7 @@ export default function SelectionQrInputs() {
                     </div>
                 </div>
             </Modal>
-            <Modal isOpen={isModalConfirmGenerateOpen} onClose={() => setIsModalConfirmGenerateOpen(false)} className="p-4 max-w-md">
+            {/* <Modal isOpen={isModalConfirmGenerateOpen} onClose={() => setIsModalConfirmGenerateOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-3">
                     <div className="w-full text-center">
                         <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Upload</span>
@@ -493,44 +503,54 @@ export default function SelectionQrInputs() {
                     </div>
                     <div className="flex flex-col">
                         <span className="text-xs">
-                            Total marchand par type QR: <span className="font-semibold">{marchandsParType.length}</span>
+                            Total Caisse: <span className="font-semibold">{totalCaisse}</span>
                         </span>
                         <span className="text-xs">
-                            QR Codes files uploaded: <span className="font-semibold">{selectedFiles.length}</span>
+                            Total QR Codes files uploaded: <span className="font-semibold">{totalPDFPages}</span>
                         </span>
                     </div>
                     <div>
-                        <div>
-                            <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
-                            <div
-                                {...getRootProps()}
-                                className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
-                            >
-                                <input {...getInputProps()} />
-                                <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
-                            </div>
-                            <div className="max-h-38 overflow-y-auto">
-                                {selectedFiles.length > 0 ? (
-                                    <div className="mt-3">
-                                        {selectedFiles.map((selectedFile, index) => (
-                                            <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
-                                                <span>
-                                                    <i className="pi pi-file-check"></i>
-                                                </span>
-                                                <span className=" text-center" style={{ fontSize: '9px' }}>
-                                                    {selectedFile.name}
-                                                </span>
-                                                <button onClick={() => handleDeleteFile(index)}>
-                                                    <span className="text-error-600"><i className="pi pi-times"></i></span>
-                                                </button>
-                                            </div>
-                                        ))}
+                        {loadingUpload ? (
+                            <>
+                                <div className='text-center text-xs'>
+                                    <span>Chargement en cours...</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                    <div
+                                        {...getRootProps()}
+                                        className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
+                                    >
+                                        <input {...getInputProps()} />
+                                        <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
                                     </div>
-                                ) : (
-                                    <></>
-                                )}
-                            </div>
-                        </div>
+                                    <div className="max-h-38 overflow-y-auto">
+                                        {selectedFiles.length > 0 ? (
+                                            <div className="mt-3">
+                                                {selectedFiles.map((selectedFile, index) => (
+                                                    <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
+                                                        <span>
+                                                            <i className="pi pi-file-check"></i>
+                                                        </span>
+                                                        <span className=" text-center" style={{ fontSize: '9px' }}>
+                                                            {selectedFile.file.name}
+                                                        </span>
+                                                        <button onClick={() => handleDeleteFile(index)}>
+                                                            <span className="text-error-600"><i className="pi pi-times"></i></span>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <></>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
@@ -547,7 +567,7 @@ export default function SelectionQrInputs() {
                         </div>
                     </div>
                 </div>
-            </Modal>
+            </Modal> */}
             <Modal isOpen={isModalConfirmValidateOpen} onClose={() => setIsModalConfirmValidateOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-5">
                     <div className="w-full text-center">
