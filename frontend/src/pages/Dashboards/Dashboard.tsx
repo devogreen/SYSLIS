@@ -284,10 +284,11 @@ export default function Dashboard() {
             </div> */}
 
             {/* TPE remplacés livrés */}
-            {/* <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
+            <div className="bg-white p-4 rounded-xl shadow min-w-[120px] max-w-[160px] min-h-[100px] flex flex-col justify-between">
               <p className="text-gray-500 text-sm">TPE remplacés livrés</p>
               <p className="text-xl font-bold">{stats?.remplacementsLivres ?? 0}</p>
-            </div> */}
+              <p className="text-gray-500 text-xs">Quantité livrée</p>
+            </div>
 
             {/* Types de livraisons dynamiques */}
             {stats?.typesLivraisons &&

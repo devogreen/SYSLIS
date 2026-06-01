@@ -1043,7 +1043,7 @@ const getGeneralStats = async (req, res) => {
         // Remplacements livrés stats (TPE remplacés dont statut = 'livre')
         let remplacementsLivres = 0;
         if (startDate && endDate) {
-            remplacementsLivres = await prisma.remplacements.count({
+remplacementsLivres = await prisma.remplacements.aggregate({
                 where: {
                     statut: 'livre',
                     deleted: false,
@@ -1051,8 +1051,9 @@ const getGeneralStats = async (req, res) => {
                         gte: new Date(startDate + 'T00:00:00'),
                         lte: new Date(endDate + 'T23:59:59')
                     }
-                }
-            }).catch(err => {
+                },
+                _sum: { quantite: true }
+            }).then(r => r?._sum?.quantite ?? 0).catch(err => {
                 console.error('Remplacements count error:', err);
                 return 0;
             });
