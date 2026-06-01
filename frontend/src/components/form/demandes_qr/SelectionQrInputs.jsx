@@ -31,6 +31,10 @@ import { ProgressSpinner } from "primereact/progressspinner";
 import JSZip from "jszip";
 import { useDropzone } from "react-dropzone"
 
+import { Tooltip } from "primereact/tooltip";
+
+import { PDFDocument } from "pdf-lib";
+
 export default function SelectionQrInputs() {
 
     const merchantsData = new Merchants();
@@ -75,6 +79,10 @@ export default function SelectionQrInputs() {
 
     const [loadingUpload, setLoadingUpload] = useState(false)
 
+    const [selectedFiles, setSelectedFiles] = useState([])
+
+    const [errorGenerate, setErrorGenerate] = useState('')
+
 
     const isOnlyDigits = (str) => /^\d+$/.test(str);
 
@@ -84,6 +92,14 @@ export default function SelectionQrInputs() {
     const targetRef = useRef(null);
 
     const [commentaireModif, setCommentaireModif] = useState('')
+
+    const getPdfPageCount = async (file) => {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const pdf = await PDFDocument.load(arrayBuffer);
+
+        return pdf.getPageCount();
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -175,7 +191,17 @@ export default function SelectionQrInputs() {
         const idMarchand = listeDemande[indexMarchand].id
 
         listeDemande[indexMarchand].quantiteQr = quantiteQr
+        let commentaire = commentaireModif ? commentaireModif.trim() : ''
+        if (commentaire) {
+            listeDemande[indexMarchand].commentaireModif = commentaire
+        }
 
+        const updatedList = listeDemande.map((item, index) =>
+            index === indexMarchand
+                ? { ...item, quantiteQr: quantiteQr, commentaireModif: commentaire ? commentaire : '' }
+                : item
+        );
+        setListeDemande(updatedList)
     }
 
     const handleConfirmValidate = () => {
@@ -193,6 +219,148 @@ export default function SelectionQrInputs() {
             console.log('Liste validée: ', listeDemande)
         } finally {
             setLoadingValidation(false)
+        }
+    }
+
+    const onDrop = useCallback(async (acceptedFiles) => {
+        const updatedFiles = [...selectedFiles];
+        let totalPages = 0
+        setLoadingUpload(true)
+        for (const file of acceptedFiles) {
+
+            // Handle ZIP files
+            if (file.type === "application/zip" || file.name.endsWith(".zip")) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+
+                    const extractedFiles = await Promise.all(
+                        Object.keys(zip.files).map(async (filename) => {
+                            const zipEntry = zip.files[filename];
+
+                            if (!zipEntry.dir) {
+                                const blob = await zipEntry.async("blob");
+
+                                return new File([blob], filename, {
+                                    type: blob.type,
+                                });
+                            }
+
+                            return null;
+                        })
+                    );
+
+                    for (const extractedFile of extractedFiles) {
+                        let pages = 0
+                        if (!extractedFile) continue;
+
+                        // Only process PDFs
+                        if (extractedFile.name.endsWith(".pdf")) {
+                            pages = await getPdfPageCount(extractedFile);
+                            totalPages += pages;
+                            console.log(
+                                `${extractedFile.name} -> ${pages} pages`
+                            );
+                        }
+
+                        if (
+                            !updatedFiles.find(
+                                (f) =>
+                                    f.name === extractedFile.name &&
+                                    f.size === extractedFile.size
+                            )
+                        ) {
+                            updatedFiles.push({
+                                file: extractedFile,
+                                pageCount: pages,
+                            });
+                        }
+                    }
+
+                } catch (error) {
+                    console.error("ZIP extraction error:", error);
+
+                    Swal.fire({
+                        title: "Attention",
+                        text: "Erreur d'extraction de fichiers !",
+                        icon: "warning",
+                    });
+                }
+
+            } else {
+                let pages = 0
+                // Normal PDF file
+                if (file.name.endsWith(".pdf")) {
+                    pages = await getPdfPageCount(file);
+                    totalPages += pages;
+                    console.log(`${file.name} -> ${pages} pages`);
+                }
+
+                if (
+                    !updatedFiles.find(
+                        (f) => f.name === file.name && f.size === file.size
+                    )
+                ) {
+                    updatedFiles.push({
+                        file: file,
+                        pageCount: pages,
+                    });
+                }
+            }
+        }
+        setSelectedFiles(updatedFiles);
+        setTotalPDFPages(totalPages);
+        setLoadingUpload(false)
+
+    }, [selectedFiles, totalPDFPages]);
+
+    const { getRootProps, getInputProps } = useDropzone({
+        onDrop,
+        multiple: true,
+    });
+
+    const handleDeleteFile = (indexToRemove) => {
+        setSelectedFiles((prev) =>
+            prev.filter((_, index) => index !== indexToRemove)
+        );
+
+        const element = selectedFiles.at(indexToRemove)
+        setTotalPDFPages((prev) => prev - element.pageCount)
+    };
+
+    const handleUploadQr = async () => {
+        if (selectedFiles.length == 0) {
+            setErrorGenerate("Vous devez upload au moins un fichier !")
+            return
+        }
+        setIsModalGenerationOpen(false)
+        try {
+            setErrorGenerate('')
+            setLoadingGenerate(true)
+            const id = Number(idDemande)
+            const fd = new FormData()
+            selectedFiles.forEach((file) => {
+                fd.append("qrCodes", file.file);
+            });
+            fd.append('userId', Number(userId))
+            fd.append('commentaire', commentaireGenerator)
+            await demandeData.uploadDemandeQr(id, fd)
+
+            Swal.fire({
+                title: "Succès",
+                text: "QR Code(s) généré(s) avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur de génération : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la génération !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingGenerate(false)
         }
     }
 
@@ -410,13 +578,25 @@ export default function SelectionQrInputs() {
                                                     {item.quantiteQr}
                                                 </TableCell>
                                                 <TableCell
-                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400 space-x-2 flex">
                                                     <button
                                                         className="text-black hover:text-blue-700"
                                                         onClick={() => handleSelectMarchand(index)}
                                                     >
                                                         <i className="pi pi-pen-to-square"></i>
                                                     </button>
+                                                    {item.commentaireModif ? (
+                                                        <>
+                                                            <div>
+                                                                <Tooltip target=".commentaire" mouseTrack mouseTrackLeft={10} />
+                                                                <span className="text-gray-500 hover:text-black commentaire" data-pr-tooltip={item.commentaireModif}>
+                                                                    <i className="pi pi-clipboard" style={{ fontSize: '15px' }}></i>
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell
                                                     className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
@@ -508,7 +688,7 @@ export default function SelectionQrInputs() {
                     </div>
                 </div>
             </Modal>
-            {/* <Modal isOpen={isModalConfirmGenerateOpen} onClose={() => setIsModalConfirmGenerateOpen(false)} className="p-4 max-w-md">
+            <Modal isOpen={isModalConfirmGenerateOpen} onClose={() => setIsModalConfirmGenerateOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-3">
                     <div className="w-full text-center">
                         <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Upload</span>
@@ -588,7 +768,7 @@ export default function SelectionQrInputs() {
                         </div>
                     </div>
                 </div>
-            </Modal> */}
+            </Modal>
             <Modal isOpen={isModalConfirmValidateOpen} onClose={() => setIsModalConfirmValidateOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-5">
                     <div className="w-full text-center">
