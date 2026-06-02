@@ -3466,7 +3466,6 @@ const updateRemplacement = async (req, res) => {
         remplacementForm,
         nouveauRemplacement,
         allTpes,
-        allOldTpes,
       }
 
     })

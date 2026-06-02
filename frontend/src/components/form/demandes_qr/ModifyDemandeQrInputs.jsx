@@ -131,8 +131,15 @@ export default function ModifyDemandeQrInputs() {
                 const merchantList = await merchantsData.findMerchant()
                 // console.log(merchantList)
 
+                const uniqueMerchants = Array.from(
+                    new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
+                );
+                console.log(uniqueMerchants)
+
+                const actifMerchants = uniqueMerchants.filter((item) => item.ETAT_ACTUEL == "Actif")
+
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
-                const countByPointMarchand = merchantList.reduce((acc, { GROUPE, POINT_MARCHAND }) => {
+                const countByPointMarchand = actifMerchants.reduce((acc, { GROUPE, POINT_MARCHAND }) => {
                     const key = `${GROUPE}__${POINT_MARCHAND}`
                     if (!acc[key]) {
                         acc[key] = {
@@ -154,7 +161,7 @@ export default function ModifyDemandeQrInputs() {
                 setOptionsMarchands(optionsPm)
 
                 // Fonction pour avoir la liste des marchands + nbr de TPE, groupés par chaîne
-                const groupedChaine = merchantList.reduce((acc, item) => {
+                const groupedChaine = actifMerchants.reduce((acc, item) => {
                     const { GROUPE, POINT_MARCHAND } = item
 
                     // 1️⃣ Create group if it doesn't exist
