@@ -251,4 +251,13 @@ export class DemandeQr {
             throw error.response?.data || { message: "Export failed" };
         }
     }
+
+    async getAllDataDemandeQr() {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/getAllDataDemandeQr`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

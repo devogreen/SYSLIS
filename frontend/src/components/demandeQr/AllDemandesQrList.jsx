@@ -134,6 +134,9 @@ export default function AllDemandesQrList() {
                 })
                 setDemandes(demandesQrData)
 
+                const data = await demandeData.getAllDataDemandeQr()
+                console.log(data)
+
             } catch (error) {
                 console.log('Error fetching data ', error)
             } finally {

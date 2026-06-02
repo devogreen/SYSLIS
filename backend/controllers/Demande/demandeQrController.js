@@ -2604,6 +2604,117 @@ const exportOneDemandeQrToExcel = async (req, res) => {
     }
 }
 
+const getAllDataDemandeQr = async (req, res) => {
+    try {
+        // const { startDate, endDate } = req.query;
+        const demandes = await prisma.demande_qr.findMany({
+            where: {
+                forms: {
+                    // last_modified_at: {
+                    //     gte: new Date(startDate + 'T00:00:00'),
+                    //     lte: new Date(endDate + 'T23:59:59')
+                    // },
+                    is_deleted: false,
+                },
+            },
+            select: {
+                id: true,
+                quantite_qr: true,
+                liste_demande: true,
+                statut: true,
+                forms: {
+                    select: {
+                        last_modified_at: true,
+                    },
+                },
+            },
+        });
+
+        const operateurs = await prisma.type_paiement.findMany({
+            select: {
+                id: true,
+                nom: true,
+            },
+        });
+
+        let total = []
+
+        const generations = await prisma.generation_qr.findMany({
+            select: {
+                demande_id: true,
+                quantite_qr: true,
+            },
+        });
+
+        const generationMap = new Map(
+            generations.map(g => [g.demande_id, g.quantite_qr])
+        );
+
+        for (const demande of demandes) {
+            const listeDemande = typeof demande.liste_demande === "string"
+                ? JSON.parse(demande.liste_demande)
+                : demande.liste_demande;
+
+            const statut = demande.statut;
+
+            const total_genere =
+                statut != "soumise"
+                    ? generationMap.get(demande.id) || 0
+                    : 0;
+
+            totals = operateurs.map((operateur) => {
+                const total_qr = listeDemande
+                    .filter(item => item.typeQrId === operateur.id)
+                    .reduce((sum, item) => sum + (item.quantiteQr || 0), 0);
+                if (total_qr === 0) return null; // On ne retourne que les opérateurs concernés par la demande
+                return {
+                    demande_id: demande.id,
+                    statut,
+                    total_qr,
+                    operateur: operateur.nom,
+                    date_demande: demande.forms.last_modified_at,
+                    total_genere: total_genere != 0 ? total_qr : 0,
+                };
+            });
+
+            total.push(...totals);
+        }
+
+        res.status(200).json({
+            data: total.filter(item => item !== null), // On filtre les opérateurs non concernés
+            message: 'Données des demandes de QR Codes récupérées avec succès !',
+        })
+
+    } catch (error) {
+        console.error('Erreur getAllDataDemandeQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
+const getDataImpressionQr = async (req, res) => {
+    try {
+        // const { startDate, endDate, format } = req.query;
+
+        const demandes = await prisma.demande_qr.findMany({
+            where: {
+                forms: {
+                    // last_modified_at: {
+                    //     gte: new Date(startDate + 'T00:00:00'),
+                    //     lte: new Date(endDate + 'T23:59:59')
+                    // },
+                    is_deleted: false,
+                },
+            }
+        });
+
+
+
+    } catch (error) {
+        console.error('Erreur getDataImpressionQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2627,4 +2738,5 @@ module.exports = {
     downloadTemplateQr,
     exportTotalDemandesQrToExcel,
     exportOneDemandeQrToExcel,
+    getAllDataDemandeQr,
 }

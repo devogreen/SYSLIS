@@ -248,8 +248,8 @@ export default function SousDashboardQRcode() {
   const exportExcel = async () => {
     // Import dynamique pour éviter l'erreur de résolution à l'exécution
     // @ts-ignore
-    const XLSX = await import('xlsx');
-    const xlsx = XLSX?.default ?? XLSX;
+    // const XLSX = await import('xlsx');
+    // const xlsx = XLSX?.default ?? XLSX;
     const headers = [
       'N° Demande',
       'Statut',
