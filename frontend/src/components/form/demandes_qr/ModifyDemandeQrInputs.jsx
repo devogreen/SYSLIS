@@ -105,6 +105,8 @@ export default function ModifyDemandeQrInputs() {
 
     const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
 
+    const [selectedTypes, setSelectedTypes] = useState([])
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -201,7 +203,7 @@ export default function ModifyDemandeQrInputs() {
 
                 const allPaiementType = await demandeData.getAllTypePaiement()
                 const qrTypes = allPaiementType.filter((item) => {
-                    return item.qr_code == true
+                    return item.qr_code == true && item.nom != "Autre"
                 })
                 setListeQr(qrTypes)
                 const optionsQr = qrTypes.map((item) => ({
@@ -355,7 +357,7 @@ export default function ModifyDemandeQrInputs() {
                 const typeQr = listeQr.find((qr) => qr.nom == item.typeQr)
                 const format = listeFormats.find((format) => format.format == item.format)
                 return ({
-                    typeQrId: typeQr ? typeQr.id : null,
+                    typeQrId: typeQr ? typeQr.id : 4,
                     typeQr: item.typeQr,
                     formatId: format ? format.id : null,
                     format: item.format,
@@ -493,14 +495,16 @@ export default function ModifyDemandeQrInputs() {
         }
     }
 
-    const handleSelectType = (value) => {
-        setSelectedTypeQr(value)
-        const qrCode = listeQr.find((item) => {
-            return item.id == value
-        })
-        if (qrCode) {
-            setSelectedNomQr(qrCode.nom)
-        }
+    const handleSelectType = (type) => {
+        setSelectedTypes((prevSelected) => {
+            const exists = prevSelected.some((item) => item.id === type.id);
+
+            if (exists) {
+                return prevSelected.filter((item) => item.id !== type.id);
+            } else {
+                return [...prevSelected, type];
+            }
+        });
     }
 
     const handleSelectFormat = (value) => {
@@ -527,8 +531,8 @@ export default function ModifyDemandeQrInputs() {
     }
 
     const checkValidate = () => {
-        if (!selectedTypeQr) {
-            setErrorAjout('Vous devez sélectionner le type du QR Code !')
+        if (selectedTypes.length == 0) {
+            setErrorAjout('Vous devez sélectionner au moins un type de QR Code !')
             return false
         }
         if (!selectedFormat) {
@@ -554,7 +558,7 @@ export default function ModifyDemandeQrInputs() {
         //     console.log(m.typeQrId)
         // }
         const isDuplicate = listeLivraison.some(item => {
-            return item.pointMarchand == selectedMarchand && item.typeQrId == selectedTypeQr && item.formatId == selectedFormat
+            return item.pointMarchand == selectedMarchand && selectedTypes.some((type) => type.id === item.typeQrId) && item.formatId == selectedFormat
         });
         if (isDuplicate) {
             setErrorAjout("Vous avez déjà ajouté ce type de QR avec ce format pour ce marchand !");
@@ -573,7 +577,7 @@ export default function ModifyDemandeQrInputs() {
         }
         for (let m of marchandFields) {
             const isDuplicate = listeLivraison.some(item => {
-                return item.pointMarchand == m.POINT_MARCHAND && item.typeQrId == selectedTypeQr && item.formatId == selectedFormat
+                return item.pointMarchand == m.POINT_MARCHAND && selectedTypes.some((type) => type.id === item.typeQrId) && item.formatId == selectedFormat
             });
             if (isDuplicate) {
                 setErrorAjout("Vous avez déjà ajouté ce type de QR avec ce format pour ce marchand !");
@@ -607,45 +611,51 @@ export default function ModifyDemandeQrInputs() {
     const handleAjoutParMarchand = (value) => {
         setErrorAjout('')
         setIsModalParMarchand(false)
-        const newElement = {
-            typeQrId: Number(selectedTypeQr),
-            typeQr: selectedNomQr,
-            formatId: Number(selectedFormat),
-            format,
-            chaine: selectedChaine,
-            pointMarchand: selectedMarchand,
-            quantiteTerminal,
-            quantiteQr,
-            nbreCopie: quantite,
-        }
+        for (let type of selectedTypes) {
+            const newElement = {
+                typeQrId: Number(type.id),
+                typeQr: type.nom,
+                formatId: Number(selectedFormat),
+                format,
+                chaine: selectedChaine,
+                pointMarchand: selectedMarchand,
+                quantiteTerminal,
+                quantiteQr,
+                nbreCopie: quantite,
+                is_selected: true,
+            }
 
-        setListeLivraison((prev) => [...prev, newElement]);
-        setQuantiteTotale((prev) => prev + 1);
-        setTotalQr((prev) => prev + quantiteQr);
+            setListeLivraison((prev) => [...prev, newElement]);
+            setQuantiteTotale((prev) => prev + 1);
+            setTotalQr((prev) => prev + quantiteQr);
+        }
     }
 
     const handleAjoutParChaine = () => {
         setErrorAjout('')
         setIsModalParChaineOpen(false)
-        const liste = marchandFields.map((item) => ({
-            typeQrId: Number(selectedTypeQr),
-            typeQr: selectedNomQr,
-            formatId: selectedFormat,
-            format,
-            chaine: selectedChaine,
-            pointMarchand: item.POINT_MARCHAND,
-            quantiteTerminal: item.sn_count,
-            quantiteQr: item.quantiteQr,
-            nbreCopie: quantite,
-        }))
-        let listeQr = 0
-        for (let item of liste) {
-            listeQr += item.quantiteQr
-        }
+        for (let type of selectedTypes) {
+            const liste = marchandFields.map((item) => ({
+                typeQrId: Number(type.id),
+                typeQr: type.nom,
+                formatId: selectedFormat,
+                format,
+                chaine: selectedChaine,
+                pointMarchand: item.POINT_MARCHAND,
+                quantiteTerminal: item.sn_count,
+                quantiteQr: item.quantiteQr,
+                nbreCopie: item.nbreQr,
+                is_selected: true,
+            }))
+            let listeQr = 0
+            for (let item of liste) {
+                listeQr += item.quantiteQr
+            }
 
-        setListeLivraison((prev) => [...prev, ...liste]);
-        setQuantiteTotale((prev) => prev + liste.length);
-        setTotalQr((prev) => prev + listeQr);
+            setListeLivraison((prev) => [...prev, ...liste]);
+            setQuantiteTotale((prev) => prev + liste.length);
+            setTotalQr((prev) => prev + listeQr);
+        }
     }
 
     const handleAjoutParExcel = () => {
@@ -946,12 +956,24 @@ export default function ModifyDemandeQrInputs() {
                                                     <>
                                                         <div>
                                                             <Label>Type QR Code <span className="text-red-700">*</span></Label>
-                                                            <Select
+                                                            {/* <Select
                                                                 options={optionsQr}
                                                                 placeholder="Choisir une option"
                                                                 className="dark:bg-dark-900"
                                                                 onChange={handleSelectType}
-                                                            />
+                                                            /> */}
+                                                            {listeQr.map((item) => {
+                                                                return (
+                                                                    <>
+                                                                        <div key={item.id} className="flex items-center gap-3 my-2">
+                                                                            <Checkbox
+                                                                                checked={selectedTypes.some((type) => type.id === item.id)}
+                                                                                onChange={() => handleSelectType({ id: item.id, nom: item.nom })}
+                                                                                label={item.nom} />
+                                                                        </div>
+                                                                    </>
+                                                                )
+                                                            })}
                                                         </div>
                                                         <div>
                                                             <Label>Format <span className="text-red-700">*</span></Label>
@@ -1305,8 +1327,16 @@ export default function ModifyDemandeQrInputs() {
                     <div className="">
                         <div className="text-xs text-center space-y-1">
                             <div>
-                                <span>Type QR CODE: </span>
-                                <span className="font-bold text-sm">{selectedNomQr}</span>
+                                <span>Type(s) QR CODE: </span>
+                                <div className="flex flex-col">
+                                    {selectedTypes.map((item) => {
+                                        return (
+                                            <>
+                                                <span className="font-bold text-sm">{item.nom}</span>
+                                            </>
+                                        )
+                                    })}
+                                </div>
                             </div>
                             <div>
                                 <span>Format: </span>
@@ -1340,8 +1370,16 @@ export default function ModifyDemandeQrInputs() {
                     <div>
                         <div className="text-xs text-center space-y-5">
                             <div>
-                                <span>Type QR CODE: </span>
-                                <span className="font-bold text-sm">{selectedNomQr}</span>
+                                <span>Type(s) QR CODE: </span>
+                                <div className="flex flex-col">
+                                    {selectedTypes.map((item) => {
+                                        return (
+                                            <>
+                                                <span className="font-bold text-sm">{item.nom}</span>
+                                            </>
+                                        )
+                                    })}
+                                </div>
                             </div>
                             <div>
                                 <span>Format: </span>

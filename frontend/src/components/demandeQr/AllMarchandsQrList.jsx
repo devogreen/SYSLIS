@@ -204,17 +204,17 @@ export default function AllMarchandsQrList() {
         )
     }
     const typeQrTemplate = (marchand) => {
-        const typeId = marchand.type_id
-        const type = typesQr.find((item) => {
-            return item.id == typeId
-        })
-        let nom = 'N/A'
-        if (type) {
-            nom = type.nom
-        }
+        // const typeId = marchand.type_id
+        // const type = typesQr.find((item) => {
+        //     return item.id == typeId
+        // })
+        // let nom = 'N/A'
+        // if (type) {
+        //     nom = type.nom
+        // }
         return (
             <div className="">
-                <span className="font-medium">{nom}</span>
+                <span className="font-medium">{marchand.type_qr}</span>
             </div>
         )
     }

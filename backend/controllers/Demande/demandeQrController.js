@@ -582,6 +582,12 @@ const getAllTypePaiement = async (req, res) => {
     try {
         const typePaiement = await prisma.type_paiement.findMany({
             orderBy: { id: 'asc' },
+            select: {
+                id: true,
+                nom: true,
+                abrv: true,
+                qr_code: true,
+            },
         });
 
         console.log('Succès !')
