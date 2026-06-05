@@ -2604,16 +2604,17 @@ const exportOneDemandeQrToExcel = async (req, res) => {
     }
 }
 
+// Fonction pour obtenir toutes les données des demandes de QR Codes (quantités, opérateurs, statuts, dates) selon des filtres de date, pour analyse et reporting.
 const getAllDataDemandeQr = async (req, res) => {
     try {
-        // const { startDate, endDate } = req.query;
+        const { startDate, endDate } = req.query;
         const demandes = await prisma.demande_qr.findMany({
             where: {
                 forms: {
-                    // last_modified_at: {
-                    //     gte: new Date(startDate + 'T00:00:00'),
-                    //     lte: new Date(endDate + 'T23:59:59')
-                    // },
+                    last_modified_at: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    },
                     is_deleted: false,
                 },
             },
@@ -2650,10 +2651,15 @@ const getAllDataDemandeQr = async (req, res) => {
             generations.map(g => [g.demande_id, g.quantite_qr])
         );
 
-        for (const demande of demandes) {
-            const listeDemande = typeof demande.liste_demande === "string"
-                ? JSON.parse(demande.liste_demande)
-                : demande.liste_demande;
+        const parsedDemandes = demandes.map(d => ({
+            ...d,
+            liste_demande:
+                typeof d.liste_demande === "string"
+                    ? JSON.parse(d.liste_demande)
+                    : d.liste_demande || []
+        }));
+
+        for (const demande of parsedDemandes) {
 
             const statut = demande.statut;
 
@@ -2662,8 +2668,8 @@ const getAllDataDemandeQr = async (req, res) => {
                     ? generationMap.get(demande.id) || 0
                     : 0;
 
-            totals = operateurs.map((operateur) => {
-                const total_qr = listeDemande
+            const totals = operateurs.map((operateur) => {
+                const total_qr = demande.liste_demande
                     .filter(item => item.typeQrId === operateur.id)
                     .reduce((sum, item) => sum + (item.quantiteQr || 0), 0);
                 if (total_qr === 0) return null; // On ne retourne que les opérateurs concernés par la demande
@@ -2691,23 +2697,121 @@ const getAllDataDemandeQr = async (req, res) => {
     }
 }
 
+// Fonction pour obtenir les données d'impression des demandes de QR Codes (quantités imprimées, opérateurs, dates) selon des filtres de date, pour analyse et reporting.
 const getDataImpressionQr = async (req, res) => {
     try {
-        // const { startDate, endDate, format } = req.query;
 
+        const { startDate, endDate } = req.query;
+        
         const demandes = await prisma.demande_qr.findMany({
             where: {
                 forms: {
-                    // last_modified_at: {
-                    //     gte: new Date(startDate + 'T00:00:00'),
-                    //     lte: new Date(endDate + 'T23:59:59')
-                    // },
+                    last_modified_at: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    },
                     is_deleted: false,
                 },
-            }
+                statut: {
+                    not: 'soumise',
+                },
+            },
+            select: {
+                id: true,
+                quantite_qr: true,
+                liste_demande: true,
+                statut: true,
+                forms: {
+                    select: {
+                        last_modified_at: true,
+                    },
+                },
+            },
         });
 
+        const formats = await prisma.format_qr.findMany({
+            select: {
+                id: true,
+                format: true,
+            },
+        });
 
+        const operateurs = await prisma.type_paiement.findMany({
+            select: {
+                id: true,
+                nom: true,
+            },
+        });
+
+        const parsedDemandes = demandes.map(d => ({
+            ...d,
+            liste_demande:
+                typeof d.liste_demande === "string"
+                    ? JSON.parse(d.liste_demande)
+                    : d.liste_demande || []
+        }));
+
+        const total = formats.map((format) => {
+            const listeOperateurs = operateurs.map((operateur) => {
+
+                const demandesOperateur = parsedDemandes
+                    .map((demande) => {
+
+                        const total_qr = demande.liste_demande
+                            .filter(
+                                (item) =>
+                                    item.typeQrId === operateur.id &&
+                                    item.formatId === format.id
+                            )
+                            .reduce(
+                                (sum, item) =>
+                                    sum + (item.quantiteQr || 0),
+                                0
+                            );
+
+                        if (total_qr === 0) {
+                            return null;
+                        }
+
+                        return {
+                            demande_id: demande.id,
+                            total_genere: total_qr,
+                            total_imprime:
+                                demande.statut === "imprimee"
+                                    ? total_qr
+                                    : 0,
+                            date_demande:
+                                demande.forms.last_modified_at,
+                        };
+                    })
+                    .filter(Boolean);
+
+                // if (demandesOperateur.length === 0) {
+                //     return null;
+                // }
+
+                return {
+                    operateur_id: operateur.id,
+                    operateur: operateur.nom,
+                    demandes: demandesOperateur,
+                };
+            })
+
+            // if (listeOperateurs.length === 0) {
+            //     return null;
+            // }
+
+            return {
+                format_id: format.id,
+                format: format.format,
+                operateurs: listeOperateurs,
+            };
+        })
+
+        res.status(200).json({
+            data: total, // On filtre les opérateurs non concernés
+            message: 'Données des impressions des demandes de QR Codes récupérées avec succès !',
+        })
 
     } catch (error) {
         console.error('Erreur getDataImpressionQr:', error);
@@ -2739,4 +2843,5 @@ module.exports = {
     exportTotalDemandesQrToExcel,
     exportOneDemandeQrToExcel,
     getAllDataDemandeQr,
+    getDataImpressionQr,
 }

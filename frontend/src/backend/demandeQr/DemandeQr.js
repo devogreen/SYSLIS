@@ -260,4 +260,14 @@ export class DemandeQr {
             throw error.response.data
         }
     }
+
+    async getDataImpressionQr() {
+        try {
+            const response = await axios.get(`${urlBase}/api/demandeQr/getDataImpressionQr`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }
