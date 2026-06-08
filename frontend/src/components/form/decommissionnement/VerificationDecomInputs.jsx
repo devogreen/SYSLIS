@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, Link, useNavigate } from "react-router";
 import { Decom } from "../../../backend/decom/decom"
 import { Users } from "../../../backend/users/Users";
@@ -18,6 +18,8 @@ import Checkbox from "../input/Checkbox.tsx";
 import TextArea from "../../../components/form/input/TextArea";
 import Swal from "sweetalert2";
 import ComponentCard from "../../common/ComponentCard";
+import Select from "../Select.tsx";
+import { Dropdown } from "primereact/dropdown";
 
 export default function VerificationDecomInputs() {
     const decomData = new Decom()
@@ -41,7 +43,8 @@ export default function VerificationDecomInputs() {
 
     const [isRAS, setIsRAS] = useState(false)
     const [isProblem, setIsProblem] = useState(false)
-    const [isRebus, setIsRebus] = useState(false)
+    const [isRebut, setIsRebut] = useState(false)
+    const [isParam, setIsParam] = useState(false)
 
     const [isRI, setIsRI] = useState(false)
     const [etatTpe, setEtatTpe] = useState('')
@@ -60,6 +63,26 @@ export default function VerificationDecomInputs() {
 
     const [checkMail, setCheckMail] = useState(false)
     const [commentaire, setCommentaire] = useState('')
+
+    const [selectedStatut, setSelectedStatut] = useState('')
+
+    const [expandedPieceDef, setExpandedPieceDef] = useState(false)
+    const [expandedPieceRec, setExpandedPieceRec] = useState(false)
+
+    const allPieceDef =
+        pieces.length > 0 &&
+        selectedPiecesDef?.length === pieces.length;
+
+    const allPieceFunc =
+        pieces.length > 0 &&
+        selectedPiecesRec?.length === pieces.length;
+
+    const targetRef = useRef(null);
+
+    const optionStatuts = [
+        { value: 'Paramétrage', label: 'Paramétrage' },
+        { value: 'Rebut', label: 'Rebut' },
+    ]
 
     useEffect(() => {
         const fetchData = async () => {
@@ -96,33 +119,79 @@ export default function VerificationDecomInputs() {
         fetchData()
     }, [])
 
+    const statutTemplate = (statut) => {
+        return (
+            <>
+                <span className="text-sm font-semibold">{statut.label}</span>
+            </>
+        )
+    }
+
+    const selectedStatutTemplate = (option, props) => {
+        if (option) {
+            return (
+                <>
+                    <span className="text-sm font-semibold">{option.label}</span>
+                </>
+            )
+        }
+        return <span>{props.placeholder}</span>;
+    }
+
     const handleSelectTerminal = (value) => {
-        if (selectedTpe) {
+        if (indexPiece === value) {
             setSelectedTpe(null)
+            setIndexPiece(null)
             return
         }
         setIsRAS(false)
         setIsProblem(false)
-        setIsRebus(false)
+        setIsRebut(false)
+        setIsParam(false)
+        setSelectedStatut(null)
         setSelectedPiecesDef([])
         setSelectedPiecesRec([])
         const terminal = listeDecom.at(value)
         if (terminal) {
             setSelectedTpe(terminal)
-            if(terminal.is_ok) {
-                setIsRAS(true)
-            } else if (!terminal.is_ok && terminal.statut == 'parametrage') {
-                setIsProblem(true)
-                const piecesDef = JSON.parse(terminal.pieces_defectueuses)
-                setSelectedPiecesDef(piecesDef)
-            } else if (!terminal.is_ok && terminal.statut == 'rebus') {
-                setIsRebus(true)
-                const piecesRec = JSON.parse(terminal.pieces_recuperees)
-                setSelectedPiecesRec(piecesRec)
+
+            const piecesDef = terminal.pieces_defectueuses ? JSON.parse(terminal.pieces_defectueuses) : []
+            setSelectedPiecesDef(piecesDef)
+
+            const piecesFonc = terminal.pieces_defectueuses ? JSON.parse(terminal.pieces_recuperees) : []
+            setSelectedPiecesRec(piecesFonc)
+            if (terminal.statut == 'parametrage') {
+                setIsParam(true)
+                setIsRebut(false)
+                setSelectedStatut('Paramétrage')
+
+                if (terminal.is_ok) {
+                    setIsRAS(true)
+                    setIsParam(false)
+                } else if (!terminal.is_ok) {
+                    setIsProblem(true)
+                }
+            } else if (terminal.statut == 'rebus' || terminal.statut == 'rebut') {
+                setIsRebut(true)
+                setSelectedStatut('Rebut')
             }
+            setIndexPiece(value)
         }
-        setIndexPiece(value)
+        targetRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
     }
+
+    const handleSelectAllPieceDef = () => {
+        if (allPieceDef) {
+            setSelectedPiecesDef([]);
+        } else {
+            setSelectedPiecesDef(
+                pieces.map(piece => piece.id_piece)
+            );
+        }
+    };
 
     const handleSelectPieceDef = (pieceId) => {
         setSelectedPiecesDef((prevSelected) =>
@@ -131,6 +200,16 @@ export default function VerificationDecomInputs() {
                 : [...prevSelected, pieceId]
         );
     }
+
+    const handleSelectAllPieceRec = () => {
+        if (allPieceFunc) {
+            setSelectedPiecesRec([]);
+        } else {
+            setSelectedPiecesRec(
+                pieces.map(piece => piece.id_piece)
+            );
+        }
+    };
 
     const handleSelectPieceRec = (pieceId) => {
         setSelectedPiecesRec((prevSelected) =>
@@ -141,35 +220,48 @@ export default function VerificationDecomInputs() {
     }
 
     const handleConfirm = () => {
-        if (isProblem && selectedPiecesDef.length == 0) {
+        if (isParam == false && isRebut == false) {
+            setErrorAjout("Vous devez choisir un statut !")
+            return
+        }
+        if (isParam && !isRAS && !isProblem) {
+            setErrorAjout("Vous devez préciser l'état du terminal !")
+            return
+        }
+        if (isParam && isProblem && selectedPiecesDef.length == 0) {
+            setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
+            return
+        }
+        if (isRebut && selectedPiecesDef.length == 0) {
             setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
             return
         }
         setIsModalConfirmOpen(true)
+        setErrorAjout('')
     }
+
     const handleModify = () => {
         setIsModalConfirmOpen(false)
         const idTPE = listeDecom[indexPiece].id
-        if (isRAS) {
-            listeDecom[indexPiece].is_ok = true
-            listeDecom[indexPiece].statut = 'parametrage'
-            listeDecom[indexPiece].retour = 'TPE OK ' + (etatTpe ? ' : ' + etatTpe : '')
-        } else {
-            listeDecom[indexPiece].is_ok = false
-        }
-        if (isProblem) {
-            listeDecom[indexPiece].pieces_recuperees = null
+        if (isParam) {
+            if (isRAS) {
+                listeDecom[indexPiece].is_ok = true
+                listeDecom[indexPiece].statut = 'parametrage'
+                listeDecom[indexPiece].retour = 'R.A.S' + (etatTpe ? ' : ' + etatTpe : '')
+            } else if (isProblem) {
+                listeDecom[indexPiece].is_ok = false
+                listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
+                listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
+                listeDecom[indexPiece].statut = 'parametrage'
+                listeDecom[indexPiece].retour = (etatTpe ? ' : ' + etatTpe : '')
+            }
+        } else if (isRebut) {
             listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
-            listeDecom[indexPiece].statut = 'parametrage'
-            listeDecom[indexPiece].retour = 'Problèmes contastés ' + (etatTpe ? ' : ' + etatTpe : '')
-        }
-        if (isRebus) {
-            listeDecom[indexPiece].pieces_defectueuses = null
             listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
-            listeDecom[indexPiece].statut = 'rebus'
-            listeDecom[indexPiece].retour = 'TPE inutilisable ' + (etatTpe ? ' : ' + etatTpe : '')
+            listeDecom[indexPiece].statut = 'rebut'
+            listeDecom[indexPiece].retour = (etatTpe ? ' : ' + etatTpe : '')
         }
-        if (!isRAS && !isProblem && !isRebus) {
+        if (!isParam && !isRebut) {
             listeDecom[indexPiece].statut = 'checking'
             listeDecom[indexPiece].pieces_defectueuses = []
             listeDecom[indexPiece].pieces_recuperees = []
@@ -186,7 +278,7 @@ export default function VerificationDecomInputs() {
         setSelectedTpe(null)
         setIsRAS(false)
         setIsProblem(false)
-        setIsRebus(false)
+        setIsRebut(false)
         setEtatTpe('')
         setSelectedPiecesDef([])
         setSelectedPiecesRec([])
@@ -199,6 +291,7 @@ export default function VerificationDecomInputs() {
         setListeVerified(listeCheck)
         setIsModalValidateOpen(true)
     }
+
     const handleValidate = async () => {
         setIsModalValidateOpen(false)
         console.log(listeChecked)
@@ -231,9 +324,23 @@ export default function VerificationDecomInputs() {
             setLoadingValidation(false)
         }
     }
+
+    const handleSelectStatut = (e) => {
+        const value = e.value
+        setSelectedStatut(value)
+        if (value == 'Paramétrage') {
+            setIsParam(true)
+            setIsRebut(false)
+        } else if (value == 'Rebut') {
+            setIsRebut(true)
+            setIsParam(false)
+            setIsRAS(false)
+        }
+    }
+
     return (
         <>
-            <div className="space-y-3">
+            <div className="space-y-3" ref={targetRef}>
                 <div className="flex justify-center">
                     {loadingData ? (
                         <>
@@ -252,7 +359,7 @@ export default function VerificationDecomInputs() {
                                     {selectedTpe ? (
                                         <>
                                             <ComponentCard className="md:w-1/2 w-full" title="Vérification Technique">
-                                                <div className="space-y-3">
+                                                <div className="space-y-6">
                                                     <div className="space-y-4">
                                                         <div className="text-center">
                                                             <span className="text-sm font-semibold">Informations Terminal</span>
@@ -275,122 +382,266 @@ export default function VerificationDecomInputs() {
                                                                 disabled
                                                             />
                                                         </div>
-                                                        <div className="pb-3 text-center">
+                                                    </div>
+                                                    <div className="space-y-4">
+                                                        <div className="text-center">
                                                             <span className="text-sm font-semibold">Vérification du terminal</span>
                                                         </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <Checkbox
-                                                                checked={isRAS}
-                                                                onChange={(e) => {
-                                                                    if (isRAS) {
-                                                                        setIsRAS(false)
-                                                                    } else {
-                                                                        setIsRAS(true)
-                                                                        setIsProblem(false)
-                                                                        setIsRebus(false)
-                                                                    }
-                                                                }}
-                                                                label="R.A.S" />
+                                                        {/* <div>
+                                                            <Label>Statut <span className="text-red-700">*</span></Label>
+                                                            <Select
+                                                                options={optionStatuts}
+                                                                className="dark:bg-dark-900"
+                                                                onChange={handleSelectStatut}
+                                                            />
+                                                        </div> */}
+                                                        <div>
+                                                            <Label>Statut <span className="text-red-700">*</span></Label>
+                                                            <Dropdown
+                                                                options={optionStatuts}
+                                                                optionLabel="Label"
+                                                                placeholder="Choisir statut"
+                                                                itemTemplate={statutTemplate}
+                                                                className="w-full"
+                                                                onChange={handleSelectStatut}
+                                                                value={selectedStatut}
+                                                                valueTemplate={selectedStatutTemplate}
+                                                            />
                                                         </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <Checkbox
-                                                                checked={isProblem}
-                                                                onChange={(e) => {
-                                                                    if (isProblem) {
-                                                                        setIsProblem(false)
-                                                                    } else {
-                                                                        setIsProblem(true)
-                                                                        setIsRAS(false)
-                                                                        setIsRebus(false)
-                                                                    }
-                                                                }}
-                                                                label="Problèmes détectés" />
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <Checkbox
-                                                                checked={isRebus}
-                                                                onChange={(e) => {
-                                                                    if (isRebus) {
-                                                                        setIsRebus(false)
-                                                                    } else {
-                                                                        setIsProblem(false)
-                                                                        setIsRAS(false)
-                                                                        setIsRebus(true)
-                                                                    }
-                                                                }}
-                                                                label="TPE rebus" />
-                                                        </div>
-                                                        {/* {isRAS ? (
-                                                            <>
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )} */}
-                                                        {isProblem ? (
+
+                                                        {isParam ? (
                                                             <>
                                                                 <div className="space-y-4">
-                                                                    <div className="space-y-3">
-                                                                        <div>
-                                                                            <span className="text-sm font-semibold">Pièces défectueuses ou absentes <span className="text-red-700">*</span></span>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2">
-                                                                            {pieces.map((item) => {
-                                                                                return (
-                                                                                    <>
-                                                                                        <div className="flex items-center gap-3 my-2">
-                                                                                            <Checkbox
-                                                                                                checked={selectedPiecesDef.includes(item.id_piece)}
-                                                                                                onChange={() => handleSelectPieceDef(item.id_piece)}
-                                                                                                label={item.nom_piece} />
-                                                                                        </div>
-                                                                                    </>
-                                                                                )
-                                                                            })}
-                                                                        </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Checkbox
+                                                                            checked={isRAS}
+                                                                            onChange={(e) => {
+                                                                                if (isRAS) {
+                                                                                    setIsRAS(false)
+                                                                                } else {
+                                                                                    setIsRAS(true)
+                                                                                    setIsProblem(false)
+                                                                                    setIsRebut(false)
+                                                                                }
+                                                                            }}
+                                                                            label="R.A.S" />
                                                                     </div>
-                                                                    <div>
-                                                                        <div className="flex items-center gap-3 my-2">
-                                                                            <Checkbox
-                                                                                checked={isRI}
-                                                                                onChange={(e) => {
-                                                                                    if (isRI) {
-                                                                                        setIsRI(false)
-                                                                                    } else {
-                                                                                        setIsRI(true)
-                                                                                    }
-                                                                                }}
-                                                                                label="Rapport d'Incident" />
-                                                                        </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Checkbox
+                                                                            checked={isProblem}
+                                                                            onChange={(e) => {
+                                                                                if (isProblem) {
+                                                                                    setIsProblem(false)
+                                                                                } else {
+                                                                                    setIsProblem(true)
+                                                                                    setIsRAS(false)
+                                                                                    setIsRebut(false)
+                                                                                }
+                                                                            }}
+                                                                            label="Problèmes détectés" />
                                                                     </div>
+                                                                    {isProblem ? (
+                                                                        <>
+                                                                            <div className="space-y-6">
+                                                                                <div className="space-y-3">
+                                                                                    <button className="flex space-x-2" onClick={() => setExpandedPieceDef(!expandedPieceDef)}>
+                                                                                        <span className="text-sm font-semibold">Pièces défectueuses ou absentes <span className="text-red-700">*</span></span>
+                                                                                        {expandedPieceDef ? (
+                                                                                            <span><i className="pi pi-angle-down"></i></span>
+                                                                                        ) : (
+                                                                                            <span><i className="pi pi-angle-up"></i></span>
+                                                                                        )}
+                                                                                    </button>
+                                                                                    {expandedPieceDef ? (
+                                                                                        <>
+                                                                                            <div>
+                                                                                                <div>
+                                                                                                    <div className="flex items-center gap-3 my-2">
+                                                                                                        <Checkbox
+                                                                                                            checked={allPieceDef}
+                                                                                                            onChange={handleSelectAllPieceDef}
+                                                                                                            label="TOUT"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <div className="grid grid-cols-2">
+                                                                                                    {pieces.map((item) => {
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                                                    <Checkbox
+                                                                                                                        checked={selectedPiecesDef?.includes(item.id_piece)}
+                                                                                                                        onChange={() => handleSelectPieceDef(item.id_piece)}
+                                                                                                                        label={item.nom_piece} />
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )
+                                                                                                    })}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <></>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="space-y-3">
+                                                                                    <button className="flex space-x-2" onClick={() => setExpandedPieceRec(!expandedPieceRec)}>
+                                                                                        <span className="text-sm font-semibold">Pièces fonctionnelles</span>
+                                                                                        {expandedPieceRec ? (
+                                                                                            <span><i className="pi pi-angle-down"></i></span>
+                                                                                        ) : (
+                                                                                            <span><i className="pi pi-angle-up"></i></span>
+                                                                                        )}
+                                                                                    </button>
+                                                                                    {expandedPieceRec ? (
+                                                                                        <>
+                                                                                            <div>
+                                                                                                <div>
+                                                                                                    <div className="flex items-center gap-3 my-2">
+                                                                                                        <Checkbox
+                                                                                                            checked={allPieceFunc}
+                                                                                                            onChange={handleSelectAllPieceRec}
+                                                                                                            label="TOUT"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <div className="grid grid-cols-2">
+                                                                                                    {pieces.map((item) => {
+                                                                                                        return (
+                                                                                                            <>
+                                                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                                                    <Checkbox
+                                                                                                                        checked={selectedPiecesRec?.includes(item.id_piece)}
+                                                                                                                        onChange={() => handleSelectPieceRec(item.id_piece)}
+                                                                                                                        label={item.nom_piece} />
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )
+                                                                                                    })}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </>
+                                                                                    ) : (
+                                                                                        <></>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-3 my-2">
+                                                                                        <Checkbox
+                                                                                            className="text-xl"
+                                                                                            checked={isRI}
+                                                                                            onChange={(e) => {
+                                                                                                if (isRI) {
+                                                                                                    setIsRI(false)
+                                                                                                } else {
+                                                                                                    setIsRI(true)
+                                                                                                }
+                                                                                            }}
+                                                                                            label="RAPPORT D'INCIDENT" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
                                                                 </div>
                                                             </>
                                                         ) : (
                                                             <></>
                                                         )}
-                                                        {isRebus ? (
+                                                        {isRebut ? (
                                                             <>
                                                                 <div>
-                                                                    <div className="space-y-3">
-                                                                        <div>
-                                                                            <span className="text-sm font-semibold">Pièces récupérables</span>
-                                                                        </div>
-                                                                        <div className="grid grid-cols-2">
-                                                                            {pieces.map((item) => {
-                                                                                return (
-                                                                                    <>
-                                                                                        <div className="flex items-center gap-3 my-2">
-                                                                                            <Checkbox
-                                                                                                checked={selectedPiecesRec.includes(item.id_piece)}
-                                                                                                onChange={() => handleSelectPieceRec(item.id_piece)}
-                                                                                                label={item.nom_piece} />
+                                                                    <div className="space-y-6">
+                                                                        <div className="space-y-3">
+                                                                            <button className="flex space-x-2" onClick={() => setExpandedPieceDef(!expandedPieceDef)}>
+                                                                                <span className="text-sm font-semibold">Pièces défectueuses ou absentes <span className="text-red-700">*</span></span>
+                                                                                {expandedPieceDef ? (
+                                                                                    <span><i className="pi pi-angle-down"></i></span>
+                                                                                ) : (
+                                                                                    <span><i className="pi pi-angle-up"></i></span>
+                                                                                )}
+                                                                            </button>
+                                                                            {expandedPieceDef ? (
+                                                                                <>
+                                                                                    <div>
+                                                                                        <div>
+                                                                                            <div className="flex items-center gap-3 my-2">
+                                                                                                <Checkbox
+                                                                                                    checked={allPieceDef}
+                                                                                                    onChange={handleSelectAllPieceDef}
+                                                                                                    label="TOUT"
+                                                                                                />
+                                                                                            </div>
                                                                                         </div>
-                                                                                    </>
-                                                                                )
-                                                                            })}
+                                                                                        <div className="grid grid-cols-2">
+                                                                                            {pieces.map((item) => {
+                                                                                                return (
+                                                                                                    <>
+                                                                                                        <div>
+                                                                                                            <div className="flex items-center gap-3 my-2">
+                                                                                                                <Checkbox
+                                                                                                                    checked={selectedPiecesDef?.includes(item.id_piece)}
+                                                                                                                    onChange={() => handleSelectPieceDef(item.id_piece)}
+                                                                                                                    label={item.nom_piece} />
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                )
+                                                                                            })}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <></>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="space-y-3">
+                                                                            <button className="flex space-x-2" onClick={() => setExpandedPieceRec(!expandedPieceRec)}>
+                                                                                <span className="text-sm font-semibold">Pièces fonctionnelles</span>
+                                                                                {expandedPieceRec ? (
+                                                                                    <span><i className="pi pi-angle-down"></i></span>
+                                                                                ) : (
+                                                                                    <span><i className="pi pi-angle-up"></i></span>
+                                                                                )}
+                                                                            </button>
+                                                                            {expandedPieceRec ? (
+                                                                                <>
+                                                                                    <div>
+                                                                                        <div>
+                                                                                            <div className="flex items-center gap-3 my-2">
+                                                                                                <Checkbox
+                                                                                                    checked={allPieceFunc}
+                                                                                                    onChange={handleSelectAllPieceRec}
+                                                                                                    label="TOUT"
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="grid grid-cols-2">
+                                                                                            {pieces.map((item) => {
+                                                                                                return (
+                                                                                                    <>
+                                                                                                        <div className="flex items-center gap-3 my-2">
+                                                                                                            <Checkbox
+                                                                                                                checked={selectedPiecesRec?.includes(item.id_piece)}
+                                                                                                                onChange={() => handleSelectPieceRec(item.id_piece)}
+                                                                                                                label={item.nom_piece} />
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                )
+                                                                                            })}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </>
+                                                                            ) : (
+                                                                                <></>
+                                                                            )}
                                                                         </div>
                                                                         <div>
                                                                             <div className="flex items-center gap-3 my-2">
                                                                                 <Checkbox
+                                                                                    className="text-xl"
                                                                                     checked={isRI}
                                                                                     onChange={(e) => {
                                                                                         if (isRI) {
@@ -399,7 +650,7 @@ export default function VerificationDecomInputs() {
                                                                                             setIsRI(true)
                                                                                         }
                                                                                     }}
-                                                                                    label="Rapport d'Incident" />
+                                                                                    label="RAPPORT D'INCIDENT" />
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -419,28 +670,28 @@ export default function VerificationDecomInputs() {
                                                                 />
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                    <div>
                                                         <div>
-                                                            <div>
-                                                                <div className="w-full flex justify-center items-center">
-                                                                    <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                                                        onClick={handleConfirm}
-                                                                    >
-                                                                        Confirmer
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
-                                                                    {errorAjout}
-                                                                </span>
+                                                            <div className="w-full flex justify-center items-center">
+                                                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                    onClick={handleConfirm}
+                                                                >
+                                                                    Confirmer
+                                                                </button>
                                                             </div>
                                                         </div>
+                                                        <div>
+                                                            <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
+                                                                {errorAjout}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-right text-gray-500">
-                                                        <span className="text-xs font-medium">
-                                                            Les champs suivis par un <span className="text-red-700">*</span> sont obligatoires
-                                                        </span>
-                                                    </div>
+                                                </div>
+                                                <div className="text-right text-gray-500">
+                                                    <span className="text-xs font-medium">
+                                                        Les champs suivis par un <span className="text-red-700">*</span> sont obligatoires
+                                                    </span>
                                                 </div>
                                             </ComponentCard>
                                         </>
@@ -514,7 +765,7 @@ export default function VerificationDecomInputs() {
                                                 statutClass = 'text-warning-200 font-semi-bold'
                                             } else if (item.statut == 'parametrage') {
                                                 statutClass = 'text-blue-200 font-semi-bold'
-                                            } else if (item.statut == 'rebus') {
+                                            } else if (item.statut == 'rebus' || item.statut == 'rebut') {
                                                 statutClass = 'text-red-500 font-semi-bold'
                                             }
 
@@ -638,7 +889,7 @@ export default function VerificationDecomInputs() {
                         <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Vérification</span>
                     </div>
                     <div className="">
-                        <div className="text-xs text-center space-y-1">
+                        <div className="text-xs text-center space-y-3">
                             <div>
                                 <span>Point Marchand: </span>
                                 <span className="font-bold text-sm">{selectedTpe?.point_marchand}</span>
@@ -647,22 +898,105 @@ export default function VerificationDecomInputs() {
                                 <span>S/N: </span>
                                 <span className="font-bold text-sm">{selectedTpe?.serial_number}</span>
                             </div>
-                            {isRAS ? (
+                            <div>
+                                <span>Statut: </span>
+                                <span className="font-bold text-sm">{selectedStatut}</span>
+                            </div>
+                            {isParam ? (
                                 <>
-                                    <div>
-                                        <div>
-                                            <span>Etat: </span>
-                                            <span className="font-bold text-sm">R.A.S</span>
-                                        </div>
-                                    </div>
+                                    {isRAS ? (
+                                        <>
+                                            <div>
+                                                <div>
+                                                    <span>Etat: </span>
+                                                    <span className="font-bold text-sm">R.A.S</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                        </>
+                                    )}
+                                    {isProblem ? (
+                                        <>
+                                            <div className="flex flex-col space-y-2">
+                                                {etatTpe ? (
+                                                    <>
+                                                        <div className="flex flex-col">
+                                                            <span>Etat: </span>
+                                                            <span className="font-bold text-sm">{etatTpe}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                                <div>
+                                                    <span className="font-medium">Pièces défectueuses ou absentes</span>
+                                                </div>
+                                                <div className="grid grid-cols-3 text-xs">
+                                                    {selectedPiecesDef?.map((item) => {
+                                                        const piece = pieces.find((p) => {
+                                                            return p.id_piece == parseInt(item)
+                                                        })
+                                                        if (piece) {
+                                                            return (
+                                                                <>
+                                                                    <div>
+                                                                        <span className="text-red-700 font-medium">{piece.nom_piece}</span>
+                                                                    </div>
+                                                                </>
+                                                            )
+                                                        } else {
+                                                            return (
+                                                                <></>
+                                                            )
+                                                        }
+                                                    })}
+                                                </div>
+                                                <div>
+                                                    <span>Pièces fonctionnelles</span>
+                                                </div>
+                                                <div className="grid grid-cols-3 text-xs">
+                                                    {selectedPiecesRec?.map((item) => {
+                                                        const piece = pieces.find((p) => {
+                                                            return p.id_piece == parseInt(item)
+                                                        })
+                                                        if (piece) {
+                                                            return (
+                                                                <>
+                                                                    <div>
+                                                                        <span className="text-green-700 font-medium">{piece.nom_piece}</span>
+                                                                    </div>
+                                                                </>
+                                                            )
+                                                        } else {
+                                                            return (
+                                                                <></>
+                                                            )
+                                                        }
+                                                    })}
+                                                </div>
+                                                {isRI ? (
+                                                    <>
+                                                        <span className="font-bold text-sm">RI OK</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <span className="font-bold text-sm">RI NOK</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <></>
+                                    )}
                                 </>
                             ) : (
-                                <>
-                                </>
+                                <></>
                             )}
-                            {isProblem ? (
+                            {isRebut ? (
                                 <>
-                                    <div className="flex flex-col space-y-2">
+                                    <div className="flex flex-col space-y-4">
                                         {etatTpe ? (
                                             <>
                                                 <div className="flex flex-col">
@@ -674,10 +1008,10 @@ export default function VerificationDecomInputs() {
                                             <></>
                                         )}
                                         <div>
-                                            <span>Pièces défectueuses ou absentes</span>
+                                            <span className="font-semibold text-sm">Pièces défectueuses ou absentes</span>
                                         </div>
                                         <div className="grid grid-cols-3 text-xs">
-                                            {selectedPiecesDef.map((item) => {
+                                            {selectedPiecesDef?.map((item) => {
                                                 const piece = pieces.find((p) => {
                                                     return p.id_piece == parseInt(item)
                                                 })
@@ -696,38 +1030,11 @@ export default function VerificationDecomInputs() {
                                                 }
                                             })}
                                         </div>
-                                        {isRI ? (
-                                            <>
-                                                <span className="font-bold text-sm">RI OK</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className="font-bold text-sm">RI NOK</span>
-                                            </>
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <></>
-                            )}
-                            {isRebus ? (
-                                <>
-                                    <div className="flex flex-col space-y-2">
-                                        {etatTpe ? (
-                                            <>
-                                                <div className="flex flex-col">
-                                                    <span>Etat: </span>
-                                                    <span className="font-bold text-sm">{etatTpe}</span>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
                                         <div>
-                                            <span>Pièces récupérables</span>
+                                            <span className="font-semibold text-sm">Pièces récupérables</span>
                                         </div>
                                         <div className="grid grid-cols-3 text-xs">
-                                            {selectedPiecesRec.map((item) => {
+                                            {selectedPiecesRec?.map((item) => {
                                                 const piece = pieces.find((p) => {
                                                     return p.id_piece == parseInt(item)
                                                 })

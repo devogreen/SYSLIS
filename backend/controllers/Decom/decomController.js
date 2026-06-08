@@ -131,7 +131,7 @@ const faireDecom = async (req, res) => {
                 skipDuplicates: true
             });
 
-            if (!isReg) {
+            if (isReg == false) {
                 // 2. Update ALL (existing + newly created)
                 await tx.parc_tpe.updateMany({
                     where: {
@@ -870,7 +870,7 @@ const receptionDecom = async (req, res) => {
                 });
             }
 
-            if (!isReg) {
+            if (isReg == false) {
                 // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
                 await Promise.all(
                     toUpdate.map(item =>
@@ -1314,6 +1314,13 @@ const verifyDecom = async (req, res) => {
 
         const dateAction = new Date()
 
+        const statutMap = {
+            parametrage: 'parametrage',
+            rebus: 'rebus',
+            rebut: 'rebus',
+            checking: 'checking',
+        };
+
         const verification = await prisma.$transaction(async (tx) => {
             const retourDecomForm = await tx.forms.create({
                 data: {
@@ -1360,7 +1367,7 @@ const verifyDecom = async (req, res) => {
                             pieces_recuperees: item.pieces_recuperees,
                             pieces_defectueuses: item.pieces_defectueuses,
                             is_ok: item.is_ok,
-                            statut: item.statut,
+                            statut: statutMap[item.statut],
                         }
                     });
                 })
@@ -1375,7 +1382,7 @@ const verifyDecom = async (req, res) => {
                             pieces_recuperees: item.pieces_recuperees,
                             pieces_defectueuses: item.pieces_defectueuses,
                             is_ok: item.is_ok,
-                            statut: item.statut,
+                            statut: statutMap[item.statut],
                             updated_at: dateAction,
                             last_modified_at: dateAction,
                         }
@@ -1626,6 +1633,12 @@ const clotureDecom = async (req, res) => {
 
         const addOneSecond = (date) => new Date(new Date(date).getTime() + 5000);
 
+        const statutMap = {
+            parametrage: 4,
+            rebus: 5,
+            rebut: 5,
+        };
+
         const cloturation = await prisma.$transaction(async (tx) => {
             const retourDecomForm = await tx.forms.create({
                 data: {
@@ -1654,11 +1667,6 @@ const clotureDecom = async (req, res) => {
             })
 
             /***********      GESTION DES TPE     ************/
-
-            const statutMap = {
-                parametrage: 4,
-                rebus: 5,
-            };
 
             // Récupérer les SN de la liste
             const serials = listeVerified.map(item => item.serial_number);
@@ -1703,7 +1711,7 @@ const clotureDecom = async (req, res) => {
                 });
             }
 
-            if (!isReg) {
+            if (isReg == false) {
                 // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
                 await Promise.all(
                     toUpdate.map(item =>
@@ -2369,6 +2377,171 @@ const downloadTemplateDecom = async (req, res) => {
     }
 }
 
+const exportOneDecomToExcel = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+            include: {
+                forms: true,
+                sn_decom: true,
+            }
+        })
+
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+
+        if (decom.forms.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const listeDecom = typeof decom.liste_decom === "string"
+            ? JSON.parse(decom.liste_decom)
+            : decom.liste_decom;
+
+        const pieces = await prisma.items.findMany({
+            where: {
+                type: 'PIECE',
+                is_deleted: false,
+            }
+        })
+        const piecesMap = new Map(pieces.map(p => [p.id_piece, p.nom_piece]));
+
+        const workbook = new ExcelJS.Workbook();
+
+        const decomSheet = workbook.addWorksheet('Décommissionnement');
+        const decomHeaders = [
+            "Index",
+            "Point Marchand",
+            "Caisse",
+            "S/N",
+            "Banque",
+            "TID GIM",
+            "TID ECOBANK",
+            "Etat",
+            "RI",
+            "Commercial",
+            "Commentaire",
+        ];
+        const decomHeaderRow = decomSheet.addRow(decomHeaders);
+        decomHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const piecesHeaders = pieces.map((item) => {
+            return item.nom_piece.toUpperCase()
+        })
+
+        const verificationSheet = workbook.addWorksheet('Vérifications');
+        const verificationHeaders = [
+            "Index",
+            "Point Marchand",
+            "S/N",
+            "Commentaire de retour",
+            ...piecesHeaders,
+            "Statut",
+        ];
+        const verificationHeaderRow = verificationSheet.addRow(verificationHeaders);
+        verificationHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        listeDecom.forEach((item, index) => {
+            decomSheet.addRow([
+                index + 1,
+                item.pointMarchand,
+                item.caisse,
+                item.terminalSN,
+                item.banque,
+                item.idGim,
+                item.idEcobank,
+                item.etat,
+                item.RI,
+                item.nomCommercial,
+                item.commentaire,
+            ])
+        });
+
+
+        decom.sn_decom?.forEach((item, index) => {
+
+            const listePiecesRecup = typeof item.pieces_recuperees === "string"
+                ? JSON.parse(item.pieces_recuperees)
+                : item.pieces_recuperees || [];
+
+            const listePiecesDef = typeof item.pieces_defectueuses === "string"
+                ? JSON.parse(item.pieces_defectueuses)
+                : item.pieces_defectueuses || [];
+
+            const piecesStatus = pieces.map(piece => {
+
+                if (item.statut === "checking") {
+                    return "";
+                }
+
+                if (listePiecesRecup.includes(piece.id_piece)) {
+                    return "OK";
+                }
+
+                if (listePiecesDef.includes(piece.id_piece)) {
+                    return "NOK";
+                }
+
+                return "";
+            });
+
+            const statut = item.statut == 'rebus' || item.statut == 'rebut' ? 'rebut' : item.statut
+
+            verificationSheet.addRow([
+                index + 1,
+                item.point_marchand,
+                item.serial_number,
+                item.commentaire_retour,
+                ...piecesStatus,
+                statut,
+            ]);
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=decom_${id}.xlsx`
+        );
+        res.send(buffer);
+
+        console.log('Export du décommissionnement téléchargé avec succès !');
+
+    } catch (error) {
+        console.error('Erreur exportOneDecomToExcel:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -2383,4 +2556,5 @@ module.exports = {
     regVerifyDecom,
     extractDecom,
     downloadTemplateDecom,
+    exportOneDecomToExcel,
 }

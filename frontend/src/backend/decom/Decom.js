@@ -135,5 +135,16 @@ export class Decom {
             throw error.response?.data || { message: "Download failed" };
         }
     }
+
+    async exportOneDecomToExcel(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/exportOneDecomToExcel/${id}`, {
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Export failed" };
+        }
+    }
     
 }

@@ -66,7 +66,7 @@ export default function DecomDetails() {
 
     const [commentaireDecom, setCommentaireDecom] = useState('')
     const [commentaireReception, setCommentaireReception] = useState('')
-    const [ceommentaireVerification, setCommentaireVerification] = useState('')
+    const [commentaireVerification, setCommentaireVerification] = useState('')
 
     const [fileId, setFileId] = useState(null);
     const [decomFiles, setDecomFiles] = useState([])
@@ -90,6 +90,8 @@ export default function DecomDetails() {
     const [selectedDateCloture, setSelectedDateCloture] = useState(null)
 
     const [errorReception, setErrorReception] = useState('')
+
+    const [loadingExtract, setLoadingExtract] = useState(false)
 
 
     const formatDate = (date) => {
@@ -350,6 +352,42 @@ export default function DecomDetails() {
             setLoadingVerification(false)
         }
     }
+
+    const handleExtractXLSX = async () => {
+        try {
+            setLoadingExtract(true);
+
+            const response = await decomData.exportOneDecomToExcel(idDecom);
+
+            const url = window.URL.createObjectURL(
+                new Blob([response.data])
+            );
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `decom_${idDecom}.xlsx`;
+
+            document.body.appendChild(a);
+            a.click();
+
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.log(error);
+
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement",
+                icon: "warning"
+            });
+
+        } finally {
+            setLoadingExtract(false);
+        }
+    };
+
+
     return (
         <>
             <PageBreadcrumb pageTitle={`Détails décom ${idDecom}`} />
@@ -605,14 +643,14 @@ export default function DecomDetails() {
                                                 ) : (
                                                     <></>
                                                 )}
-                                                {ceommentaireVerification ? (
+                                                {commentaireVerification ? (
                                                     <>
                                                         <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
                                                             <div className='mb-6 pb-2 w-full border-b text-left'>
                                                                 <span className='text-sm mr-2'>Commentaire vérification</span>
                                                                 <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                             </div>
-                                                            <p className='text-sm text-blue-500 text-left'>{ceommentaireVerification}</p>
+                                                            <p className='text-sm text-blue-500 text-left'>{commentaireVerification}</p>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -624,8 +662,30 @@ export default function DecomDetails() {
                                         <div>
                                             <div>
                                                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                                                    <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
-                                                        <span>Total : {quantiteDecom}</span>
+                                                    <div className="flex justify-between p-4 pb-0">
+                                                        <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
+                                                            <span>Total : {quantiteDecom}</span>
+                                                        </div>
+                                                        <div>
+                                                            {loadingExtract ?
+                                                                (
+                                                                    <>
+                                                                        <span className='flex items-center justify-center'>
+                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button className="flex items-center text-red-600 justify-center rounded-full h-4 w-4 p-4 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
+                                                                            onClick={handleExtractXLSX}>
+                                                                            <span className="">
+                                                                                <i className="pi pi-download"></i>
+                                                                            </span>
+                                                                        </button>
+                                                                    </>
+                                                                )
+                                                            }
+                                                        </div>
                                                     </div>
                                                     <div className="max-w-full overflow-x-auto">
                                                         {checking ? (
@@ -675,11 +735,13 @@ export default function DecomDetails() {
                                                                     <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                                                                         {listeDecom.map((item, index) => {
                                                                             let statutClass = ''
+                                                                            let statut = item.statut
                                                                             if (item.statut == 'checking') {
                                                                                 statutClass = 'text-warning-200 font-semi-bold'
                                                                             } else if (item.statut == 'parametrage') {
                                                                                 statutClass = 'text-blue-200 font-semi-bold'
                                                                             } else if (item.statut == 'rebus') {
+                                                                                statut = 'rebut'
                                                                                 statutClass = 'text-red-500 font-semi-bold'
                                                                             }
 
@@ -707,7 +769,7 @@ export default function DecomDetails() {
                                                                                             isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             <span className={statutClass}>
-                                                                                                {item.statut}
+                                                                                                {statut}
                                                                                             </span>
                                                                                         </TableCell>
                                                                                         <TableCell
