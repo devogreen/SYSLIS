@@ -226,6 +226,9 @@ import RegDecomForm from "./pages/Forms/DecomForms/RegDecomForm"
 // @ts-ignore
 import RegVerificationForm from "./pages/Forms/DecomForms/RegVerificationForm"
 
+// @ts-ignore
+import RebutForm from "./pages/Forms/RebutForms/RebutForm"
+
 export default function App() {
   return (
     <>
@@ -309,6 +312,9 @@ export default function App() {
               <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
               <Route path="/regularisation-decom" element={<RegDecomForm />} />
               <Route path="/reg-verification-decom/:id" element={<RegVerificationForm />} />
+
+              {/* Gestion des rebuts */}
+              <Route path="/nouveau-rebut" element={<RebutForm />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

@@ -2227,6 +2227,7 @@ function getCellValue(cell) {
 
     return String(cell.value).trim();
 }
+
 const isOnlyDigits = (str) => /^\d+$/.test(str);
 
 // Fonction d'extraction d'une liste de décommissionnement par fichier excel
@@ -2368,15 +2369,16 @@ const downloadTemplateDecom = async (req, res) => {
     try {
         const templateFile = 'template_decommissionnement.xlsx';
         const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
-        res.download(filePath);
+        return res.download(filePath);
 
         console.log('Template de décommissionnement téléchargé avec succès !');
     } catch (error) {
         console.error('Erreur downloadTemplateDecom:', error);
-        res.status(500).json({ message: 'Erreur serveur' });
+        return res.status(500).json({ message: 'Erreur serveur' });
     }
 }
 
+// Fonction pour télécharger un export excel d'une demande de décommissionnement et des vérifications techniques
 const exportOneDecomToExcel = async (req, res) => {
     try {
         const { id } = req.params;
@@ -2538,7 +2540,7 @@ const exportOneDecomToExcel = async (req, res) => {
 
     } catch (error) {
         console.error('Erreur exportOneDecomToExcel:', error);
-        res.status(500).json({ message: 'Erreur serveur' });
+        return res.status(500).json({ message: 'Erreur serveur' });
     }
 }
 
