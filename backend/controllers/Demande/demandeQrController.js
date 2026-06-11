@@ -2702,7 +2702,7 @@ const getDataImpressionQr = async (req, res) => {
     try {
 
         const { startDate, endDate } = req.query;
-        
+
         const demandes = await prisma.demande_qr.findMany({
             where: {
                 forms: {
@@ -2754,52 +2754,44 @@ const getDataImpressionQr = async (req, res) => {
         const total = formats.map((format) => {
             const listeOperateurs = operateurs.map((operateur) => {
 
-                const demandesOperateur = parsedDemandes
-                    .map((demande) => {
+                let total_genere = 0;
+                let total_imprime = 0;
+                let total_demandes = 0;
 
-                        const total_qr = demande.liste_demande
-                            .filter(
-                                (item) =>
-                                    item.typeQrId === operateur.id &&
-                                    item.formatId === format.id
-                            )
-                            .reduce(
-                                (sum, item) =>
-                                    sum + (item.quantiteQr || 0),
-                                0
-                            );
+                // Récupérer le total des demandes qui contiennent l'opérateur et le format
+                parsedDemandes.forEach((demande) => {
+                    const quantite = demande.liste_demande
+                        .filter(
+                            item =>
+                                item.typeQrId === operateur.id &&
+                                item.formatId === format.id
+                        )
+                        .reduce(
+                            (sum, item) => sum + (item.quantiteQr || 0),
+                            0
+                        );
 
-                        if (total_qr === 0) {
-                            return null;
-                        }
+                    // This demande contains this operator/format
+                    if (quantite > 0) {
+                        total_demandes++;
+                    }
 
-                        return {
-                            demande_id: demande.id,
-                            total_genere: total_qr,
-                            total_imprime:
-                                demande.statut === "imprimee"
-                                    ? total_qr
-                                    : 0,
-                            date_demande:
-                                demande.forms.last_modified_at,
-                        };
-                    })
-                    .filter(Boolean);
+                    // Accumuler le total des qr codes pour chaque demande avec le format et l'opérateur
+                    total_genere += quantite;
 
-                // if (demandesOperateur.length === 0) {
-                //     return null;
-                // }
+                    if (demande.statut === "imprimee") {
+                        total_imprime += quantite;
+                    }
+                });
 
                 return {
                     operateur_id: operateur.id,
                     operateur: operateur.nom,
-                    demandes: demandesOperateur,
+                    total_demandes,
+                    total_genere,
+                    total_imprime,
                 };
             })
-
-            // if (listeOperateurs.length === 0) {
-            //     return null;
-            // }
 
             return {
                 format_id: format.id,
