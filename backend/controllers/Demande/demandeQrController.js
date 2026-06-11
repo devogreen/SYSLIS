@@ -2604,7 +2604,7 @@ const exportOneDemandeQrToExcel = async (req, res) => {
     }
 }
 
-// Fonction pour obtenir toutes les données des demandes de QR Codes (quantités, opérateurs, statuts, dates) selon des filtres de date, pour analyse et reporting.
+// Fonction pour obtenir toutes les données des demandes de QR Codes (quantités, opérateurs, statuts, dates) selon des filtres de date, pour analyse et reporting.T1
 const getAllDataDemandeQr = async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -2697,7 +2697,7 @@ const getAllDataDemandeQr = async (req, res) => {
     }
 }
 
-// Fonction pour obtenir les données d'impression des demandes de QR Codes (quantités imprimées, opérateurs, dates) selon des filtres de date, pour analyse et reporting.
+// Fonction pour obtenir les données d'impression des demandes de QR Codes (quantités imprimées, opérateurs, dates) selon des filtres de date, pour analyse et reporting.T2
 const getDataImpressionQr = async (req, res) => {
     try {
 

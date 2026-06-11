@@ -8,6 +8,7 @@ import axios from 'axios';
 // @ts-ignore
 import urlBase from '../../backend/const.js';
 
+
 import {
   PieChart,
   Pie,
@@ -68,6 +69,11 @@ export default function SousDashboardQRcode() {
   const formattedIsoStart = useMemo(() => getFormattedDate(isoWeekRange.start), [isoWeekRange.start]);
   const formattedIsoEnd = useMemo(() => getFormattedDate(isoWeekRange.end), [isoWeekRange.end]);
 
+  // bornes iso recalculées selon la période choisie pour éviter les soucis timezone
+  const formattedIsoStartByState = startDate ? getFormattedDate(startDate) : formattedIsoStart;
+  const formattedIsoEndByState = endDate ? getFormattedDate(endDate) : formattedIsoEnd;
+
+
 
 
   const [stats, setStats] = useState<QRStats>({
@@ -95,6 +101,10 @@ export default function SousDashboardQRcode() {
   // IMPORTANT: la colonne COMMENTAIRES est volontairement vide.
   const [tableData, setTableData] = useState<any[]>([]);
   const [tableTotals, setTableTotals] = useState({ totalQrCodes: 0, totalQrGeneres: 0, pourcentageGlobal: 0 });
+
+  // Tableau d'impression (source: getDataImpressionQr)
+  const [impressionTableData, setImpressionTableData] = useState<any[]>([]);
+
 
   const handleStartDateChange = (value: DateValue) => {
     if (Array.isArray(value)) {
@@ -128,6 +138,27 @@ export default function SousDashboardQRcode() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // 0) Tableau des demandes QR (via getAllDataDemandeQr)
+          try {
+          await axios.get(
+            `${urlBase}/api/demandes/getAllDemandes`,
+            {
+              params: {
+                startDate: '2026-01-01',
+                endDate: '2026-01-31'
+              }
+            }
+          );
+      //  console.log(res.data);
+
+          // NOTE: dataset différent (noms de clés différents).
+          // On n’alimente le tableau hebdomadaire que via getAllDataDemandeQr.
+          // Le code ci-dessous était conservé mais n’était pas utilisé.
+          // const formatted = (res.data?.data || []).map(...)
+        } catch (error) {
+          console.error('Erreur chargement données getAllDataDemandeQr', error);
+        }
+
         // 1) Stats globales (tuiles)
         let statsUrl = `${urlBase}/api/stats/general`;
         if (startDate && endDate) {
@@ -184,19 +215,136 @@ export default function SousDashboardQRcode() {
           console.error('Recent QR list error:', error);
         }
 
-        // 4) Données du tableau (si l’API existe et renvoie un format exploitable)
-        // Si l’API n’existe pas, le tableau exportera vide (colonnes conservées).
+        // 4) Données du tableau (demandes - source: getAllDataDemandeQr)
         try {
-          const tableUrl = `${urlBase}/api/demandeQr/getAllDemandesQrTable`;
+          const tableUrl = `${urlBase}/api/demandeQr/getAllDataDemandeQr`;
           const resp = await axios.get(
-            `${tableUrl}?startDate=${formattedIsoStart}&endDate=${formattedIsoEnd}`
+            `${tableUrl}?startDate=${formattedIsoStartByState}&endDate=${formattedIsoEndByState}`
           );
 
           const rows = resp.data?.data ?? resp.data ?? [];
-          setTableData(rows);
-        } catch {
-          // fallback: on garde tableData vide
+
+          // console.log('[getAllDataDemandeQr] statusResponse', resp.status);
+          // console.log('[getAllDataDemandeQr] raw resp.data', resp.data);
+          // console.log('[getAllDataDemandeQr] rows length', (rows || []).length);
+
+          const formattedTable = (rows || [])
+
+            .map((item: any) => {
+              const statutNorm = (item?.statut ?? '')
+                .toString()
+                .trim()
+                .toLowerCase();
+
+              const pourcentageValue = statutNorm === 'recue' ? 100 : 0;
+
+              const dateValue = item?.date_demande;
+              const dateObj = dateValue ? new Date(dateValue) : null;
+              const dateFormatted = dateObj && !Number.isNaN(dateObj.getTime())
+                ? dateObj.toLocaleDateString('fr-FR')
+                : '';
+
+              return {
+                demande_id: item.demande_id,
+                statut: item.statut,
+                total_qr: item.total_qr,
+                operateur: item.operateur,
+                date_demande: dateFormatted,
+                total_genere: item.total_genere,
+                pourcentage: pourcentageValue,
+              };
+            })
+            .filter(Boolean);
+
+          setTableData(formattedTable);
+        } catch (e) {
+          console.error('Erreur mapping tableData:', e);
           setTableData([]);
+        }
+
+        // 5) Données du tableau d'impression (source: getDataImpressionQr)
+        try {
+          const impressionUrl = `${urlBase}/api/demandeQr/getDataImpressionQr`;
+          const resp = await axios.get(
+            `${impressionUrl}?startDate=${formattedIsoStartByState}&endDate=${formattedIsoEndByState}`
+          );
+
+          const apiData = resp.data?.data ?? [];
+
+          console.log('[getDataImpressionQr] resp.data.data length:', Array.isArray(apiData) ? apiData.length : 'not-array');
+          if (Array.isArray(apiData) && apiData.length > 0) {
+            console.log('[getDataImpressionQr] sample first element keys:', Object.keys(apiData[0] || {}));
+            const sampleOps = (apiData[0] as any)?.operateurs;
+            console.log('[getDataImpressionQr] sample operateurs:', (sampleOps || []).map((o: any) => o?.operateur));
+          }
+
+          // apiData = [{ format_id, format, operateurs: [{ operateur_id, operateur, demandes: [...] }] }]
+          const mapped = (apiData || []).map((f: any) => {
+            const operateurs = f?.operateurs || [];
+
+            const norm = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
+            const getOp = (name: string) => {
+              const target = name.trim().toLowerCase();
+              return operateurs.find((op: any) => norm(op?.operateur) === target);
+            };
+
+            // Backend renvoie souvent des libellés comme “Orange Money”, “MTN Money”, “MOOV Money”.
+            const orangeOp = getOp('Orange Money') || getOp('Orange');
+            const mtnOp = getOp('MTN Money') || getOp('MTN');
+            const moovOp = getOp('MOOV Money') || getOp('MOOV');
+
+
+            // Debug: indique quels opérateurs existent réellement côté API
+            console.log('[getDataImpressionQr] operateurs trouvés =>', {
+              orange: Boolean(orangeOp),
+              mtn: Boolean(mtnOp),
+              moov: Boolean(moovOp),
+            });
+
+
+            const toTotals = (op: any) => {
+              const demandes = op?.demandes || [];
+              // Backend renvoie total_genere (et pas total_imprime) dans demandes
+              const totalImprimes = (demandes || []).reduce(
+                (sum: number, d: any) => sum + (Number(d?.total_genere) || 0),
+                0
+              );
+              return {
+                numero: demandes.length, // nombre de demandes incluses dans cet opérateur/format
+                imprime: totalImprimes,
+              };
+            };
+
+            const orangeTotals = toTotals(orangeOp);
+            const mtnTotals = toTotals(mtnOp);
+            const moovTotals = toTotals(moovOp);
+
+            const total = (orangeTotals.imprime || 0) + (mtnTotals.imprime || 0) + (moovTotals.imprime || 0);
+
+            return {
+              format: f?.format,
+              orangeNumero: orangeTotals.numero,
+              orange: orangeTotals.imprime,
+              orangeImprimes: orangeTotals.imprime,
+
+              mtnNumero: mtnTotals.numero,
+              mtn: mtnTotals.imprime,
+              mtnImprimes: mtnTotals.imprime,
+
+              moovNumero: moovTotals.numero,
+              moov: moovTotals.imprime,
+              moovImprimes: moovTotals.imprime,
+
+              total,
+              // Placeholder: le backend n'envoie pas directement le % d'impression
+              pourcentage: total > 0 ? 100 : 0,
+            };
+          });
+
+          setImpressionTableData(mapped);
+        } catch (e) {
+          console.error('Erreur mapping impressionTableData:', e);
+          setImpressionTableData([]);
         }
       } catch (error) {
         console.error('Erreur dashboard QR:', error);
@@ -210,9 +358,20 @@ export default function SousDashboardQRcode() {
 
   // Calcul des totaux pour le footer (si on a des données)
   const computedTableTotals = useMemo(() => {
-    const totalQrCodes = (tableData || []).reduce((sum, r) => sum + (Number(r.nbreQrCodes) || 0), 0);
-    const totalQrGeneres = (tableData || []).reduce((sum, r) => sum + (Number(r.nbreQrGeneres) || 0), 0);
-    const pourcentageGlobal = totalQrCodes > 0 ? Math.round((totalQrGeneres / totalQrCodes) * 100) : 0;
+    // tableData est alimenté par getAllDataDemandeQr avec les clés:
+    // - total_qr
+    // - total_genere
+    const totalQrCodes = (tableData || []).reduce(
+      (sum, r) => sum + (Number(r.total_qr) || 0),
+      0
+    );
+    const totalQrGeneres = (tableData || []).reduce(
+      (sum, r) => sum + (Number(r.total_genere) || 0),
+      0
+    );
+    const pourcentageGlobal =
+      totalQrCodes > 0 ? Math.round((totalQrGeneres / totalQrCodes) * 100) : 0;
+
     return { totalQrCodes, totalQrGeneres, pourcentageGlobal };
   }, [tableData]);
 
@@ -246,10 +405,9 @@ export default function SousDashboardQRcode() {
 
 
   const exportExcel = async () => {
-    // Import dynamique pour éviter l'erreur de résolution à l'exécution
-    // @ts-ignore
-    // const XLSX = await import('xlsx');
-    // const xlsx = XLSX?.default ?? XLSX;
+    // Import dynamique pour corriger l'erreur TypeScript et garantir l'exécution.
+    const XLSXmod: any = await import('xlsx');
+    const XLSX = XLSXmod?.default ?? XLSXmod;
     const headers = [
       'N° Demande',
       'Statut',
@@ -263,14 +421,16 @@ export default function SousDashboardQRcode() {
 
     const rows = (tableData || []).map((demande) => {
       // L’idée: COMMENTAIRES doit être vide, même si item.commentaire existe.
+      // tableData est construit avec les clés backend :
+      // - demande_id, statut, total_qr, operateur, date_demande, total_genere, pourcentage
       return {
-        'N° Demande': demande.id ?? demande.id ?? '',
+        'N° Demande': demande.demande_id ?? demande.id ?? '',
         'Statut': demande.statut ?? '',
-        'Nbre QR Codes': demande.quantite_qr ?? demande.qrCodes ?? '',
+        'Nbre QR Codes': demande.total_qr ?? demande.quantite_qr ?? '',
         'Opérateur': demande.operateur ?? '',
-        'Date Demande': demande.dateDemande ?? demande.date ?? '',
-        'Nbre QR Générés': demande.nbreQrGeneres ?? demande.qrGeneres ?? '',
-        '% QR Générés': demande.pourcentage ?? demande.pourcent ?? '',
+        'Date Demande': demande.date_demande ?? demande.dateDemande ?? '',
+        'Nbre QR Générés': demande.total_genere ?? demande.nbreQrGeneres ?? '',
+        '% QR Générés': demande.pourcentage ?? '',
         'Commentaires': ''
       };
     });
@@ -520,15 +680,16 @@ export default function SousDashboardQRcode() {
             </thead>
 
             <tbody>
+              
               {(tableData || []).map((demande: any, index: number) => (
                 <tr key={index} className="text-center bg-gray-100">
-                  <td className="border p-2">{demande.number}</td>
+                  <td className="border p-2">{demande.id ?? demande.demande_id}</td>
                   <td className="border p-2">{demande.statut}</td>
-                  <td className="border p-2">{demande.nbreQrCodes}</td>
+                  <td className="border p-2">{demande.total_qr}</td>
                   <td className="border p-2">{demande.operateur}</td>
-                  <td className="border p-2">{demande.dateDemande}</td>
-                  <td className="border p-2">{demande.nbreQrGeneres}</td>
-                  <td className="border p-2">{demande.pourcentage}</td>
+                  <td className="border p-2">{demande.date_demande}</td>
+                  <td className="border p-2">{demande.total_genere}</td>
+                  <td className="border p-2">{demande.pourcentage}%</td>
                   <td className="border p-2"></td>
                 </tr>
               ))}
@@ -624,7 +785,16 @@ export default function SousDashboardQRcode() {
             </thead>
 
             <tbody>
-              {(tableData || []).map((item: any, index: number) => (
+              {(impressionTableData || []).length === 0 && (
+                <tr>
+                  <td colSpan={11} className="border p-6 text-center text-gray-500">
+                    Aucune donnée d'impression pour ce tableau.
+                  </td>
+                </tr>
+              )}
+
+              {(impressionTableData || []).map((item: any, index: number) => (
+
                 <tr
                   key={index}
                   className="bg-gray-100"
@@ -670,8 +840,6 @@ export default function SousDashboardQRcode() {
                   <td className="border p-3 font-bold">
                     {item.pourcentage}
                   </td>
-
-                  <td className="border p-3 min-w-[200px]"></td>
                 </tr>
               ))}
             </tbody>
@@ -683,44 +851,42 @@ export default function SousDashboardQRcode() {
                 </td>
 
                 <td className="bg-orange-500 border p-3">
-                  5
+                  
                 </td>
                 <td className="bg-orange-500 border p-3">
-                  1180
+                  
                 </td>
                 <td className="bg-orange-500 border p-3">
-                  436
+                  
                 </td>
 
                 <td className="bg-yellow-400 border p-3">
-                  5
+                  
                 </td>
                 <td className="bg-yellow-400 border p-3">
-                  399
+                  
                 </td>
                 <td className="bg-yellow-400 border p-3">
-                  399
+                  
                 </td>
 
                 <td className="bg-blue-800 border p-3">
-                  4
+                  
                 </td>
                 <td className="bg-blue-800 border p-3">
-                  914
+                  
                 </td>
                 <td className="bg-blue-800 border p-3">
-                  173
+                  
                 </td>
 
                 <td className="bg-green-600 border p-3">
-                  2493
+                  
                 </td>
 
                 <td className="bg-green-600 border p-3">
-                  70,2%
+                  
                 </td>
-
-                {/* <td className="bg-gray-700 border p-3"></td> */}
               </tr>
             </tfoot>
           </table>
@@ -788,7 +954,7 @@ export default function SousDashboardQRcode() {
                 label={renderLabel}
                 labelLine={true}
               >
-                {formatData.map((entry, index) => (
+                {formatData.map((_, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={
