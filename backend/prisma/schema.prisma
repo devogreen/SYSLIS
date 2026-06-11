@@ -992,6 +992,17 @@ model statut_tpe {
   @@index([statut], map: "statut")
 }
 
+model demande_rebut {
+  id               Int                @id @default(autoincrement())
+  form_id          Int
+  statut           demande_rebut_statut
+  quantite         Int?
+  liste_rebut      String?            @db.LongText
+  
+
+  @@index([form_id], map: "form_id")
+}
+
 enum livraison_statut_livraison {
   en_cours
   livre
@@ -1154,4 +1165,12 @@ enum statut_parc_tpe {
   decom
   parametrage
   rebut
+}
+
+enum demande_rebut_statut {
+  en_cours
+  valide
+  retourne
+  refuse
+  clos
 }
