@@ -2779,7 +2779,7 @@ const getDataImpressionQr = async (req, res) => {
                     // Accumuler le total des qr codes pour chaque demande avec le format et l'opérateur
                     total_genere += quantite;
 
-                    if (demande.statut === "imprimee") {
+                    if (demande.statut === "imprimee" || demande.statut === "livree" || demande.statut === "recue") {
                         total_imprime += quantite;
                     }
                 });

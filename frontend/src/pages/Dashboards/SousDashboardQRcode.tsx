@@ -139,7 +139,7 @@ export default function SousDashboardQRcode() {
       setLoading(true);
       try {
         // 0) Tableau des demandes QR (via getAllDataDemandeQr)
-          try {
+        try {
           await axios.get(
             `${urlBase}/api/demandes/getAllDemandes`,
             {
@@ -149,7 +149,7 @@ export default function SousDashboardQRcode() {
               }
             }
           );
-      //  console.log(res.data);
+          //  console.log(res.data);
 
           // NOTE: dataset différent (noms de clés différents).
           // On n’alimente le tableau hebdomadaire que via getAllDataDemandeQr.
@@ -271,6 +271,8 @@ export default function SousDashboardQRcode() {
 
           const apiData = resp.data?.data ?? [];
 
+
+
           console.log('[getDataImpressionQr] resp.data.data length:', Array.isArray(apiData) ? apiData.length : 'not-array');
           if (Array.isArray(apiData) && apiData.length > 0) {
             console.log('[getDataImpressionQr] sample first element keys:', Object.keys(apiData[0] || {}));
@@ -279,69 +281,13 @@ export default function SousDashboardQRcode() {
           }
 
           // apiData = [{ format_id, format, operateurs: [{ operateur_id, operateur, demandes: [...] }] }]
-          const mapped = (apiData || []).map((f: any) => {
-            const operateurs = f?.operateurs || [];
+          // Debug global: voir les libellés exacts envoyés par le backend
+          console.log('[impressionTableData] raw apiData =>', apiData);
 
-            const norm = (v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : '');
-            const getOp = (name: string) => {
-              const target = name.trim().toLowerCase();
-              return operateurs.find((op: any) => norm(op?.operateur) === target);
-            };
+          setImpressionTableData(apiData || []);
 
-            // Backend renvoie souvent des libellés comme “Orange Money”, “MTN Money”, “MOOV Money”.
-            const orangeOp = getOp('Orange Money') || getOp('Orange');
-            const mtnOp = getOp('MTN Money') || getOp('MTN');
-            const moovOp = getOp('MOOV Money') || getOp('MOOV');
-
-
-            // Debug: indique quels opérateurs existent réellement côté API
-            console.log('[getDataImpressionQr] operateurs trouvés =>', {
-              orange: Boolean(orangeOp),
-              mtn: Boolean(mtnOp),
-              moov: Boolean(moovOp),
-            });
-
-
-            const toTotals = (op: any) => {
-              const demandes = op?.demandes || [];
-              // Backend renvoie total_genere (et pas total_imprime) dans demandes
-              const totalImprimes = (demandes || []).reduce(
-                (sum: number, d: any) => sum + (Number(d?.total_genere) || 0),
-                0
-              );
-              return {
-                numero: demandes.length, // nombre de demandes incluses dans cet opérateur/format
-                imprime: totalImprimes,
-              };
-            };
-
-            const orangeTotals = toTotals(orangeOp);
-            const mtnTotals = toTotals(mtnOp);
-            const moovTotals = toTotals(moovOp);
-
-            const total = (orangeTotals.imprime || 0) + (mtnTotals.imprime || 0) + (moovTotals.imprime || 0);
-
-            return {
-              format: f?.format,
-              orangeNumero: orangeTotals.numero,
-              orange: orangeTotals.imprime,
-              orangeImprimes: orangeTotals.imprime,
-
-              mtnNumero: mtnTotals.numero,
-              mtn: mtnTotals.imprime,
-              mtnImprimes: mtnTotals.imprime,
-
-              moovNumero: moovTotals.numero,
-              moov: moovTotals.imprime,
-              moovImprimes: moovTotals.imprime,
-
-              total,
-              // Placeholder: le backend n'envoie pas directement le % d'impression
-              pourcentage: total > 0 ? 100 : 0,
-            };
-          });
-
-          setImpressionTableData(mapped);
+          // setImpressionTableData(apiData);
+          setImpressionTableData(apiData);
         } catch (e) {
           console.error('Erreur mapping impressionTableData:', e);
           setImpressionTableData([]);
@@ -658,7 +604,9 @@ export default function SousDashboardQRcode() {
       {/* TABLEAU DES DEMANDE SR CODE HEBDOMADAIRE */}
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-green-700">TABLEAU DES DEMANDES DE QR CODE HEBDOMADAIRE S {currentWeek}</h2>
+          <h2 className="text-2xl font-bold text-green-700">TABLEAU DES DEMANDES DE QR CODE HEBDOMADAIRE 
+            {/* S {currentWeek} */}
+            </h2>
           <button onClick={exportExcel} className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded">
             Télécharger Excel
           </button>
@@ -680,7 +628,7 @@ export default function SousDashboardQRcode() {
             </thead>
 
             <tbody>
-              
+
               {(tableData || []).map((demande: any, index: number) => (
                 <tr key={index} className="text-center bg-gray-100">
                   <td className="border p-2">{demande.id ?? demande.demande_id}</td>
@@ -720,258 +668,452 @@ export default function SousDashboardQRcode() {
       {/* FIN TABLEAU DES DEMANDE SR CODE HEBDOMADAIRE */}
 
       {/* TABLEAU DES IMPRESSION DE QR CODE HEBDOMADAIRE */}
+
       <div className="p-6">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="text-2xl font-bold text-green-700">TABLEAU DES IMPRESSIONS DE QR CODE HEBDOMADAIRE S {currentWeek}</h2>
-
-        {/* <button
-          onClick={exportExcel}
-          className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded-lg"
-        >
-          Télécharger Excel
-        </button> */}
-      </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border border-gray-300 text-center">
-            <thead>
-              <tr className="text-white">
-                <th className="bg-green-700 border p-3">
-                  FORMAT
-                </th>
-
-                <th className="bg-orange-500 border p-3">
-                  N° DEMANDE
-                </th>
-                <th className="bg-orange-500 border p-3">
-                  ORANGE
-                </th>
-                <th className="bg-orange-500 border p-3">
-                  IMPRIMES
-                </th>
-
-                <th className="bg-yellow-400 border p-3">
-                  N° DEMANDE
-                </th>
-                <th className="bg-yellow-400 border p-3">
-                  MTN
-                </th>
-                <th className="bg-yellow-400 border p-3">
-                  IMPRIMES
-                </th>
-
-                <th className="bg-blue-800 border p-3">
-                  N° DEMANDE
-                </th>
-                <th className="bg-blue-800 border p-3">
-                  MOOV
-                </th>
-                <th className="bg-blue-800 border p-3">
-                  IMPRIMES
-                </th>
-
-                <th className="bg-green-700 border p-3">
-                  TOTAL GENERAL
-                </th>
-
-                <th className="bg-green-700 border p-3">
-                  % D IMPRESSION
-                </th>
-
-                {/* <th className="bg-gray-700 border p-3">
-                  COMMENTAIRES
-                </th> */}
-              </tr>
-            </thead>
-
-            <tbody>
-              {(impressionTableData || []).length === 0 && (
-                <tr>
-                  <td colSpan={11} className="border p-6 text-center text-gray-500">
-                    Aucune donnée d'impression pour ce tableau.
-                  </td>
-                </tr>
-              )}
-
-              {(impressionTableData || []).map((item: any, index: number) => (
-
-                <tr
-                  key={index}
-                  className="bg-gray-100"
-                >
-                  <td className="border p-3 font-bold">
-                    {item.format}
-                  </td>
-
-                  <td className="border p-3">
-                    {item.orangeNumero}
-                  </td>
-                  <td className="border p-3">
-                    {item.orange}
-                  </td>
-                  <td className="border p-3">
-                    {item.orangeImprimes}
-                  </td>
-
-                  <td className="border p-3">
-                    {item.mtnNumero}
-                  </td>
-                  <td className="border p-3">
-                    {item.mtn}
-                  </td>
-                  <td className="border p-3">
-                    {item.mtnImprimes}
-                  </td>
-
-                  <td className="border p-3">
-                    {item.moovNumero}
-                  </td>
-                  <td className="border p-3">
-                    {item.moov}
-                  </td>
-                  <td className="border p-3">
-                    {item.moovImprimes}
-                  </td>
-
-                  <td className="border p-3 font-semibold">
-                    {item.total}
-                  </td>
-
-                  <td className="border p-3 font-bold">
-                    {item.pourcentage}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-
-            <tfoot>
-              <tr className="text-white font-bold">
-                <td className="bg-green-600 border p-3">
-                  TOTAL
-                </td>
-
-                <td className="bg-orange-500 border p-3">
-                  
-                </td>
-                <td className="bg-orange-500 border p-3">
-                  
-                </td>
-                <td className="bg-orange-500 border p-3">
-                  
-                </td>
-
-                <td className="bg-yellow-400 border p-3">
-                  
-                </td>
-                <td className="bg-yellow-400 border p-3">
-                  
-                </td>
-                <td className="bg-yellow-400 border p-3">
-                  
-                </td>
-
-                <td className="bg-blue-800 border p-3">
-                  
-                </td>
-                <td className="bg-blue-800 border p-3">
-                  
-                </td>
-                <td className="bg-blue-800 border p-3">
-                  
-                </td>
-
-                <td className="bg-green-600 border p-3">
-                  
-                </td>
-
-                <td className="bg-green-600 border p-3">
-                  
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <h2 className="text-2xl font-bold text-green-700">
+            TABLEAU DES IMPRESSIONS DE QR CODE HEBDOMADAIRE 
+            {/* S {currentWeek} */}
+          </h2>
         </div>
+
+        {(() => {
+          const rows = impressionTableData || [];
+
+          const operateurs =
+            rows.length > 0
+              ? rows[0].operateurs || []
+              : [];
+
+          const getBgClass = (index: number) => {
+            const colors = [
+              "bg-orange-500",
+              "bg-yellow-400",
+              "bg-blue-800",
+            ];
+
+            return colors[index] || "bg-gray-600";
+          };
+
+          const sumOperateurField = (
+            operateurId: number,
+            field: string
+          ) => {
+            return rows.reduce((acc: number, row: any) => {
+              const op = row.operateurs?.find(
+                (o: any) => o.operateur_id === operateurId
+              );
+
+              return acc + (Number(op?.[field]) || 0);
+            }, 0);
+          };
+
+          const totalImprimeGeneral = rows.reduce(
+            (acc: number, row: any) =>
+              acc +
+              (row.operateurs || []).reduce(
+                (s: number, op: any) =>
+                  s + (Number(op.total_imprime) || 0),
+                0
+              ),
+            0
+          );
+
+          const totalGenereGeneral = rows.reduce(
+            (acc: number, row: any) =>
+              acc +
+              (row.operateurs || []).reduce(
+                (s: number, op: any) =>
+                  s + (Number(op.totalGenere) || Number(op.total_genere) || 0),
+                0
+              ),
+            0
+          );
+
+          const globalPourcentage =
+            totalGenereGeneral > 0
+              ? `${(
+                (totalImprimeGeneral / totalGenereGeneral) *
+                100
+              ).toFixed(1)}%`
+              : "-";
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border border-gray-300 text-center">
+                <thead>
+                  <tr className="text-white">
+                    <th className="bg-green-700 border p-3">
+                      FORMAT
+                    </th>
+
+                    {operateurs.map(
+                      (operateur: any, index: number) => (
+                        <React.Fragment
+                          key={operateur.operateur_id}
+                        >
+                          <th
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            N° DEMANDE
+                          </th>
+
+                          <th
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            {operateur.operateur}
+                          </th>
+
+                          <th
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            IMPRIMES
+                          </th>
+                        </React.Fragment>
+                      )
+                    )}
+
+                    <th className="bg-green-700 border p-3">
+                      TOTAL GENERAL
+                    </th>
+
+                    <th className="bg-green-700 border p-3">
+                      % D IMPRESSION
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {rows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={
+                          1 +
+                          operateurs.length * 3 +
+                          2
+                        }
+                        className="border p-6 text-center text-gray-500"
+                      >
+                        Aucune donnée d'impression pour ce tableau.
+                      </td>
+                    </tr>
+                  )}
+
+                  {rows.map((row: any) => {
+                    const totalGenere = (
+                      row.operateurs || []
+                    ).reduce(
+                      (acc: number, op: any) =>
+                        acc +
+                        (Number(op.total_genere) || 0),
+                      0
+                    );
+
+                    const totalImprime = (
+                      row.operateurs || []
+                    ).reduce(
+                      (acc: number, op: any) =>
+                        acc +
+                        (Number(op.total_imprime) || 0),
+                      0
+                    );
+
+                    const pourcentage =
+                      totalGenere > 0
+                        ? `${(
+                          (totalImprime /
+                            totalGenere) *
+                          100
+                        ).toFixed(1)}%`
+                        : "-";
+
+                    return (
+                      <tr
+                        key={row.format_id}
+                        className="bg-gray-100"
+                      >
+                        <td className="border p-3 font-bold">
+                          {row.format}
+                        </td>
+
+                        {(row.operateurs || []).map(
+                          (op: any) => (
+                            <React.Fragment
+                              key={op.operateur_id}
+                            >
+                              <td className="border p-3">
+                                {op.total_demandes}
+                              </td>
+
+                              <td className="border p-3">
+                                {op.total_genere}
+                              </td>
+
+                              <td className="border p-3">
+                                {op.total_imprime}
+                              </td>
+                            </React.Fragment>
+                          )
+                        )}
+
+                        <td className="border p-3 font-semibold">
+                          {totalImprime}
+                        </td>
+
+                        <td className="border p-3 font-bold">
+                          {pourcentage}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+
+                <tfoot>
+                  <tr className="text-white font-bold">
+                    <td className="bg-green-600 border p-3">
+                      TOTAL
+                    </td>
+
+                    {operateurs.map(
+                      (operateur: any, index: number) => (
+                        <React.Fragment
+                          key={operateur.operateur_id}
+                        >
+                          <td
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            {sumOperateurField(
+                              operateur.operateur_id,
+                              "total_demandes"
+                            )}
+                          </td>
+
+                          <td
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            {sumOperateurField(
+                              operateur.operateur_id,
+                              "total_genere"
+                            )}
+                          </td>
+
+                          <td
+                            className={`${getBgClass(
+                              index
+                            )} border p-3`}
+                          >
+                            {sumOperateurField(
+                              operateur.operateur_id,
+                              "total_imprime"
+                            )}
+                          </td>
+                        </React.Fragment>
+                      )
+                    )}
+
+                    <td className="bg-green-600 border p-3">
+                      {totalImprimeGeneral}
+                    </td>
+
+                    <td className="bg-green-600 border p-3">
+                      {globalPourcentage}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          );
+        })()}
       </div>
+
+
       {/* FIN TABLEAU DES IMPRESSION DE QR CODE HEBDOMADAIRE */}
 
       {/* BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE  */}
 
-    <div className="bg-gray-100 min-h-screen p-10">
-      <h2 className="text-4xl font-bold text-center mb-16">
-        BILAN D'IMPRESSION DES QR
-        CODE DE LA SEMAINE S {currentWeek}
-      </h2>
+      {/* BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE  */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* PAR OPERATEUR */}
-        <div className="bg-gray-200 p-6 shadow-md">
-          <h2 className="text-2xl font-semibold text-center mb-6">
-            PAR OPERATEUR
-          </h2>
+      <div className="bg-gray-100 min-h-screen p-10">
+        <h2 className="text-4xl font-bold text-center mb-16">
+          BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE 
+          {/* S {currentWeek} */}
+        </h2>
 
-          <ResponsiveContainer width="100%" height={400}>
-            <PieChart>
-              <Pie
-                data={operateurData}
-                cx="50%"
-                cy="50%"
-                outerRadius={130}
-                dataKey="value"
-                label={renderLabel}
-                labelLine={true}
-              >
-                {operateurData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={
-                      COLORS_OPERATEUR[
-                        index % COLORS_OPERATEUR.length
-                      ]
-                    }
-                  />
-                ))}
-              </Pie>
+        {(() => {
+          const rows = impressionTableData || [];
 
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+          // 🔥 TOTAL GLOBAL IMPRESSIONS
+          const totalImprimeGlobal = rows.reduce(
+            (acc: number, f: any) =>
+              acc +
+              (f.operateurs || []).reduce(
+                (s: number, op: any) => s + (Number(op.total_imprime) || 0),
+                0
+              ),
+            0
+          );
 
-        {/* PAR FORMAT */}
-        <div className="bg-gray-200 p-6 shadow-md">
-          <h2 className="text-2xl font-semibold text-center mb-6">
-            PAR FORMAT
-          </h2>
+          const totalGenereGlobal = rows.reduce(
+            (acc: number, f: any) =>
+              acc +
+              (f.operateurs || []).reduce(
+                (s: number, op: any) => s + (Number(op.total_genere) || 0),
+                0
+              ),
+            0
+          );
 
-          <ResponsiveContainer width="100%" height={400}>
-            <PieChart>
-              <Pie
-                data={formatData}
-                cx="50%"
-                cy="50%"
-                outerRadius={130}
-                dataKey="value"
-                label={renderLabel}
-                labelLine={true}
-              >
-                {formatData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={
-                      COLORS_FORMAT[
-                        index % COLORS_FORMAT.length
-                      ]
-                    }
-                  />
-                ))}
-              </Pie>
+          const pourcentageGlobal =
+            totalGenereGlobal > 0
+              ? ((totalImprimeGlobal / totalGenereGlobal) * 100).toFixed(1)
+              : "0";
 
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+          // 🔥 DATA OPERATEURS (TOUS FORMATS CONFONDUS)
+          const operateurMap: Record<string, number> = {};
+
+          rows.forEach((f: any) => {
+            (f.operateurs || []).forEach((op: any) => {
+              const key = op.operateur;
+              operateurMap[key] =
+                (operateurMap[key] || 0) + (op.total_imprime || 0);
+            });
+          });
+
+          // const operateurData = Object.keys(operateurMap).map((k) => ({
+          //   name: k,
+          //   value: operateurMap[k],
+          // }));
+          const ALL_OPERATEURS = ["Orange Money", "MTN Money", "MOOV Money", "Autre"];
+
+          const operateurData = ALL_OPERATEURS.map((name) => ({
+            name,
+            value: operateurMap[name] || 0,
+          }));
+
+          // 🔥 DATA FORMAT
+          // const formatData = rows.map((f: any) => {
+          //   const total = (f.operateurs || []).reduce(
+          //     (s: number, op: any) => s + (op.total_imprime || 0),
+          //     0
+          //   );
+
+          //   return {
+          //     name: f.format,
+          //     value: total,
+          //   };
+          // });
+          const ALL_FORMATS = rows.map((f: any) => f.format);
+          // ou mieux si tu connais : ["A6", "A5", "A4", "A3"]
+
+          const formatMap: Record<string, number> = {};
+
+          rows.forEach((f: any) => {
+            const total = (f.operateurs || []).reduce(
+              (s: number, op: any) => s + (op.total_imprime || 0),
+              0
+            );
+
+            formatMap[f.format] = total;
+          });
+
+          const formatData = ALL_FORMATS.map((name) => ({
+            name,
+            value: formatMap[name] || 0,
+          }));
+
+          return (
+            <div>
+              {/* TOTAL GLOBAL */}
+              <div className="text-center mb-10">
+                <h3 className="text-xl font-bold">
+                  Total QR Imprimés : {totalImprimeGlobal}
+                </h3>
+                <h3 className="text-xl font-bold">
+                  % Global Impression : {pourcentageGlobal}%
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* PAR OPERATEUR */}
+                <div className="bg-gray-200 p-6 shadow-md">
+                  <h2 className="text-2xl font-semibold text-center mb-6">
+                    PAR OPERATEUR
+                  </h2>
+
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={operateurData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={130}
+                        dataKey="value"
+                        label={renderLabel}
+                        labelLine={true}
+                      >
+                        {operateurData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              COLORS_OPERATEUR[
+                              index % COLORS_OPERATEUR.length
+                              ]
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* PAR FORMAT */}
+                <div className="bg-gray-200 p-6 shadow-md">
+                  <h2 className="text-2xl font-semibold text-center mb-6">
+                    PAR FORMAT
+                  </h2>
+
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={formatData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={130}
+                        dataKey="value"
+                        label={renderLabel}
+                        labelLine={true}
+                      >
+                        {formatData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              COLORS_FORMAT[
+                              index % COLORS_FORMAT.length
+                              ]
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
-    </div>
 
       {/* FIN BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE  */}
 
