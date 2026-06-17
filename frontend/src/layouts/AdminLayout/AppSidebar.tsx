@@ -113,9 +113,11 @@ const navItems: NavItem[] = [
   {
     name: "Gestion des Rebuts",
     icon: <MaintenanceCircle />,
-    roles: [],
+    roles: [30, 31, 32, 33],
     subItems: [
-      { name: "Mettre au rebut", path: "/nouveau-rebut", pro: false },
+      { name: "Mettre au rebut", path: "/nouveau-rebut", roles: [30, 32], pro: false },
+      { name: "Toutes les mises au rebut", path: "/toutes-les-demandes-rebut", roles: [30, 31, 32, 33], pro: false },
+      { name: "Tous les TPE au rebut", path: "/tpe-rebuts", roles: [30, 31, 32, 33], pro: false },
     ],
   },
   {

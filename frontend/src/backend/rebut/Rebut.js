@@ -31,4 +31,44 @@ export class Rebut {
             throw error.response.data;
         }
     }
+
+    async demandeRebut(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/rebut/demandeRebut`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async getAllDemandesRebut() {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getAllDemandesRebut`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getAllTpeRebuts() {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getAllTpeRebuts`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getTpeRebutDetails(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getTpeRebutDetails/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

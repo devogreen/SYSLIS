@@ -213,6 +213,7 @@ model model_piece {
   stock_piece                                           stock_piece[]
   stocks                                                stocks[]
   parc_tpe                                              parc_tpe[]
+  sn_rebut                                              sn_rebut[]
 }
 
 model mouvement_stock {
@@ -1042,6 +1043,7 @@ model validation_rebut {
 model sn_rebut {
   id                  Int                   @id @default(autoincrement())
   sn_id               Int
+  model_id            Int
   rebut_id            Int?
   decom_id            Int?
   point_marchand      String?               @db.VarChar(255)
@@ -1060,12 +1062,15 @@ model sn_rebut {
   user_update         users?                @relation("sn_rebut_updated_by_user", fields: [updated_by], references: [id_user], onDelete: SetNull, map: "sn_rebut_ibfk_4")
   parc_tpe            parc_tpe              @relation(fields: [sn_id], references: [id], onDelete: NoAction, map: "sn_rebut_ibfk_5")
   decom               form_decom?           @relation(fields: [decom_id], references: [id], onDelete: SetNull, map: "sn_rebut_ibfk_6")
+  model_piece         model_piece           @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "sn_rebut_ibfk_7")
   history_piece_rebut history_piece_rebut[]
 
   @@index([rebut_id], map: "rebut_id")
+  @@index([decom_id], map: "decom_id")
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
   @@index([sn_id], map: "sn_id")
+  @@index([model_id], map: "model_id")
 }
 
 model pieces_rebut {
@@ -1226,6 +1231,7 @@ enum fichiers_type_formulaire {
   demande
   demande_qr
   decom
+  rebut
 }
 
 enum fichiers_role {

@@ -228,6 +228,12 @@ import RegVerificationForm from "./pages/Forms/DecomForms/RegVerificationForm"
 
 // @ts-ignore
 import RebutForm from "./pages/Forms/RebutForms/RebutForm"
+// @ts-ignore
+import AllDemandeRebuts from "./pages/RebutsPages/AllDemandeRebuts"
+// @ts-ignore
+import AllTpeRebuts from "./pages/RebutsPages/AllTpeRebuts"
+// @ts-ignore
+import TpeRebutDetails from "./pages/RebutsPages/TpeRebutDetails"
 
 export default function App() {
   return (
@@ -315,6 +321,9 @@ export default function App() {
 
               {/* Gestion des rebuts */}
               <Route path="/nouveau-rebut" element={<RebutForm />} />
+              <Route path="/toutes-les-demandes-rebut" element={<AllDemandeRebuts />} />
+              <Route path="/tpe-rebuts" element={<AllTpeRebuts />} />
+              <Route path="/tpe-rebut-details/:id" element={<TpeRebutDetails />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

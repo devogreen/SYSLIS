@@ -24,6 +24,7 @@ import { Merchants } from "../../../backend/livraisons/Merchants.js";
 import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
 import { useDropzone } from "react-dropzone";
 import { Rebut } from "../../../backend/rebut/Rebut.js";
+import { Calendar } from "primereact/calendar";
 
 export default function RebutInputs() {
     const merchantsData = new Merchants()
@@ -106,6 +107,16 @@ export default function RebutInputs() {
     const [isModalImportOpen, setIsModalImportOpen] = useState(false)
     const [loadingExtract, setLoadindExtract] = useState(false)
 
+    const [isReg, setIsReg] = useState(false)
+    const [selectedDate, setSelectedDate] = useState(null)
+
+    const [errorValidation, setErrorValidation] = useState('')
+
+    const [listeModel, setListeModel] = useState([])
+    const [optionsModel, setOptionsModel] = useState([])
+    const [selectedModel, setSelectedModel] = useState([])
+    const [nomModel, setNomModel] = useState('')
+
     const allPieceDef =
         pieces.length > 0 &&
         selectedPiecesDef?.length === pieces.length;
@@ -133,6 +144,14 @@ export default function RebutInputs() {
                     return item.is_deleted == false && item.type != 'TERMINAL'
                 })
                 setPieces(items)
+
+                const modelData = await stockData.getAllModels()
+                setListeModel(modelData)
+                const optionsModel = modelData.map((item) => ({
+                    label: item.nom_model,
+                    value: item.id_model,
+                }))
+                setOptionsModel(optionsModel)
             } catch (error) {
                 console.error('Error fetching data ', error)
                 setErrorForm('Erreur lors de la génération du formulaire')
@@ -287,9 +306,11 @@ export default function RebutInputs() {
             const response = await rebutData.extractRebut(fd)
             const terminals = response.data
             const listeRebutData = terminals.map((item, index) => {
+                const model = listeModel.find((m) => m.nom_model == item.model)
                 return ({
                     pointMarchand: item.pointMarchand,
                     terminalSN: item.terminalSN,
+                    modele: model ? model.id_model : null,
                     etatTpe: item.etatTpe,
                     pieces_recuperees: item.listePieceRec,
                     pieces_defectueuses: item.listePieceDef,
@@ -374,6 +395,16 @@ export default function RebutInputs() {
         }
     }
 
+    const handleSelectModel = (value) => {
+        setSelectedModel(value)
+        const model = listeModel.find((item) => {
+            return item.id_model == value
+        })
+        if (model) {
+            setNomModel(model.nom_model)
+        }
+    }
+
     const handleSelectTerminal = (value) => {
         if (indexPiece === value) {
             setSelectedTpe(null)
@@ -389,6 +420,15 @@ export default function RebutInputs() {
         const terminal = listeRebut.at(value)
         if (terminal) {
             setSelectedTpe(terminal)
+
+            setSelectedModel(terminal.modele)
+
+            const model = listeModel.find((m) => {
+                return m.id_model == terminal.modele
+            })
+            if (model) {
+                setNomModel(model.nom_model)
+            }
 
             setEtatTpe(terminal.etatTpe)
 
@@ -446,6 +486,10 @@ export default function RebutInputs() {
             setErrorAjout("S/N non valide !")
             return
         }
+        if (!selectedModel) {
+            setErrorAjout("Vous devez préciser le modèle du terminal !")
+            return
+        }
         const isDuplicate = listeRebut.some(item => {
             return item.terminalSN == terminalSN
         });
@@ -462,6 +506,10 @@ export default function RebutInputs() {
     }
 
     const handleConfirmModif = () => {
+        if (!selectedModel) {
+            setErrorAjout("Vous devez préciser le modèle du terminal !")
+            return
+        }
         if (selectedPiecesDef.length == 0) {
             setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
             return
@@ -475,10 +523,11 @@ export default function RebutInputs() {
         const newElement = {
             pointMarchand: terminalName,
             terminalSN,
+            modele: selectedModel,
             etatTpe,
             commentaire,
-            pieces_recuperees: JSON.stringify(selectedPiecesRec),
-            pieces_defectueuses: JSON.stringify(selectedPiecesDef),
+            pieces_recuperees: selectedPiecesRec,
+            pieces_defectueuses: selectedPiecesDef,
         }
 
         setListeRebut((prev) => [...prev, newElement]);
@@ -509,32 +558,44 @@ export default function RebutInputs() {
     }
 
     const handleValidate = async () => {
+        if (isReg && !selectedDate) {
+            setErrorValidation("Vous devez choisir une date en cas de régularisation !")
+            return
+        }
+        setErrorValidation('')
         setIsModalValidateOpen(false)
         try {
             setLoadingValidation(true)
-            const payload = {
-                commentaire,
-                userId,
-                checkMail,
-                listeRebut: JSON.stringify(listeChecked),
-            }
+            const fd = new FormData()
+            selectedFiles.forEach((file) => {
+                fd.append("files", file);
+            });
+            fd.append("commentaire", commentaire)
+            fd.append("listeRebut", JSON.stringify(listeRebut))
+            fd.append("quantite", quantiteTotale)
+            fd.append("userId", Number(userId))
+            fd.append("dateRebut", selectedDate?.toISOString())
+            fd.append("isReg", isReg)
 
-            const id = idDecom
-            await decomData.verifyDecom(id, payload)
+            console.log("Sending data : ")
+
+            await rebutData.demandeRebut(fd)
             Swal.fire({
                 title: "Succès",
-                text: "Nouvelles vérifications avec succès !",
+                text: "Demande de mise au rebut éffectuée avec succès !",
                 icon: "success"
             })
-            navigate('/tous-les-decommissionnements')
+            setListeRebut([])
+            setQuantiteTotale(0)
+            // navigate('/tous-les-decommissionnements')
         } catch (error) {
-            console.log("Erreur de vérification : ", error)
+            console.log("Erreur de demande : ", error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la vérification !",
+                text: "Une erreur est survenue lors de la demande !",
                 icon: "warning"
             })
-            navigate('/tous-les-decommissionnements')
+            // navigate('/tous-les-decommissionnements')
         } finally {
             setLoadingValidation(false)
         }
@@ -545,6 +606,8 @@ export default function RebutInputs() {
             prev.filter((_, index) => index !== indexToRemove)
         );
         setQuantiteTotale((prev) => prev - 1);
+        setIndexPiece(null)
+        setSelectedTpe(null)
     };
 
     return (
@@ -579,6 +642,15 @@ export default function RebutInputs() {
                                                                 type="text"
                                                                 id="input"
                                                                 value={selectedTpe.terminalSN}
+                                                                disabled
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label className="text-gray-400">Modèle <span className="text-gray-700">*</span></Label>
+                                                            <Input
+                                                                type="text"
+                                                                id="input"
+                                                                value={nomModel}
                                                                 disabled
                                                             />
                                                         </div>
@@ -780,6 +852,15 @@ export default function RebutInputs() {
                                                                                 }
                                                                             }
                                                                         }} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <Label>Modèle <span className="text-red-700">*</span></Label>
+                                                                        <Select
+                                                                            options={optionsModel}
+                                                                            placeholder="Choisir une option"
+                                                                            className="dark:bg-dark-900"
+                                                                            onChange={handleSelectModel}
+                                                                        />
                                                                     </div>
                                                                     <div>
                                                                         <Label className="">Point Marchand</Label>
@@ -1065,6 +1146,13 @@ export default function RebutInputs() {
                                         {listeRebut.map((item, index) => {
                                             const piecesDefectueuses = new Array(...item.pieces_defectueuses)
                                             const piecesRecuperables = new Array(...item.pieces_recuperees)
+
+
+                                            const model = listeModel.find((m) => {
+                                                return m.id_model == item.modele
+                                            })
+                                            const nomModel = model ? model.nom_model : '%%%'
+
                                             return (
                                                 <>
                                                     <TableRow>
@@ -1078,7 +1166,10 @@ export default function RebutInputs() {
                                                         </TableCell>
                                                         <TableCell
                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                            {item.terminalSN}
+                                                                <div>
+                                                                    {item.terminalSN}
+                                                                </div>
+                                                                <div className=" text-gray-700 font-medium" style={{ fontSize: '11px' }}>{nomModel}</div>
                                                         </TableCell>
                                                         <TableCell
                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
@@ -1192,6 +1283,10 @@ export default function RebutInputs() {
                             <div>
                                 <span>S/N: </span>
                                 <span className="font-bold text-sm">{terminalSN}</span>
+                            </div>
+                            <div>
+                                <span>Modèle: </span>
+                                <span className="font-bold text-sm">{nomModel}</span>
                             </div>
                             <div className="flex flex-col space-y-4">
                                 {etatTpe ? (
@@ -1359,6 +1454,10 @@ export default function RebutInputs() {
                         <div className="text-xs text-center space-y-5">
                             <div className="h-44 overflow-y-auto space-y-5">
                                 {listeRebutImport.map((item) => {
+                                    const model = listeModel.find((m) => {
+                                        return m.id_model == item.modele
+                                    })
+                                    const nomModel = model ? model.nom_model : '%%%'
                                     return (
                                         <>
                                             <div>
@@ -1368,6 +1467,10 @@ export default function RebutInputs() {
                                                 <div>
                                                     <span>S/N: </span>
                                                     <span className="font-bold text-sm">{item.terminalSN}</span>
+                                                </div>
+                                                <div>
+                                                    <span>Modèle: </span>
+                                                    <span className="font-bold text-sm">{nomModel}</span>
                                                 </div>
                                                 <div>
                                                     <span>Etat: </span>
@@ -1500,6 +1603,44 @@ export default function RebutInputs() {
                                     )}
                                 </div>
                             </div>
+                            <div>
+                                <div className="flex items-center gap-3 my-2">
+                                    <Checkbox
+                                        checked={isReg}
+                                        onChange={(e) => {
+                                            if (isReg) {
+                                                setIsReg(false)
+                                            } else {
+                                                setIsReg(true)
+                                            }
+                                        }}
+                                        label="Régularisation"
+                                    />
+                                </div>
+                            </div>
+                            {isReg ? (
+                                <>
+                                    <div>
+                                        <Label>Date <span className="text-red-700">*</span></Label>
+                                        <Calendar
+                                            value={selectedDate}
+                                            locale="fr"
+                                            onChange={(e) => setSelectedDate(e.value)}
+                                            dateFormat="dd/mm/yy"
+                                            placeholder="dd/mm/yyyy"
+                                            maxDate={new Date()}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <></>
+                            )}
+                        </div>
+                        <div>
+                            <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
+                                {errorValidation}
+                            </span>
                         </div>
                     </div>
                     <div>

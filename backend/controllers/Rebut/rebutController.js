@@ -72,6 +72,7 @@ const downloadTemplateRebut = async (req, res) => {
         const verificationHeaders = [
             "Point Marchand",
             "S/N",
+            "Modele",
             "Observations",
             ...piecesHeaders,
         ];
@@ -180,6 +181,7 @@ const extractRebut = async (req, res) => {
 
         const requiredHeaders = [
             "S/N",
+            "MODELE",
         ];
 
         for (const header of requiredHeaders) {
@@ -194,12 +196,14 @@ const extractRebut = async (req, res) => {
         const terminals = [];
         const uniqueKeys = new Set();
         let duplicateError = null;
-        let invalidRowError = null;
+        let invalidSnRowError = null;
+        let invalidModelRowError = null;
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
 
             const pointMarchand = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
             const terminalSN = String(getCellValue(row.getCell(headers["S/N"])) || "").trim();
+            const model = String(getCellValue(row.getCell(headers["MODELE"])) || "").trim();
             const etatTpe = String(getCellValue(row.getCell(headers["OBSERVATIONS"])) || "").trim();
             const listePieceRec = [];
             const listePieceDef = [];
@@ -220,7 +224,14 @@ const extractRebut = async (req, res) => {
                 return;
             }
             if (terminalSN && (terminalSN.length != 10 || !isOnlyDigits(terminalSN))) {
-                invalidRowError = {
+                invalidSnRowError = {
+                    rowNumber,
+                    terminal: { terminalSN }
+                };
+                return;
+            }
+            if (terminalSN && !model) {
+                invalidModelRowError = {
                     rowNumber,
                     terminal: { terminalSN }
                 };
@@ -230,6 +241,7 @@ const extractRebut = async (req, res) => {
             const terminal = {
                 pointMarchand: pointMarchand ? pointMarchand : 'N/A',
                 terminalSN,
+                model,
                 etatTpe,
                 listePieceRec,
                 listePieceDef,
@@ -255,9 +267,15 @@ const extractRebut = async (req, res) => {
             });
         }
 
-        if (invalidRowError) {
+        if (invalidSnRowError) {
             return res.status(400).json({
-                message: `S/N invalide à la ligne ${invalidRowError.rowNumber} pour le TPE ${invalidRowError.terminal.terminalSN}`,
+                message: `S/N invalide à la ligne ${invalidSnRowError.rowNumber} pour le TPE ${invalidSnRowError.terminal.terminalSN}`,
+            });
+        }
+
+        if (invalidModelRowError) {
+            return res.status(400).json({
+                message: `Modèle manquant à la ligne ${invalidModelRowError.rowNumber} pour le TPE ${invalidModelRowError.terminal.terminalSN}`,
             });
         }
 
@@ -272,7 +290,280 @@ const extractRebut = async (req, res) => {
     }
 }
 
+// Fonction pour faire une demande de mise au rebut
+const demandeRebut = async (req, res) => {
+    try {
+        const {
+            commentaire,
+            listeRebut,
+            quantite,
+            userId,
+            dateRebut,
+            isReg,
+        } = req.body
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const details = typeof listeRebut === "string" ? JSON.parse(listeRebut) : listeRebut;
+
+        const reg = isReg == "false" ? false : true
+        let dateAction = new Date()
+        const dateVer = new Date(dateRebut)
+        if (!isNaN(dateVer.valueOf())) {
+            dateAction = new Date(dateRebut)
+        }
+
+        const nouveauRebut = await prisma.$transaction(async (tx) => {
+            const rebutForm = await tx.forms.create({
+                data: {
+                    type: 'demande_rebut',
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                    created_by: utilisateur.id_user,
+                    is_reg: reg,
+                }
+            })
+            const rebut = await tx.demande_rebut.create({
+                data: {
+                    form_id: rebutForm.id,
+                    statut: 'en_cours',
+                    quantite: parseInt(quantite),
+                    liste_rebut: JSON.stringify(details),
+                }
+            })
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: rebutForm.id,
+                        type_formulaire: 'rebut',
+                        role: 'demandeur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            return {
+                rebutForm,
+                rebut,
+            }
+        })
+
+        /****************    GESTION DES MAILS     *****************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 33,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesValidation = await prisma.user_roles.findMany({
+            where: {
+                role_id: 31,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const validateurs = rolesValidation.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/demande-rebut/${nouveauRebut.rebut.id}`;
+
+        let subject = `SYSLIS - MISE AU REBUT`;
+        let html = `
+                <p>Bonjour,</p>
+                <p>Une nouvelle demande de mise au rebut a été soumise.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+        if (reg) {
+            subject = `SYSLIS - REGULARISATION MISE AU REBUT`;
+            html = `
+                <p>Bonjour,</p>
+                <p>Une régularisation de mise au rebut a été soumise.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+        }
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (validateurs && validateurs.length > 0) {
+            for (const validateur of validateurs) {
+                await sendMail({
+                    to: validateur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log(`Demande de mise au rebut enregistrée avec succès par ${utilisateur.username}`)
+        res.status(201).json({
+            message: `Demande de mise au rebut enregistrée avec succès par ${utilisateur.username}`,
+            data: nouveauRebut,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la demande de mise au rebut :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour avoir la liste de toutes les demandes de mise au rebut et leur statut
+const getAllDemandesRebut = async (req, res) => {
+    try {
+        const demandes = await prisma.demande_rebut.findMany({
+            include: {
+                forms: true,
+                validation_rebut: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+            orderBy: {
+                forms: {
+                    last_modified_at: 'desc',
+                }
+            },
+        });
+
+        res.status(200).json(demandes);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des demandes de mise au rebut :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des demandes de mise au rebut", error });
+    }
+}
+
+// Fonction pour avoir les détails de pièces défectueuses et fonctionnelles sur un TPE au rebut
+const getTpeRebutDetails = async (req, res) => {
+    try {
+        const {
+            id,
+        } = req.params
+
+        const tpe = await prisma.parc_tpe.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+            include: {
+                statut_tpe: true,
+                pieces_rebut: true,
+                mouvement_piece_rebut: true,
+                model_piece: true,
+                sn_rebut: {
+                    include: {
+                        history_piece_rebut: true,
+                    },
+                },
+            },
+        })
+
+        if (tpe.statut_tpe.statut != 'rebut') {
+            console.error('Statut du terminal non conforme !')
+            return res.status(400).json({ message: "Le terminal n'est pas au rebut !" });
+        }
+
+        res.status(200).json(tpe);
+    } catch (error) {
+        console.error("Erreur lors de la récupération du TPE :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
+    }
+}
+
+
+// Fonction pour la liste des TPE du parc au staut 'rebut' avec leurs pièces
+const getAllTpeRebuts = async (req, res) => {
+    try {
+        const tpe = await prisma.parc_tpe.findMany({
+            where: {
+                statut_id: 5,
+            },
+            include: {
+                model_piece: true,
+                sn_rebut: true,
+                pieces_rebut: true,
+                mouvement_piece_rebut: true,
+            },
+            orderBy: {
+                last_modified_at: 'desc',
+            },
+        });
+
+        res.status(200).json(tpe);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des TPE au rebut :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE au rebut", error });
+    }
+}
+
 module.exports = {
     downloadTemplateRebut,
     extractRebut,
+    demandeRebut,
+    getAllDemandesRebut,
+    getAllTpeRebuts,
+    getTpeRebutDetails,
 }
