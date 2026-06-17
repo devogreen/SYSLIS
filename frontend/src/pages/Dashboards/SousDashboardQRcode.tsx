@@ -336,14 +336,23 @@ export default function SousDashboardQRcode() {
     { name: 'format-B', value: qrQuantities.generee || 0 }
   ];
 
-  const COLORS_OPERATEUR = ['#ff8200', '#ffcc00', '#025ba7'];
-  const COLORS_FORMAT = ['#67e6dc', ' #7158e2', '#17c0eb', '#3ae374'];
+  const COLORS_OPERATEUR = ['#ff8200', '#ffcc00', '#025ba7', '#4b4b4b'];
+  const COLORS_FORMAT = ['#67e6dc', ' #7158e2', '#17c0eb', '#3ae374', '#ffb8b8'];
 
   // Recharts: on utilise un type implicite (any) pour éviter les erreurs de typage PieLabelRenderProps
   const renderLabel = ((props: any) => {
     const name = props?.name ?? '';
-    const percent = typeof props?.percent === 'number' ? props.percent : 0;
-    const pct = Number.isFinite(percent) ? `${Math.round(percent * 10) / 10}%` : '';
+
+    // IMPORTANT: on veut le % basé sur (total généré opérateur * 100) / total généré global.
+    // Recharts calcule `props.percent` avec la somme locale des `value`, donc on n'utilise pas `props.percent`.
+    const pctValue = props?.payload?.percentage;
+
+    // percentage est calculé en amont et stocké sous forme string (toFixed(1)) dans operateurData.
+    const pct =
+      pctValue === null || pctValue === undefined || pctValue === ''
+        ? ''
+        : `${Number(pctValue)}%`;
+
     return `${name} ${pct}`.trim();
   }) as unknown as any;
 
@@ -604,9 +613,9 @@ export default function SousDashboardQRcode() {
       {/* TABLEAU DES DEMANDE SR CODE HEBDOMADAIRE */}
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-green-700">TABLEAU DES DEMANDES DE QR CODE HEBDOMADAIRE 
+          <h2 className="text-2xl font-bold text-green-700">TABLEAU DES DEMANDES DE QR CODE HEBDOMADAIRE
             {/* S {currentWeek} */}
-            </h2>
+          </h2>
           <button onClick={exportExcel} className="bg-green-700 hover:bg-green-800 text-white px-4 py-2 rounded">
             Télécharger Excel
           </button>
@@ -672,7 +681,7 @@ export default function SousDashboardQRcode() {
       <div className="p-6">
         <div className="flex justify-between items-center mb-5">
           <h2 className="text-2xl font-bold text-green-700">
-            TABLEAU DES IMPRESSIONS DE QR CODE HEBDOMADAIRE 
+            TABLEAU DES IMPRESSIONS DE QR CODE HEBDOMADAIRE
             {/* S {currentWeek} */}
           </h2>
         </div>
@@ -730,20 +739,28 @@ export default function SousDashboardQRcode() {
             0
           );
 
+          const formatImpressionValue = (value: any) => {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n === 0) return '-';
+            return n;
+          };
+
           const globalPourcentage =
             totalGenereGeneral > 0
-              ? `${(
-                (totalImprimeGeneral / totalGenereGeneral) *
-                100
-              ).toFixed(1)}%`
-              : "-";
+              ? (() => {
+                const pct = (totalImprimeGeneral / totalGenereGeneral) * 100;
+                if (!Number.isFinite(pct) || pct === 0) return '-';
+                return `${pct.toFixed(1)}%`;
+              })()
+              : '-';
+
 
           return (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300 text-center">
                 <thead>
                   <tr className="text-white">
-                    <th className="bg-green-700 border p-3">
+                    <th className="bg-green-700 border px-2 py-1 text-xs">
                       FORMAT
                     </th>
 
@@ -755,7 +772,7 @@ export default function SousDashboardQRcode() {
                           <th
                             className={`${getBgClass(
                               index
-                            )} border p-3`}
+                            )} border px-2 py-1 text-xs`}
                           >
                             N° DEMANDE
                           </th>
@@ -763,7 +780,7 @@ export default function SousDashboardQRcode() {
                           <th
                             className={`${getBgClass(
                               index
-                            )} border p-3`}
+                            )} border px-2 py-1 text-xs`}
                           >
                             {operateur.operateur}
                           </th>
@@ -771,7 +788,7 @@ export default function SousDashboardQRcode() {
                           <th
                             className={`${getBgClass(
                               index
-                            )} border p-3`}
+                            )} border px-2 py-1 text-xs`}
                           >
                             IMPRIMES
                           </th>
@@ -779,11 +796,11 @@ export default function SousDashboardQRcode() {
                       )
                     )}
 
-                    <th className="bg-green-700 border p-3">
+                    <th className="bg-green-700 border px-2 py-1 text-xs">
                       TOTAL GENERAL
                     </th>
 
-                    <th className="bg-green-700 border p-3">
+                    <th className="bg-green-700 borderpx-2 py-1 text-xs">
                       % D IMPRESSION
                     </th>
                   </tr>
@@ -848,22 +865,22 @@ export default function SousDashboardQRcode() {
                               key={op.operateur_id}
                             >
                               <td className="border p-3">
-                                {op.total_demandes}
+                                {formatImpressionValue(op.total_demandes)}
                               </td>
 
                               <td className="border p-3">
-                                {op.total_genere}
+                                {formatImpressionValue(op.total_genere)}
                               </td>
 
                               <td className="border p-3">
-                                {op.total_imprime}
+                                {formatImpressionValue(op.total_imprime)}
                               </td>
                             </React.Fragment>
                           )
                         )}
 
                         <td className="border p-3 font-semibold">
-                          {totalImprime}
+                          {totalImprime}/{totalGenere}
                         </td>
 
                         <td className="border p-3 font-bold">
@@ -922,7 +939,7 @@ export default function SousDashboardQRcode() {
                     )}
 
                     <td className="bg-green-600 border p-3">
-                      {totalImprimeGeneral}
+                      {formatImpressionValue(totalImprimeGeneral)} /{totalGenereGeneral}
                     </td>
 
                     <td className="bg-green-600 border p-3">
@@ -945,14 +962,35 @@ export default function SousDashboardQRcode() {
 
       <div className="bg-gray-100 min-h-screen p-10">
         <h2 className="text-4xl font-bold text-center mb-16">
-          BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE 
-          {/* S {currentWeek} */}
+          BILAN D'IMPRESSION DES QR CODE DE LA SEMAINE
         </h2>
 
         {(() => {
+          //  Données reçues depuis l'API (formats + opérateurs)
           const rows = impressionTableData || [];
 
-          // 🔥 TOTAL GLOBAL IMPRESSIONS
+          //  Normalisation des noms opérateurs (regroupement)
+          const normalizeOperateur = (name: string) => {
+            const n = (name || "").toLowerCase();
+            if (n.includes("orange")) return "ORANGE";
+            if (n.includes("mtn")) return "MTN";
+            if (n.includes("moov")) return "MOOV";
+            return "AUTRES";
+          };
+
+          //  Agrégation des QR générés par opérateur
+          const operateurMap: Record<string, number> = {};
+
+          rows.forEach((f: any) => {
+            (f.operateurs || []).forEach((op: any) => {
+              const key = normalizeOperateur(op.operateur);
+
+              operateurMap[key] =
+                (operateurMap[key] || 0) + (Number(op.total_genere) || 0);
+            });
+          });
+
+          //  Total global des QR imprimés
           const totalImprimeGlobal = rows.reduce(
             (acc: number, f: any) =>
               acc +
@@ -963,77 +1001,76 @@ export default function SousDashboardQRcode() {
             0
           );
 
-          const totalGenereGlobal = rows.reduce(
-            (acc: number, f: any) =>
-              acc +
-              (f.operateurs || []).reduce(
-                (s: number, op: any) => s + (Number(op.total_genere) || 0),
-                0
-              ),
+          //  Total global des QR générés (basé sur opérateurs agrégés)
+          const totalGenereGlobal = Object.values(operateurMap).reduce(
+            (acc: number, val: any) => acc + Number(val || 0),
             0
           );
 
+          //  Pourcentage global d'impression
           const pourcentageGlobal =
             totalGenereGlobal > 0
               ? ((totalImprimeGlobal / totalGenereGlobal) * 100).toFixed(1)
               : "0";
 
-          // 🔥 DATA OPERATEURS (TOUS FORMATS CONFONDUS)
-          const operateurMap: Record<string, number> = {};
+          //  Préparation des données pour le graphique "Par opérateur"
+          const operateurData = Object.keys(operateurMap).map((name) => {
+            const totalOperateur = operateurMap[name];
 
-          rows.forEach((f: any) => {
-            (f.operateurs || []).forEach((op: any) => {
-              const key = op.operateur;
-              operateurMap[key] =
-                (operateurMap[key] || 0) + (op.total_imprime || 0);
-            });
+            const percentage =
+              totalGenereGlobal > 0
+                ? (totalOperateur * 100) / totalGenereGlobal
+                : 0;
+
+            return {
+              name,
+              value: totalOperateur,
+              percentage: Number(percentage.toFixed(1)),
+            };
           });
 
-          // const operateurData = Object.keys(operateurMap).map((k) => ({
-          //   name: k,
-          //   value: operateurMap[k],
-          // }));
-          const ALL_OPERATEURS = ["Orange Money", "MTN Money", "MOOV Money", "Autre"];
-
-          const operateurData = ALL_OPERATEURS.map((name) => ({
-            name,
-            value: operateurMap[name] || 0,
-          }));
-
-          // 🔥 DATA FORMAT
-          // const formatData = rows.map((f: any) => {
-          //   const total = (f.operateurs || []).reduce(
-          //     (s: number, op: any) => s + (op.total_imprime || 0),
-          //     0
-          //   );
-
-          //   return {
-          //     name: f.format,
-          //     value: total,
-          //   };
-          // });
+          //  Liste des formats disponibles
           const ALL_FORMATS = rows.map((f: any) => f.format);
-          // ou mieux si tu connais : ["A6", "A5", "A4", "A3"]
 
+          //  Agrégation des impressions par format
+         
+
+          //  Préparation des données pour le graphique "Par format"
+          // const formatData = ALL_FORMATS.map((name) => ({
+          //   name,
+          //   value: formatMap[name] || 0,
+          // }));
+          // 📌 Agrégation des QR générés par format
           const formatMap: Record<string, number> = {};
 
           rows.forEach((f: any) => {
-            const total = (f.operateurs || []).reduce(
-              (s: number, op: any) => s + (op.total_imprime || 0),
+            const totalGenere = (f.operateurs || []).reduce(
+              (s: number, op: any) => s + (Number(op.total_genere) || 0),
               0
             );
 
-            formatMap[f.format] = total;
+            formatMap[f.format] = totalGenere;
           });
 
-          const formatData = ALL_FORMATS.map((name) => ({
-            name,
-            value: formatMap[name] || 0,
-          }));
+          // 📌 Préparation des données pour le graphique "Par format"
+          // % format = totalGenere * 100 / totalGenereGlobal
+          const formatData = Object.keys(formatMap).map((name) => {
+            const totalFormat = formatMap[name];
 
+            const percentage =
+              totalGenereGlobal > 0
+                ? (totalFormat * 100) / totalGenereGlobal
+                : 0;
+
+            return {
+              name,
+              value: totalFormat,
+              percentage: Number(percentage.toFixed(1)),
+            };
+          });
           return (
             <div>
-              {/* TOTAL GLOBAL */}
+              {/* 📊 Résumé global */}
               <div className="text-center mb-10">
                 <h3 className="text-xl font-bold">
                   Total QR Imprimés : {totalImprimeGlobal}
@@ -1043,8 +1080,10 @@ export default function SousDashboardQRcode() {
                 </h3>
               </div>
 
+              {/* 📊 Graphiques */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                {/* PAR OPERATEUR */}
+
+                {/*  Graphique par opérateur */}
                 <div className="bg-gray-200 p-6 shadow-md">
                   <h2 className="text-2xl font-semibold text-center mb-6">
                     PAR OPERATEUR
@@ -1077,7 +1116,7 @@ export default function SousDashboardQRcode() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* PAR FORMAT */}
+                {/*  Graphique par format */}
                 <div className="bg-gray-200 p-6 shadow-md">
                   <h2 className="text-2xl font-semibold text-center mb-6">
                     PAR FORMAT
@@ -1098,9 +1137,7 @@ export default function SousDashboardQRcode() {
                           <Cell
                             key={`cell-${index}`}
                             fill={
-                              COLORS_FORMAT[
-                              index % COLORS_FORMAT.length
-                              ]
+                              COLORS_FORMAT[index % COLORS_FORMAT.length]
                             }
                           />
                         ))}
