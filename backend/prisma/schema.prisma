@@ -213,7 +213,6 @@ model model_piece {
   stock_piece                                           stock_piece[]
   stocks                                                stocks[]
   parc_tpe                                              parc_tpe[]
-  sn_rebut                                              sn_rebut[]
 }
 
 model mouvement_stock {
@@ -454,30 +453,30 @@ model user_services {
 }
 
 model users {
-  id_user                               Int                          @id @default(autoincrement())
-  fullname                              String?                      @db.VarChar(255)
-  username                              String?                      @db.VarChar(255)
-  password                              String?                      @db.VarChar(255)
-  email                                 String?                      @db.VarChar(255)
-  reset_token                           String?                      @db.VarChar(255)
-  reset_expires                         DateTime?                    @db.DateTime(0)
-  created_at                            DateTime?                    @default(now()) @db.DateTime(0)
-  is_deleted                            Int?                         @default(0) @db.TinyInt
+  id_user                               Int                            @id @default(autoincrement())
+  fullname                              String?                        @db.VarChar(255)
+  username                              String?                        @db.VarChar(255)
+  password                              String?                        @db.VarChar(255)
+  email                                 String?                        @db.VarChar(255)
+  reset_token                           String?                        @db.VarChar(255)
+  reset_expires                         DateTime?                      @db.DateTime(0)
+  created_at                            DateTime?                      @default(now()) @db.DateTime(0)
+  is_deleted                            Int?                           @default(0) @db.TinyInt
   Livraisons                            Livraisons[]
-  demandes_demandes_user_idTousers      demandes[]                   @relation("demandes_user_idTousers")
-  demandes_demandes_id_demandeurTousers demandes[]                   @relation("demandes_id_demandeurTousers")
+  demandes_demandes_user_idTousers      demandes[]                     @relation("demandes_user_idTousers")
+  demandes_demandes_id_demandeurTousers demandes[]                     @relation("demandes_id_demandeurTousers")
   fichiers                              fichiers[]
   form_signatures                       form_signatures[]
-  forms_forms_created_byTousers         forms[]                      @relation("forms_created_byTousers")
-  forms_forms_updated_byTousers         forms[]                      @relation("forms_updated_byTousers")
+  forms_forms_created_byTousers         forms[]                        @relation("forms_created_byTousers")
+  forms_forms_updated_byTousers         forms[]                        @relation("forms_updated_byTousers")
   items                                 items[]
   livraison                             livraison[]
   qr_codes                              qr_codes[]
   reception_livraison                   reception_livraison[]
   reception_piece                       reception_piece[]
   remplacements                         remplacements[]
-  stocks_stocks_created_byTousers       stocks[]                     @relation("stocks_created_byTousers")
-  stocks_stocks_updated_byTousers       stocks[]                     @relation("stocks_updated_byTousers")
+  stocks_stocks_created_byTousers       stocks[]                       @relation("stocks_created_byTousers")
+  stocks_stocks_updated_byTousers       stocks[]                       @relation("stocks_updated_byTousers")
   type_livraison_commerciale            type_livraison_commerciale[]
   user_roles                            user_roles[]
   user_services                         user_services[]
@@ -485,14 +484,14 @@ model users {
   validation_remplacement               validation_remplacement[]
   validations                           validations[]
   stockOwner                            stocks[]
-  tpe_created                           parc_tpe[]                   @relation("tpe_created_by_user")
-  tpe_updated                           parc_tpe[]                   @relation("tpe_updated_by_user")
+  tpe_created                           parc_tpe[]                     @relation("tpe_created_by_user")
+  tpe_updated                           parc_tpe[]                     @relation("tpe_updated_by_user")
   history_tpe                           history_tpe[]
-  sn_rebut_created                      sn_rebut[]                   @relation("sn_rebut_created_by_user")
-  sn_rebut_updated                      sn_rebut[]                   @relation("sn_rebut_updated_by_user")
-  pieces_rebut_created                  pieces_rebut[]               @relation("pieces_rebut_created_by_user")
-  pieces_rebut_updated                  pieces_rebut[]               @relation("pieces_rebut_updated_by_user")
-  history_piece_rebut                   history_piece_rebut[]
+  sn_rebut_created                      sn_rebut[]                     @relation("sn_rebut_created_by_user")
+  sn_rebut_updated                      sn_rebut[]                     @relation("sn_rebut_updated_by_user")
+  pieces_rebut_created                  pieces_rebut[]                 @relation("pieces_rebut_created_by_user")
+  pieces_rebut_updated                  pieces_rebut[]                 @relation("pieces_rebut_updated_by_user")
+  history_snapshot_piece_rebut          history_snapshot_piece_rebut[]
   mouvement_piece_rebut                 mouvement_piece_rebut[]
 }
 
@@ -958,23 +957,23 @@ model format_qr {
 }
 
 model parc_tpe {
-  id                    Int                     @id @default(autoincrement())
-  serial_number         String                  @unique @db.VarChar(255)
-  model_id              Int?
-  created_by            Int
-  updated_by            Int?
-  created_at            DateTime                @default(now()) @db.DateTime(0)
-  updated_at            DateTime?               @db.DateTime(0)
-  last_modified_at      DateTime                @default(now()) @db.DateTime(0)
-  statut_id             Int
-  users_create_tpe      users                   @relation("tpe_created_by_user", fields: [created_by], references: [id_user], map: "parc_tpe_ibfk_1")
-  users_update_tpe      users?                  @relation("tpe_updated_by_user", fields: [updated_by], references: [id_user], map: "parc_tpe_ibfk_2")
-  statut_tpe            statut_tpe              @relation(fields: [statut_id], references: [id], map: "parc_tpe_ibfk_3")
-  model_piece           model_piece?            @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "parc_tpe_ibfk_4")
-  history_tpe           history_tpe[]
-  sn_rebut              sn_rebut[]
-  pieces_rebut          pieces_rebut[]
-  mouvement_piece_rebut mouvement_piece_rebut[]
+  id               Int            @id @default(autoincrement())
+  serial_number    String         @unique @db.VarChar(255)
+  model_id         Int?
+  created_by       Int
+  updated_by       Int?
+  created_at       DateTime       @default(now()) @db.DateTime(0)
+  updated_at       DateTime?      @db.DateTime(0)
+  last_modified_at DateTime       @default(now()) @db.DateTime(0)
+  statut_id        Int
+  is_deleted       Boolean        @default(false)
+  users_create_tpe users          @relation("tpe_created_by_user", fields: [created_by], references: [id_user], map: "parc_tpe_ibfk_1")
+  users_update_tpe users?         @relation("tpe_updated_by_user", fields: [updated_by], references: [id_user], map: "parc_tpe_ibfk_2")
+  statut_tpe       statut_tpe     @relation(fields: [statut_id], references: [id], map: "parc_tpe_ibfk_3")
+  model_piece      model_piece?   @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "parc_tpe_ibfk_4")
+  history_tpe      history_tpe[]
+  sn_rebut         sn_rebut[]
+  pieces_rebut     pieces_rebut[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -1041,36 +1040,34 @@ model validation_rebut {
 }
 
 model sn_rebut {
-  id                  Int                   @id @default(autoincrement())
-  sn_id               Int
-  model_id            Int
-  rebut_id            Int?
-  decom_id            Int?
-  point_marchand      String?               @db.VarChar(255)
-  etat                String?               @db.VarChar(255)
-  commentaire         String?               @db.VarChar(255)
-  created_at          DateTime              @default(now()) @db.DateTime(0)
-  updated_at          DateTime?             @db.DateTime(0)
-  last_modified_at    DateTime              @default(now()) @db.DateTime(0)
-  created_by          Int?
-  updated_by          Int?
-  pieces_recuperees   String?               @db.LongText
-  pieces_defectueuses String?               @db.LongText
-  is_deleted          Boolean               @default(false)
-  demande_rebut       demande_rebut?        @relation(fields: [rebut_id], references: [id], onDelete: Restrict, map: "sn_rebut_ibfk_1")
-  user_create         users?                @relation("sn_rebut_created_by_user", fields: [created_by], references: [id_user], onDelete: SetNull, map: "sn_rebut_ibfk_3")
-  user_update         users?                @relation("sn_rebut_updated_by_user", fields: [updated_by], references: [id_user], onDelete: SetNull, map: "sn_rebut_ibfk_4")
-  parc_tpe            parc_tpe              @relation(fields: [sn_id], references: [id], onDelete: NoAction, map: "sn_rebut_ibfk_5")
-  decom               form_decom?           @relation(fields: [decom_id], references: [id], onDelete: SetNull, map: "sn_rebut_ibfk_6")
-  model_piece         model_piece           @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "sn_rebut_ibfk_7")
-  history_piece_rebut history_piece_rebut[]
+  id                           Int                            @id @default(autoincrement())
+  sn_id                        Int
+  rebut_id                     Int?
+  decom_id                     Int?
+  point_marchand               String?                        @db.VarChar(255)
+  etat                         String?                        @db.VarChar(255)
+  commentaire                  String?                        @db.VarChar(255)
+  created_at                   DateTime                       @default(now()) @db.DateTime(0)
+  updated_at                   DateTime?                      @db.DateTime(0)
+  last_modified_at             DateTime                       @default(now()) @db.DateTime(0)
+  created_by                   Int?
+  updated_by                   Int?
+  pieces_recuperees            String?                        @db.LongText
+  pieces_defectueuses          String?                        @db.LongText
+  is_deleted                   Boolean                        @default(false)
+  demande_rebut                demande_rebut?                 @relation(fields: [rebut_id], references: [id], onDelete: Restrict, map: "sn_rebut_ibfk_1")
+  user_create                  users?                         @relation("sn_rebut_created_by_user", fields: [created_by], references: [id_user], onDelete: SetNull, map: "sn_rebut_ibfk_3")
+  user_update                  users?                         @relation("sn_rebut_updated_by_user", fields: [updated_by], references: [id_user], onDelete: SetNull, map: "sn_rebut_ibfk_4")
+  parc_tpe                     parc_tpe                       @relation(fields: [sn_id], references: [id], onDelete: NoAction, map: "sn_rebut_ibfk_5")
+  decom                        form_decom?                    @relation(fields: [decom_id], references: [id], onDelete: SetNull, map: "sn_rebut_ibfk_6")
+  history_snapshot_piece_rebut history_snapshot_piece_rebut[]
+  mouvement_piece_rebut        mouvement_piece_rebut[]
 
   @@index([rebut_id], map: "rebut_id")
   @@index([decom_id], map: "decom_id")
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
   @@index([sn_id], map: "sn_id")
-  @@index([model_id], map: "model_id")
 }
 
 model pieces_rebut {
@@ -1091,36 +1088,46 @@ model pieces_rebut {
   @@index([piece_id], map: "piece_id")
 }
 
-model history_piece_rebut {
-  id         Int              @id @default(autoincrement())
-  sn_id      Int
-  piece_id   Int
-  created_at DateTime         @default(now()) @db.DateTime(0)
+model history_snapshot_piece_rebut {
+  id         Int      @id @default(autoincrement())
+  rebut_id   Int
+  created_at DateTime @default(now()) @db.DateTime(0)
   created_by Int
-  etat       etat_piece_rebut
-  sn_rebut   sn_rebut         @relation(fields: [sn_id], references: [id], onDelete: Cascade, map: "history_piece_rebut_ibfk_1")
-  items      items            @relation(fields: [piece_id], references: [id_piece], map: "history_piece_rebut_ibfk_2")
-  users      users            @relation(fields: [created_by], references: [id_user], map: "history_piece_rebut_ibfk_3")
 
-  @@index([sn_id], map: "sn_id")
-  @@index([piece_id], map: "piece_id")
+  sn_rebut            sn_rebut              @relation(fields: [rebut_id], references: [id], onDelete: Cascade, map: "history_snapshot_piece_rebut_ibfk_1")
+  users               users                 @relation(fields: [created_by], references: [id_user], map: "history_snapshot_piece_rebut_ibfk_2")
+  history_piece_rebut history_piece_rebut[]
+
+  @@index([rebut_id], map: "rebut_id")
   @@index([created_by], map: "created_by")
+}
+
+model history_piece_rebut {
+  id       Int                          @id @default(autoincrement())
+  snap_id  Int
+  piece_id Int
+  etat     etat_piece_rebut
+  snap     history_snapshot_piece_rebut @relation(fields: [snap_id], references: [id], onDelete: Cascade, map: "history_piece_rebut_ibfk_1")
+  items    items                        @relation(fields: [piece_id], references: [id_piece], map: "history_piece_rebut_ibfk_2")
+
+  @@index([snap_id], map: "snap_id")
+  @@index([piece_id], map: "piece_id")
 }
 
 model mouvement_piece_rebut {
   id                          Int                        @id @default(autoincrement())
-  sn_id                       Int
+  rebut_id                    Int
   piece_id                    Int
-  reste_pieces_fonctionnelles String?                    @db.LongText
-  reste_pieces_defectueuses   String?                    @db.LongText
   mouvement                   type_mouvement_piece_rebut
+  ancien_etat                 etat_piece_rebut?
+  nouvel_etat                 etat_piece_rebut
   created_at                  DateTime                   @default(now()) @db.DateTime(0)
   created_by                  Int
-  parc_tpe                    parc_tpe                   @relation(fields: [sn_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
+  sn_rebut                    sn_rebut                   @relation(fields: [rebut_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
   items                       items                      @relation(fields: [piece_id], references: [id_piece], map: "mouvement_piece_rebut_ibfk_2")
   users                       users                      @relation(fields: [created_by], references: [id_user], map: "mouvement_piece_rebut_ibfk_3")
 
-  @@index([sn_id], map: "sn_id")
+  @@index([rebut_id], map: "rebut_id")
   @@index([piece_id], map: "piece_id")
   @@index([created_by], map: "created_by")
 }

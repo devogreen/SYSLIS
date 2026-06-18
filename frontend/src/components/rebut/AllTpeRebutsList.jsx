@@ -12,6 +12,7 @@ import { addLocale } from "primereact/api";
 import { MultiSelect } from "primereact/multiselect";
 import Checkbox from "../form/input/Checkbox";
 import { Rebut } from "../../backend/rebut/Rebut";
+import { Stock } from "../../backend/stock/Stock";
 
 import Swal from "sweetalert2";
 
@@ -30,6 +31,7 @@ export default function AllTpeRebutsList() {
     });
 
     const rebutData = new Rebut()
+    const stockData = new Stock()
 
     const savedPagination = JSON.parse(sessionStorage.getItem("paginationStateRebut"));
 
@@ -55,6 +57,10 @@ export default function AllTpeRebutsList() {
     const [printingId, setPrintingId] = useState(null);
     const [globalFilter, setGlobalFilter] = useState(savedFilters?.globalFilter || "");
 
+    const [selectedModels, setSelectedModels] = useState(savedFilters?.selectedModels || []);
+
+    const [models, setModels] = useState([])
+
     const [datesUpdatePiece, setDateUpdatePiece] = useState(
         savedFilters?.datesUpdatePiece
             ? savedFilters.datesUpdatePiece.map((d) => new Date(d))
@@ -65,13 +71,21 @@ export default function AllTpeRebutsList() {
         saveFilters({
             globalFilter,
             datesUpdatePiece: datesUpdatePiece?.map(d => d?.toISOString()),
+            selectedModels,
         });
-    }, [globalFilter, datesUpdatePiece]);
+    }, [globalFilter, datesUpdatePiece, selectedModels]);
 
     useEffect(() => {
         const fetchData = async () => {
             const allTpeRebuts = await rebutData.getAllTpeRebuts()
             setTpeRebutList(allTpeRebuts)
+
+            const modelsData = await stockData.getAllModels()
+            const modelsOptions = modelsData.map((item) => ({
+                value: item.id_model,
+                label: item.nom_model,
+            }))
+            setModels(modelsOptions)
         }
         fetchData()
     }, [])
@@ -85,6 +99,7 @@ export default function AllTpeRebutsList() {
     const handleClearFilters = () => {
         setGlobalFilter("");
         setDateUpdatePiece(null);
+        setSelectedModels([]);
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -186,10 +201,11 @@ export default function AllTpeRebutsList() {
     const filteredTpeRebutList = tpeRebutList.filter((item) => {
 
         // const matchesDatesUpdatesPiece = datesUpdatePiece ? (datesUpdatePiece[0] <= dateDemandeRebut && nextDayDemandeRebut >= dateDemandeRebut) : true;
+        const matchesModel = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesGlobalFilter;
+        return matchesModel, matchesGlobalFilter;
     });
 
     const totalTPE = filteredTpeRebutList.length;
@@ -214,8 +230,19 @@ export default function AllTpeRebutsList() {
                             </button>
                         </span>
                     </div>
-
-                    <div className="flex justify-normal flex-wrap gap-3">
+                    <div className="grid grid-cols-3 gap-3 pb-0">
+                        <MultiSelect
+                            value={selectedModels}
+                            onChange={(e) => setSelectedModels(e.value)}
+                            options={models}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par modèle"
+                            className=""
+                        />
+                    </div>
+                    {/* <div className="flex justify-normal flex-wrap gap-3">
                         <div>
                             <Label>Dates Updates</Label>
                             <Calendar
@@ -231,7 +258,7 @@ export default function AllTpeRebutsList() {
                                 placeholder="jj/mm/aaaa - jj/mm/aaaa"
                             />
                         </div>
-                    </div>
+                    </div> */}
                 </div>
                 <div className="p-6 pt-0 flex justify-between">
                     <div className="flex space-x-3 items-center">

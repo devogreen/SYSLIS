@@ -510,12 +510,16 @@ const getTpeRebutDetails = async (req, res) => {
             },
             include: {
                 statut_tpe: true,
-                pieces_rebut: true,
-                mouvement_piece_rebut: true,
                 model_piece: true,
+                pieces_rebut: {
+                    include: {
+                        items: true,
+                    },
+                },
                 sn_rebut: {
                     include: {
-                        history_piece_rebut: true,
+                        history_snapshot_piece_rebut: true,
+                        mouvement_piece_rebut: true,
                     },
                 },
             },
@@ -533,7 +537,6 @@ const getTpeRebutDetails = async (req, res) => {
     }
 }
 
-
 // Fonction pour la liste des TPE du parc au staut 'rebut' avec leurs pièces
 const getAllTpeRebuts = async (req, res) => {
     try {
@@ -545,7 +548,6 @@ const getAllTpeRebuts = async (req, res) => {
                 model_piece: true,
                 sn_rebut: true,
                 pieces_rebut: true,
-                mouvement_piece_rebut: true,
             },
             orderBy: {
                 last_modified_at: 'desc',
@@ -559,6 +561,218 @@ const getAllTpeRebuts = async (req, res) => {
     }
 }
 
+// Fonction pour modifier la liste de pièces fonctionnelles/défectueuses d'un terminal
+const changeLotPiece = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            listePieceDef,
+            listePieceRec,
+            userId,
+        } = req.body
+
+        const terminal = await prisma.parc_tpe.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+        })
+
+        if (!terminal) {
+            console.error('Terminal introuvable !')
+            return res.status(404).json({ message: "Terminal introuvable !" });
+        }
+
+        if (terminal.is_deleted) {
+            console.error('Terminal supprimé !')
+            return res.status(400).json({ message: "Terminal supprimé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const piecesFonc = typeof listePieceRec === "string" ? JSON.parse(listePieceRec) : listePieceRec;
+        const pieceDef = typeof listePieceDef === "string" ? JSON.parse(listePieceDef) : listePieceDef;
+
+        const duplicates = piecesFonc.filter(id =>
+            pieceDef.includes(id)
+        );
+
+        if (duplicates.length) {
+            console.log("Une pièce ne peut pas être à la fois fonctionnelle et défectueuse.")
+            return res.status(400).json({
+                message: "Une pièce ne peut pas être à la fois fonctionnelle et défectueuse."
+            });
+        }
+
+        const dateAction = new Date()
+
+        let rebut_session = await prisma.sn_rebut.findFirst({
+            where: {
+                sn_id: terminal.id,
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
+        });
+
+        const data = []
+        const historyData = []
+
+        if (Array.isArray(piecesFonc)) {
+            data.push(
+                ...piecesFonc.map(pieceId => ({
+                    sn_id: terminal.id,
+                    piece_id: pieceId,
+                    etat: 'fonctionnel',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                }))
+            );
+            historyData.push(
+                ...piecesFonc.map(pieceId => ({
+                    piece_id: pieceId,
+                    etat: 'fonctionnel',
+                }))
+            )
+        }
+
+        if (Array.isArray(pieceDef)) {
+            data.push(
+                ...pieceDef.map(pieceId => ({
+                    sn_id: terminal.id,
+                    piece_id: pieceId,
+                    etat: 'defectueux',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                }))
+            );
+            historyData.push(
+                ...pieceDef.map(pieceId => ({
+                    piece_id: pieceId,
+                    etat: 'defectueux',
+                }))
+            )
+        }
+
+        const modification = await prisma.$transaction(async (tx) => {
+
+            if (!rebut_session) {
+                rebut_session = await tx.sn_rebut.create({
+                    data: {
+                        sn_id: terminal.id,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    }
+                })
+            } else {
+                await tx.sn_rebut.update({
+                    where: {
+                        id: rebut_session.id,
+                    },
+                    data: {
+                        last_modified_at: dateAction,
+                        updated_at: dateAction,
+                        updated_by: utilisateur.id_user,
+                    }
+                })
+            }
+
+            
+            await tx.pieces_rebut.deleteMany({
+                where: { sn_id: terminal.id }
+            })
+            
+            if (data.length) {
+                
+                const snapshot = await tx.history_snapshot_piece_rebut.create({
+                    data: {
+                        rebut_id: rebut_session.id,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                    }
+                })
+
+                await tx.pieces_rebut.createMany({
+                    data,
+                });
+
+                await tx.history_piece_rebut.createMany({
+                    data: historyData.map(item => ({
+                        ...item,
+                        snap_id: snapshot.id,
+                    })),
+                })
+            }
+
+            return true
+        })
+
+        console.log(`Modification du lot de pièces du TPE ${terminal.id} : ${terminal.serial_number} par ${utilisateur.username}`)
+        res.status(200).json({
+            data: modification,
+            message: `Modification du lot de pièces du TPE ${terminal.id} : ${terminal.serial_number} par ${utilisateur.username}`
+        });
+    } catch (error) {
+        console.error("Erreur lors de la modification de pièces :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour changer le statut de pièces fonctionnelles d'un TPE en 'utilise"
+// const recupPieceFonc = async (req, res) => {
+//     try {
+//         const {
+//             id
+//         } = req.params
+//         const {
+//             listePieceFonc,
+//             userId,
+//         } = req.body
+
+//         const terminal = await prisma.parc_tpe.findUnique({
+//             where: {
+//                 id: parseInt(id),
+//             },
+//         })
+
+//         if (!terminal) {
+//             console.error('Terminal introuvable !')
+//             return res.status(404).json({ message: "Terminal introuvable !" });
+//         }
+
+//         if (terminal.is_deleted) {
+//             console.error('Terminal supprimé !')
+//             return res.status(400).json({ message: "Terminal supprimé !" });
+//         }
+
+//         const utilisateur = await prisma.users.findUnique({
+//             where: {
+//                 id_user: parseInt(userId)
+//             }
+//         })
+//         if (!utilisateur) {
+//             console.error('Utilisteur introuvable !')
+//             return res.status(404).json({ message: "Utilisateur introuvable !" });
+//         }
+
+//         const piecesFonc = typeof listePieceFonc === "string" ? JSON.parse(listePieceFonc) : listePieceFonc;
+
+//         const recuperation = await prisma.$transaction(async (tx) => {
+
+//         })
+//     }
+// }
+
 module.exports = {
     downloadTemplateRebut,
     extractRebut,
@@ -566,4 +780,5 @@ module.exports = {
     getAllDemandesRebut,
     getAllTpeRebuts,
     getTpeRebutDetails,
+    changeLotPiece,
 }

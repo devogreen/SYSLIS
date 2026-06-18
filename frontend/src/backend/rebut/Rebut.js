@@ -71,4 +71,14 @@ export class Rebut {
             throw error.response.data
         }
     }
+
+    async changeLotPiece(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/rebut/changeLotPiece/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }
