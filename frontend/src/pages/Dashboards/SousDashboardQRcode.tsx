@@ -47,6 +47,7 @@ export default function SousDashboardQRcode() {
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  // @ts-ignore
   const currentWeek = getWeek(new Date(), { weekStartsOn: 1 });
 
   const getIsoWeekRange = (date: Date) => {
@@ -325,12 +326,14 @@ export default function SousDashboardQRcode() {
     setTableTotals(computedTableTotals);
   }, [computedTableTotals]);
 
+  // @ts-ignore
   const operateurData = [
     { name: 'Orange', value: qrQuantities.imprimee || 0 },
     { name: 'MTN', value: qrQuantities.livree || 0 },
     { name: 'MOOV', value: qrQuantities.recue || 0 }
   ];
 
+  // @ts-ignore
   const formatData = [
     { name: 'format-A', value: qrQuantities.soumise || 0 },
     { name: 'format-B', value: qrQuantities.generee || 0 }
@@ -1030,6 +1033,7 @@ export default function SousDashboardQRcode() {
           });
 
           //  Liste des formats disponibles
+          // @ts-ignore
           const ALL_FORMATS = rows.map((f: any) => f.format);
 
           //  Agrégation des impressions par format
