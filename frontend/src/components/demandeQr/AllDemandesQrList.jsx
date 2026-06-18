@@ -134,6 +134,12 @@ export default function AllDemandesQrList() {
                 })
                 setDemandes(demandesQrData)
 
+                // const data = await demandeData.getDataImpressionQr()
+                // console.log(data)
+
+                // const data2 = await demandeData.getAllDataDemandeQr()
+                // console.log(data2)
+
             } catch (error) {
                 console.log('Error fetching data ', error)
             } finally {

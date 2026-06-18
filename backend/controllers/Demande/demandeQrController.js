@@ -2610,6 +2610,213 @@ const exportOneDemandeQrToExcel = async (req, res) => {
     }
 }
 
+// Fonction pour obtenir toutes les données des demandes de QR Codes (quantités, opérateurs, statuts, dates) selon des filtres de date, pour analyse et reporting.T1
+const getAllDataDemandeQr = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const demandes = await prisma.demande_qr.findMany({
+            where: {
+                forms: {
+                    last_modified_at: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    },
+                    is_deleted: false,
+                },
+            },
+            select: {
+                id: true,
+                quantite_qr: true,
+                liste_demande: true,
+                statut: true,
+                forms: {
+                    select: {
+                        last_modified_at: true,
+                    },
+                },
+            },
+        });
+
+        const operateurs = await prisma.type_paiement.findMany({
+            select: {
+                id: true,
+                nom: true,
+            },
+        });
+
+        let total = []
+
+        const generations = await prisma.generation_qr.findMany({
+            select: {
+                demande_id: true,
+                quantite_qr: true,
+            },
+        });
+
+        const generationMap = new Map(
+            generations.map(g => [g.demande_id, g.quantite_qr])
+        );
+
+        const parsedDemandes = demandes.map(d => ({
+            ...d,
+            liste_demande:
+                typeof d.liste_demande === "string"
+                    ? JSON.parse(d.liste_demande)
+                    : d.liste_demande || []
+        }));
+
+        for (const demande of parsedDemandes) {
+
+            const statut = demande.statut;
+
+            const total_genere =
+                statut != "soumise"
+                    ? generationMap.get(demande.id) || 0
+                    : 0;
+
+            const totals = operateurs.map((operateur) => {
+                const total_qr = demande.liste_demande
+                    .filter(item => item.typeQrId === operateur.id)
+                    .reduce((sum, item) => sum + (item.quantiteQr || 0), 0);
+                if (total_qr === 0) return null; // On ne retourne que les opérateurs concernés par la demande
+                return {
+                    demande_id: demande.id,
+                    statut,
+                    total_qr,
+                    operateur: operateur.nom,
+                    date_demande: demande.forms.last_modified_at,
+                    total_genere: total_genere != 0 ? total_qr : 0,
+                };
+            });
+
+            total.push(...totals);
+        }
+
+        res.status(200).json({
+            data: total.filter(item => item !== null), // On filtre les opérateurs non concernés
+            message: 'Données des demandes de QR Codes récupérées avec succès !',
+        })
+
+    } catch (error) {
+        console.error('Erreur getAllDataDemandeQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
+// Fonction pour obtenir les données d'impression des demandes de QR Codes (quantités imprimées, opérateurs, dates) selon des filtres de date, pour analyse et reporting.T2
+const getDataImpressionQr = async (req, res) => {
+    try {
+
+        const { startDate, endDate } = req.query;
+
+        const demandes = await prisma.demande_qr.findMany({
+            where: {
+                forms: {
+                    last_modified_at: {
+                        gte: new Date(startDate + 'T00:00:00'),
+                        lte: new Date(endDate + 'T23:59:59')
+                    },
+                    is_deleted: false,
+                },
+                statut: {
+                    not: 'soumise',
+                },
+            },
+            select: {
+                id: true,
+                quantite_qr: true,
+                liste_demande: true,
+                statut: true,
+                forms: {
+                    select: {
+                        last_modified_at: true,
+                    },
+                },
+            },
+        });
+
+        const formats = await prisma.format_qr.findMany({
+            select: {
+                id: true,
+                format: true,
+            },
+        });
+
+        const operateurs = await prisma.type_paiement.findMany({
+            select: {
+                id: true,
+                nom: true,
+            },
+        });
+
+        const parsedDemandes = demandes.map(d => ({
+            ...d,
+            liste_demande:
+                typeof d.liste_demande === "string"
+                    ? JSON.parse(d.liste_demande)
+                    : d.liste_demande || []
+        }));
+
+        const total = formats.map((format) => {
+            const listeOperateurs = operateurs.map((operateur) => {
+
+                let total_genere = 0;
+                let total_imprime = 0;
+                let total_demandes = 0;
+
+                // Récupérer le total des demandes qui contiennent l'opérateur et le format
+                parsedDemandes.forEach((demande) => {
+                    const quantite = demande.liste_demande
+                        .filter(
+                            item =>
+                                item.typeQrId === operateur.id &&
+                                item.formatId === format.id
+                        )
+                        .reduce(
+                            (sum, item) => sum + (item.quantiteQr || 0),
+                            0
+                        );
+
+                    // This demande contains this operator/format
+                    if (quantite > 0) {
+                        total_demandes++;
+                    }
+
+                    // Accumuler le total des qr codes pour chaque demande avec le format et l'opérateur
+                    total_genere += quantite;
+
+                    if (demande.statut === "imprimee" || demande.statut === "livree" || demande.statut === "recue") {
+                        total_imprime += quantite;
+                    }
+                });
+
+                return {
+                    operateur_id: operateur.id,
+                    operateur: operateur.nom,
+                    total_demandes,
+                    total_genere,
+                    total_imprime,
+                };
+            })
+
+            return {
+                format_id: format.id,
+                format: format.format,
+                operateurs: listeOperateurs,
+            };
+        })
+
+        res.status(200).json({
+            data: total, // On filtre les opérateurs non concernés
+            message: 'Données des impressions des demandes de QR Codes récupérées avec succès !',
+        })
+
+    } catch (error) {
+        console.error('Erreur getDataImpressionQr:', error);
+        res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2633,4 +2840,6 @@ module.exports = {
     downloadTemplateQr,
     exportTotalDemandesQrToExcel,
     exportOneDemandeQrToExcel,
+    getAllDataDemandeQr,
+    getDataImpressionQr,
 }
