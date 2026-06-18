@@ -72,6 +72,8 @@ import { ReactComponent as DeliveryAdd} from "./delivery-add.svg?react"
 import { ReactComponent as PiecesSolid } from "./pieces-solid.svg?react"
 import { ReactComponent as MultipleCogs}  from "./cogs.svg?react"
 import { ReactComponent as TimeRecover } from "./time-past.svg?react"
+import { ReactComponent as ToolContainer } from "./tools-container.svg?react"
+import { ReactComponent as ToolContainerThin } from "./tools-container-thin.svg?react"
 export {
   ErrorHexaIcon,
   AlertHexaIcon,
@@ -146,4 +148,6 @@ export {
   PiecesSolid,
   MultipleCogs,
   TimeRecover,
+  ToolContainer,
+  ToolContainerThin,
 };

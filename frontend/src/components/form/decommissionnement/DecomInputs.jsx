@@ -95,7 +95,6 @@ export default function DecomInputs() {
             try {
                 setLoadingData(true)
                 const merchants = await merchantsData.findMerchant()
-                // console.log(merchants)
                 setMerchantList(merchants)
 
             } catch (error) {
@@ -510,7 +509,7 @@ export default function DecomInputs() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <Label>Importer des fichiers <span className="text-red-700">*</span></Label>
+                                                    <Label>Importer des fichiers</Label>
                                                     <div
                                                         {...getFilesRootProps()}
                                                         className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"

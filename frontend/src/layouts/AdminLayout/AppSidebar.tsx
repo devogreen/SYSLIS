@@ -17,6 +17,7 @@ import {
   RefreshTimeIcon,
   BaseLinePhoneIcon,
   TrashBinIcon,
+  MaintenanceCircle,
 } from "../../icons";
 import { useSidebar } from "../../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -107,6 +108,16 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles: [23], pro: false },
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
+    ],
+  },
+  {
+    name: "Gestion des Rebuts",
+    icon: <MaintenanceCircle />,
+    roles: [30, 31, 32, 33],
+    subItems: [
+      { name: "Mettre au rebut", path: "/nouveau-rebut", roles: [30, 32], pro: false },
+      { name: "Toutes les mises au rebut", path: "/toutes-les-demandes-rebut", roles: [30, 31, 32, 33], pro: false },
+      { name: "Tous les TPE au rebut", path: "/tpe-rebuts", roles: [30, 31, 32, 33], pro: false },
     ],
   },
   {
