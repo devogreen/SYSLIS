@@ -181,15 +181,11 @@ export default function AllRemplacementsList() {
         }
     }
     const titleTemplate = (deliveryForms) => {
-        let title = '';
         let linkSee = `/remplacement-details/${deliveryForms.id}`;
         let titleClass = 'font-bold text-sm'
-        const model = listModels.find((item) => {
-            return item.id_model == deliveryForms.old_model_id
-        })
-        if (model) {
-            title = `Remplacement TPE ${model.nom_model.toUpperCase()}`
-        }
+        const model = deliveryForms.model_piece_remplacements_new_model_idTomodel_piece.nom_model
+        let title = `Remplacement TPE ${model}`;
+
         return (
             <span className="flex flex-col">
                 <Link key={deliveryForms.id}
@@ -201,17 +197,11 @@ export default function AllRemplacementsList() {
         );
     };
     const newModelTemplate = (deliveryForms) => {
-        const model = listModels.find((item) => {
-            return item.id_model == deliveryForms.new_model_id
-        })
-        let nomModel = ''
-        if (model) {
-            nomModel = model.nom_model.toUpperCase()
-        }
+        const model = deliveryForms.model_piece_remplacements_new_model_idTomodel_piece.nom_model
 
         return (
             <>
-                <span className="font-bold text-sm">{nomModel}</span>
+                <span className="font-bold text-sm">{model}</span>
             </>
         )
     }

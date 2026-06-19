@@ -76,28 +76,27 @@ export default function AllUsers() {
         )
     }
     const serviceTemplate = (user) => {
-        const service_list = userServices.map((userServices => {
-            if (userServices.user_id == user.id_user) {
-                return userServices.service_id
-            }
-            return []
-        }))
+        // const service_list = userServices.map((userServices => {
+        //     if (userServices.user_id == user.id_user) {
+        //         return userServices.service_id
+        //     }
+        //     return []
+        // }))
 
-        const user_services = services.filter((service => {
-            return service_list.includes(service.id)
-        }))
+        const userServices = user.user_services.map((item) => {
+            return item.services.nom_service
+        })
 
         return (
             <>  
                 <div className="max-h-40 overflow-y-auto">
-                    {user_services.map((service => {
+                    {userServices.map((service => {
 
-                        const nomService = service.nom_service
                         let serviceTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-semibold'
                         return (
                             <>
                                 <div className="flex-col">
-                                    <span className={serviceTag}>{nomService}</span>
+                                    <span className={serviceTag}>{service}</span>
                                 </div>
                             </>
                         )
@@ -107,23 +106,16 @@ export default function AllUsers() {
         )
     }
     const roleTemplate = (user) => {
-        const role_list = userRoles.map((userRoles => {
-            if (userRoles.user_id == user.id_user) {
-                return userRoles.role_id
-            }
-            return []
-        }))
-
-        const user_roles = roles.filter((role => {
-            return role_list.includes(role.id_role)
-        }))
+        const userRoles = user.user_roles.map((item) => {
+            return item.roles.nom_role
+        })
 
         return (
             <>
                 <div className="max-h-40 overflow-y-auto">
-                    {user_roles.map((role => {
+                    {userRoles.map((role => {
 
-                        const nomRole = role.nom_role.split("_").join(" ");
+                        const nomRole = role.split("_").join(" ");
                         let roleTag = 'px-1 rounded-xl bg-gray-400 text-xs text-black font-bold'
                         return (
                             <>

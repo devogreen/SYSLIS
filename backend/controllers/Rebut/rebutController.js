@@ -687,13 +687,12 @@ const changeLotPiece = async (req, res) => {
                 })
             }
 
-            
             await tx.pieces_rebut.deleteMany({
                 where: { sn_id: terminal.id }
             })
-            
+
             if (data.length) {
-                
+
                 const snapshot = await tx.history_snapshot_piece_rebut.create({
                     data: {
                         rebut_id: rebut_session.id,
@@ -728,50 +727,179 @@ const changeLotPiece = async (req, res) => {
     }
 }
 
-// Fonction pour changer le statut de pièces fonctionnelles d'un TPE en 'utilise"
-// const recupPieceFonc = async (req, res) => {
-//     try {
-//         const {
-//             id
-//         } = req.params
-//         const {
-//             listePieceFonc,
-//             userId,
-//         } = req.body
+// Fonction pour changer le statut de pièces fonctionnelles d'un TPE en 'utilise'
+const recupPieceFonc = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            listePiecesRecup,
+            listePiecesFoncReste,
+            listePiecesDef,
+            userId,
+        } = req.body
 
-//         const terminal = await prisma.parc_tpe.findUnique({
-//             where: {
-//                 id: parseInt(id),
-//             },
-//         })
+        const terminal = await prisma.parc_tpe.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+        })
 
-//         if (!terminal) {
-//             console.error('Terminal introuvable !')
-//             return res.status(404).json({ message: "Terminal introuvable !" });
-//         }
+        if (!terminal) {
+            console.error('Terminal introuvable !')
+            return res.status(404).json({ message: "Terminal introuvable !" });
+        }
 
-//         if (terminal.is_deleted) {
-//             console.error('Terminal supprimé !')
-//             return res.status(400).json({ message: "Terminal supprimé !" });
-//         }
+        if (terminal.is_deleted) {
+            console.error('Terminal supprimé !')
+            return res.status(400).json({ message: "Terminal supprimé !" });
+        }
 
-//         const utilisateur = await prisma.users.findUnique({
-//             where: {
-//                 id_user: parseInt(userId)
-//             }
-//         })
-//         if (!utilisateur) {
-//             console.error('Utilisteur introuvable !')
-//             return res.status(404).json({ message: "Utilisateur introuvable !" });
-//         }
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
 
-//         const piecesFonc = typeof listePieceFonc === "string" ? JSON.parse(listePieceFonc) : listePieceFonc;
+        const piecesRecup = typeof listePiecesRecup === "string" ? JSON.parse(listePiecesRecup) : listePiecesRecup;
+        const piecesFoncReste = typeof listePiecesFoncReste === "string" ? JSON.parse(listePiecesFoncReste) : listePiecesFoncReste;
+        const piecesDef = typeof listePiecesDef === "string" ? JSON.parse(listePiecesDef) : listePiecesDef;
 
-//         const recuperation = await prisma.$transaction(async (tx) => {
+        let rebut_session = await prisma.sn_rebut.findFirst({
+            where: {
+                sn_id: terminal.id,
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
+        });
 
-//         })
-//     }
-// }
+        const dateAction = new Date()
+
+        const dataUpdate = []
+        const mouvementData = []
+        const historyData = []
+
+        if (Array.isArray(piecesRecup)) {
+            // Update de la liste de pièces à récuper: changer de statut de fonctionnel à utilisé
+            dataUpdate.push(
+                ...piecesRecup.map(pieceId => ({
+                    sn_id: terminal.id,
+                    piece_id: pieceId,
+                    etat: 'utilise',
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                }))
+            );
+            // Mouvement des pièces fonctionnelles à utilisées
+            mouvementData.push(
+                ...piecesRecup.map(pieceId => ({
+                    piece_id: pieceId,
+                    ancien_etat: 'fonctionnel',
+                    nouvel_etat: 'utilise',
+                    mouvement: 'retrait',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                }))
+            );
+        }
+
+        // Historique des pièces utilisé au moment de l'action
+        if (Array.isArray(piecesRecup)) {
+            historyData.push(
+                ...piecesRecup.map(pieceId => ({
+                    piece_id: pieceId,
+                    etat: 'utilise',
+                }))
+            )
+        }
+        // Historique des pièces fonctionnelles (non utilisées) au moment de l'action
+        if (Array.isArray(piecesFoncReste)) {
+            historyData.push(
+                ...piecesFoncReste.map(pieceId => ({
+                    piece_id: pieceId,
+                    etat: 'fonctionnel',
+                }))
+            )
+        }
+        // Historique des pièces défectueuses au moment de l'action
+        if (Array.isArray(piecesDef)) {
+            historyData.push(
+                ...piecesDef.map(pieceId => ({
+                    piece_id: pieceId,
+                    etat: 'defectueux',
+                }))
+            )
+        }
+
+        const recuperation = await prisma.$transaction(async (tx) => {
+
+            await tx.sn_rebut.update({
+                where: {
+                    id: rebut_session.id,
+                },
+                data: {
+                    last_modified_at: dateAction,
+                    updated_at: dateAction,
+                    updated_by: utilisateur.id_user,
+                }
+            })
+
+            await Promise.all(
+                piecesRecup.map(piece =>
+                    tx.pieces_rebut.updateMany({
+                        where: {
+                            sn_id: terminal.id,
+                            piece_id: parseInt(piece),
+                        },
+                        data: dataUpdate
+                    })
+                )
+            );
+
+            const snapshot = await tx.history_snapshot_piece_rebut.create({
+                data: {
+                    rebut_id: rebut_session.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                }
+            })
+
+            await tx.history_piece_rebut.createMany({
+                data: historyData.map(item => ({
+                    ...item,
+                    snap_id: snapshot.id,
+                })),
+            })
+
+            await tx.mouvement_piece_rebut.createMany({
+                data: mouvementData.map(item => ({
+                    ...item,
+                    rebut_id: rebut_session.id,
+                    snap_id: snapshot.id,
+                })),
+            })
+
+            return {
+                snapshot
+            }
+        })
+
+        console.log(`Récupération des pièces fonctionnelles du TPE ${terminal.id} : ${terminal.serial_number} par ${utilisateur.username}`)
+        res.status(200).json({
+            data: recuperation,
+            message: `Récupération des pièces fonctionnelles du TPE ${terminal.id} : ${terminal.serial_number} par ${utilisateur.username}`
+        });
+    } catch (error) {
+        console.error("Erreur lors de la récupération des pièces fonctionnelles :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
 
 module.exports = {
     downloadTemplateRebut,
@@ -781,4 +909,5 @@ module.exports = {
     getAllTpeRebuts,
     getTpeRebutDetails,
     changeLotPiece,
+    recupPieceFonc,
 }

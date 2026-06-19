@@ -2591,6 +2591,8 @@ const getAllRemplacements = async (req, res) => {
       orderBy: { date_remplacement: 'desc' },
       include: {
         forms: true,
+        model_piece_remplacements_new_model_idTomodel_piece: true,
+        model_piece_remplacements_new_model_idTomodel_piece: true,
         validation_remplacement: {
           include: {
             forms: true,

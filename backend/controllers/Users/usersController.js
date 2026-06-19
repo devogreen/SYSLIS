@@ -343,6 +343,18 @@ const getAllUsers = async (req, res) => {
     try {
         const allUsers = await prisma.users.findMany({
             orderBy: { id_user: 'asc' },
+            include: {
+                user_roles: {
+                    include: {
+                        roles: true,
+                    },
+                },
+                user_services: {
+                    include: {
+                        services: true,
+                    },
+                },
+            },
         });
 
         res.status(200).json(allUsers);

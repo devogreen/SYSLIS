@@ -1094,9 +1094,10 @@ model history_snapshot_piece_rebut {
   created_at DateTime @default(now()) @db.DateTime(0)
   created_by Int
 
-  sn_rebut            sn_rebut              @relation(fields: [rebut_id], references: [id], onDelete: Cascade, map: "history_snapshot_piece_rebut_ibfk_1")
-  users               users                 @relation(fields: [created_by], references: [id_user], map: "history_snapshot_piece_rebut_ibfk_2")
-  history_piece_rebut history_piece_rebut[]
+  sn_rebut              sn_rebut                @relation(fields: [rebut_id], references: [id], onDelete: Cascade, map: "history_snapshot_piece_rebut_ibfk_1")
+  users                 users                   @relation(fields: [created_by], references: [id_user], map: "history_snapshot_piece_rebut_ibfk_2")
+  history_piece_rebut   history_piece_rebut[]
+  mouvement_piece_rebut mouvement_piece_rebut[]
 
   @@index([rebut_id], map: "rebut_id")
   @@index([created_by], map: "created_by")
@@ -1115,21 +1116,24 @@ model history_piece_rebut {
 }
 
 model mouvement_piece_rebut {
-  id                          Int                        @id @default(autoincrement())
-  rebut_id                    Int
-  piece_id                    Int
-  mouvement                   type_mouvement_piece_rebut
-  ancien_etat                 etat_piece_rebut?
-  nouvel_etat                 etat_piece_rebut
-  created_at                  DateTime                   @default(now()) @db.DateTime(0)
-  created_by                  Int
-  sn_rebut                    sn_rebut                   @relation(fields: [rebut_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
-  items                       items                      @relation(fields: [piece_id], references: [id_piece], map: "mouvement_piece_rebut_ibfk_2")
-  users                       users                      @relation(fields: [created_by], references: [id_user], map: "mouvement_piece_rebut_ibfk_3")
+  id          Int                          @id @default(autoincrement())
+  rebut_id    Int
+  piece_id    Int
+  snap_id     Int
+  mouvement   type_mouvement_piece_rebut
+  ancien_etat etat_piece_rebut?
+  nouvel_etat etat_piece_rebut
+  created_at  DateTime                     @default(now()) @db.DateTime(0)
+  created_by  Int
+  sn_rebut    sn_rebut                     @relation(fields: [rebut_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
+  items       items                        @relation(fields: [piece_id], references: [id_piece], map: "mouvement_piece_rebut_ibfk_2")
+  users       users                        @relation(fields: [created_by], references: [id_user], map: "mouvement_piece_rebut_ibfk_3")
+  snap        history_snapshot_piece_rebut @relation(fields: [snap_id], references: [id], map: "mouvement_piece_rebut_ibfk_4")
 
   @@index([rebut_id], map: "rebut_id")
   @@index([piece_id], map: "piece_id")
   @@index([created_by], map: "created_by")
+  @@index([snap_id], map: "snap_id")
 }
 
 enum livraison_statut_livraison {

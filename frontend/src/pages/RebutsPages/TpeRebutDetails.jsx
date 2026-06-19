@@ -54,7 +54,7 @@ export default function TpeRebutDetails() {
         pieces.length > 0 &&
         selectedPiecesRec?.length === pieces.length;
 
-    const allPieceRecupFonc = 
+    const allPieceRecupFonc =
         piecesFonc.length > 0 &&
         selectedPiecesRecupFonc?.length === piecesFonc.length;
 
@@ -100,7 +100,7 @@ export default function TpeRebutDetails() {
             }
 
             if (nomRoles.includes('gestion_rebut')) {
-                // setIsGestion(true)
+                setIsGestion(true)
             }
         }
         fetchData()
@@ -202,6 +202,52 @@ export default function TpeRebutDetails() {
             );
         }
     };
+
+    const handleValidateRecupPiecesFonc = async () => {
+        try {
+            const piecesFoncRest = piecesFonc.filter((piece) => {
+                return !selectedPiecesRecupFonc.includes(piece.items.id_piece)
+            })
+
+            const piecesFoncRestId = piecesFoncRest.map((piece) => {
+                return piece.items.id_piece
+            })
+
+            console.log('Pièces fonctionnelles récupérées : ', selectedPiecesRecupFonc)
+            console.log('Pièces fonctionnelles restantes : ', piecesFoncRestId)
+            console.log('Pieces défectueuses : ', selectedPiecesDef)
+
+            setLoadingValidationLot(true)
+            setIsModalRetraitPieceOpen(false)
+
+            const payload = {
+                listePiecesRecup: JSON.stringify(selectedPiecesRecupFonc),
+                listePiecesFoncReste: JSON.stringify(piecesFoncRestId),
+                listePiecesDef: JSON.stringify(selectedPiecesDef),
+                userId,
+            }
+
+            await rebutData.recupPieceFonc(id, payload)
+
+            Swal.fire({
+                title: "Succès",
+                text: `Récupération de ${selectedPiecesRecupFonc.length} pièces fonctionnelles sur le terminal`,
+                icon: "success"
+            })
+
+            navigate('/tpe-rebuts')
+        } catch (error) {
+            console.log("Erreur de modification : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la modification !",
+                icon: "warning"
+            })
+            navigate('/tpe-rebuts')
+        } finally {
+            setLoadingValidationLot(false)
+        }
+    }
     return (
         <>
             <PageBreadcrumb pageTitle="Détails TPE au rebut" />
@@ -215,17 +261,17 @@ export default function TpeRebutDetails() {
                             </div>
                             <div>
                                 <div className="col-start-2 space-y-0.5">
-                                    {isAdmin ? (
+                                    {loadingValidationLot ? (
                                         <>
-                                            {loadingValidationLot ? (
-                                                <>
-                                                    <div className='text-center'>
-                                                        <span className=''>
-                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                        </span>
-                                                    </div>
-                                                </>
-                                            ) : (
+                                            <div className='text-center'>
+                                                <span className=''>
+                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                </span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {isAdmin ? (
                                                 <>
                                                     <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                         onClick={() => {
@@ -236,38 +282,37 @@ export default function TpeRebutDetails() {
                                                         <span className='text-sm text-gray-700 font-medium'>Modifier lots de pièces</span>
                                                     </button>
                                                 </>
+                                            ) : (
+                                                <></>
                                             )}
-                                        </>
-                                    ) : (
-                                        <></>
-                                    )}
-                                    {isGestion ? (
-                                        <>
-                                            {loadingRetrait ? (
+                                            {isGestion ? (
                                                 <>
-                                                    <div className='text-center'>
-                                                        <span className=''>
-                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                        </span>
-                                                    </div>
+                                                    {loadingRetrait ? (
+                                                        <>
+                                                            <div className='text-center'>
+                                                                <span className=''>
+                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                onClick={() => {
+                                                                    setIsModalRetraitPieceOpen(true)
+                                                                }}
+                                                            >
+                                                                <span className='mr-4'><i className="pi pi-wrench"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Récupérer pièces fonctionnelles</span>
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </>
                                             ) : (
-                                                <>
-                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                        onClick={() => {
-                                                            setIsModalRetraitPieceOpen(true)
-                                                        }}
-                                                    >
-                                                        <span className='mr-4'><i className="pi pi-wrench"></i></span>
-                                                        <span className='text-sm text-gray-700 font-medium'>Récupérer pièces fonctionnelles</span>
-                                                    </button>
-                                                </>
+                                                <></>
                                             )}
                                         </>
-                                    ) : (
-                                        <></>
                                     )}
-
                                 </div>
                             </div>
                         </div>
@@ -287,7 +332,7 @@ export default function TpeRebutDetails() {
                                         </div>
                                     </div>
                                     <div className=" border border-black rounded-xl bg-gray-100">
-                                        <img src="../../public/images/logo/terminal_lines_black.png" alt="" style={{ width: '500px' }} />
+                                        <img src="/images/logo/terminal_lines_black.png" alt="terminal_image" style={{ width: '500px' }} />
                                     </div>
                                 </div>
                                 {/* <img src="../../public/images/logo/terminal_A8900_sided.png" alt="" style={{width: '500px'}}/> */}
@@ -486,7 +531,7 @@ export default function TpeRebutDetails() {
                         <div>
                             <div className="w-full flex justify-center items-center">
                                 <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={handleValidateLot}
+                                    onClick={handleValidateRecupPiecesFonc}
                                 >
                                     Valider
                                 </button>

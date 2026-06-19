@@ -184,40 +184,17 @@ export default function AllDeliveriesList({ filterType }) {
         }
     }
     const titleTemplate = (deliveryForms) => {
-        let title = '';
+        let title = deliveryForms.type_livraison_commerciale.nom_type_livraison;
         let linkSee = `/formulaire/${deliveryForms.id_livraison}`;
         let titleClass = 'font-bold text-sm'
-        let typeLivraison = typesLivraison.find((item) => {
-            return item.id_type_livraison == deliveryForms.type_livraison_id
-        })
-        if (typeLivraison) {
-            title = typeLivraison.nom_type_livraison.toUpperCase()
-        }
 
-        // if (deliveryForms.type_livraison_id === 1) {
-        //     title = 'Livraison TPE GIM';
-        //     titleClass = "font-bold text-sm text-fuchsia-400"
-        // } else if (deliveryForms.type_livraison_id === 2) {
-        //     title = 'Livraison TPE REPARE'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-red-400"
-        // } else if (deliveryForms.type_livraison_id === 3) {
-        //     title = 'Livraison TPE MAJ GIM'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-purple-400"
-        // } else if (deliveryForms.type_livraison_id === 4) {
-        //     title = 'Livraison TPE MOBILE'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-green-400"
-        // } else if (deliveryForms.type_livraison_id === 5 || deliveryForms.type_livraison_id === 7) {
-        //     title = 'Livraison CHARGEUR'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-yellow-400"
-        //     linkSee = `/formulaire-chargeur/${deliveryForms.id_livraison}`
-        // } else if (deliveryForms.type_livraison_id === 6) {
-        //     title = 'Livraison TPE ECOBANK'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-cyan-400"
-        // } else if (deliveryForms.type_livraison_id === 8) {
-        //     title = 'Livraison CHARGEUR (DECOM RI NOK)'; // fallback or other types
-        //     titleClass = "font-bold text-sm text-yellow-600";
-        //     linkSee = `/formulaire-chargeur/${deliveryForms.id_livraison}`;
+        // let typeLivraison = typesLivraison.find((item) => {
+        //     return item.id_type_livraison == deliveryForms.type_livraison_id
+        // })
+        // if (typeLivraison) {
+        //     title = typeLivraison.nom_type_livraison.toUpperCase()
         // }
+
         return (
             <span className="flex flex-col">
                 <Link key={deliveryForms.id_livraison}

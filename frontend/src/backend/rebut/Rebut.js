@@ -81,4 +81,13 @@ export class Rebut {
         }
     }
 
+    async recupPieceFonc(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/rebut/recupPieceFonc/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }
