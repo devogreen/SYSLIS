@@ -851,13 +851,17 @@ const recupPieceFonc = async (req, res) => {
             })
 
             await Promise.all(
-                piecesRecup.map(piece =>
+                dataUpdate.map(piece =>
                     tx.pieces_rebut.updateMany({
                         where: {
                             sn_id: terminal.id,
-                            piece_id: parseInt(piece),
+                            piece_id: piece.piece_id,
                         },
-                        data: dataUpdate
+                        data: {
+                            etat: piece.etat,
+                            updated_by: piece.updated_by,
+                            updated_at: piece.update_at,
+                        }
                     })
                 )
             );

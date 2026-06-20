@@ -338,7 +338,7 @@ export default function TpeRebutDetails() {
                                 {/* <img src="../../public/images/logo/terminal_A8900_sided.png" alt="" style={{width: '500px'}}/> */}
                             </div>
                             <div className="">
-                                <div className="border rounded-2xl p-3">
+                                <div className="border rounded-2xl p-3 bg-gray-dark">
                                     <div className="space-y-3">
                                         <div className="space-y-3">
                                             <div className="text-center text-green-700">
@@ -355,12 +355,12 @@ export default function TpeRebutDetails() {
                                                     <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
                                                 </div>
                                             </div>
-                                            <div className="min-h-50 max-h-50 overflow-y-auto">
+                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-gray-dark p-0.5">
                                                 <div className="grid grid-cols-3 gap-1">
                                                     {piecesFonc.map((item) => {
                                                         return (
                                                             <>
-                                                                <div className="bg-green-200 text-green-800 text-center">
+                                                                <div className="bg-green-200 text-green-900 text-center">
                                                                     <span>{item.items.nom_piece}</span>
                                                                 </div>
                                                             </>
@@ -384,7 +384,7 @@ export default function TpeRebutDetails() {
                                                     <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
                                                 </div>
                                             </div>
-                                            <div className="min-h-50 max-h-50 overflow-y-auto">
+                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-gray-dark p-0">
                                                 <div className="grid grid-cols-3 gap-1">
                                                     {piecesDef.map((item) => {
                                                         return (
