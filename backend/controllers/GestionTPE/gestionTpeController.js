@@ -121,6 +121,7 @@ const getTpeInfos = async (req, res) => {
                 users_create_tpe: true,
                 users_update_tpe: true,
                 statut_tpe: true,
+                model_piece: true,
                 history_tpe: {
                     include: {
                         users: true,

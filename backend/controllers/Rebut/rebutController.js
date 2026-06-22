@@ -518,7 +518,14 @@ const getTpeRebutDetails = async (req, res) => {
                 },
                 sn_rebut: {
                     include: {
-                        history_snapshot_piece_rebut: true,
+                        history_snapshot_piece_rebut: {
+                            include: {
+                                history_piece_rebut: true,
+                            },
+                            orderBy: {
+                                created_at: 'desc',
+                            },
+                        },
                         mouvement_piece_rebut: true,
                     },
                 },
@@ -547,7 +554,11 @@ const getAllTpeRebuts = async (req, res) => {
             include: {
                 model_piece: true,
                 sn_rebut: true,
-                pieces_rebut: true,
+                pieces_rebut: {
+                    include: {
+                        items: true,
+                    },
+                },
             },
             orderBy: {
                 last_modified_at: 'desc',
@@ -860,7 +871,7 @@ const recupPieceFonc = async (req, res) => {
                         data: {
                             etat: piece.etat,
                             updated_by: piece.updated_by,
-                            updated_at: piece.update_at,
+                            updated_at: piece.updated_at,
                         }
                     })
                 )
@@ -905,6 +916,65 @@ const recupPieceFonc = async (req, res) => {
     }
 }
 
+// Fonction pour récupérér l'historique des états des pièces à chaque mouvement des pièces au cours d'une session rebut
+const getTpePieceRebutHistory = async (req, res) => {
+    try {
+        const {
+            id,
+        } = req.params
+
+        const history = await prisma.history_snapshot_piece_rebut.findMany({
+            where: {
+                rebut_id: parseInt(id),
+            },
+            include: {
+                history_piece_rebut: {
+                    include: {
+                        items: true,
+                    },
+                },
+            },
+            select: {
+                users: {
+                    select: {
+                        id_user: true,
+                        fullname: true,
+                    },
+                }
+            },
+            orderBy: {
+                created_at: 'desc',
+            },
+        })
+
+        res.status(200).json(history);
+    } catch (error) {
+        console.error("Erreur lors de la récupération de l'historique des pièces rebuts :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération de l'historique des pièces rebuts", error });
+    } res.status(500).json({ message: "Erreur lors de la récupération de l'historique", error });
+}
+
+// Fonction pour récupérer facilement la liste des pièces au rebut (fonctionnelles/defectueuses)
+const getAllPiecesRebut = async (req, res) => {
+    try {
+        const pieces = await prisma.pieces_rebut.findMany({
+            include: {
+                items: true,
+                parc_tpe: true,
+            },
+            orderBy: {
+                items: {
+                    nom_piece: 'desc',
+                },
+            },
+        });
+        res.status(200).json(pieces);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des pièces au rebut :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des pièces au rebut", error });
+    }
+}
+
 module.exports = {
     downloadTemplateRebut,
     extractRebut,
@@ -914,4 +984,5 @@ module.exports = {
     getTpeRebutDetails,
     changeLotPiece,
     recupPieceFonc,
+    getAllPiecesRebut,
 }

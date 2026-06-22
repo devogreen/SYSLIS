@@ -370,6 +370,8 @@ export default function RebutInputs() {
     const handleChangeSn = async (value) => {
         setTerminalName('')
         setStatutTpe('')
+        setSelectedModel(null)
+        setNomModel('')
         setTerminalSN(value)
         try {
             const pointMarchand = merchantList.find((terminal) => {
@@ -384,6 +386,11 @@ export default function RebutInputs() {
                 if (tpeData) {
                     const statutTpe = tpeData.statut_tpe.statut
                     setStatutTpe(statutTpe)
+                    const model = tpeData.model_id 
+                    if (model) {
+                        setSelectedModel(model)
+                        setNomModel(tpeData.model_piece.nom_model)
+                    }
                 } else {
                     setStatutTpe('non enregistré')
                 }
@@ -484,6 +491,10 @@ export default function RebutInputs() {
     const handleConfirm = () => {
         if (terminalSN.length < 10) {
             setErrorAjout("S/N non valide !")
+            return
+        }
+        if (statutTpe == 'rebut') {
+            setErrorAjout("Ce terminal est déjà au rebut !")
             return
         }
         if (!selectedModel) {
@@ -857,7 +868,8 @@ export default function RebutInputs() {
                                                                         <Label>Modèle <span className="text-red-700">*</span></Label>
                                                                         <Select
                                                                             options={optionsModel}
-                                                                            placeholder="Choisir une option"
+                                                                            defaultValue={selectedModel}
+                                                                            placeholder={nomModel ? nomModel : 'Choisir une option'}
                                                                             className="dark:bg-dark-900"
                                                                             onChange={handleSelectModel}
                                                                         />

@@ -59,7 +59,12 @@ export default function AllTpeRebutsList() {
 
     const [selectedModels, setSelectedModels] = useState(savedFilters?.selectedModels || []);
 
+    const [modelOptions, setModelOptions] = useState([])
     const [models, setModels] = useState([])
+
+    const [pieces, setPieces] = useState([])
+    const [pieceOptions, setPieceOptions] = useState([])
+    const [selectedPieces, setSelectedPieces] = useState([])
 
     const [datesUpdatePiece, setDateUpdatePiece] = useState(
         savedFilters?.datesUpdatePiece
@@ -72,20 +77,35 @@ export default function AllTpeRebutsList() {
             globalFilter,
             datesUpdatePiece: datesUpdatePiece?.map(d => d?.toISOString()),
             selectedModels,
+            selectedPieces,
         });
-    }, [globalFilter, datesUpdatePiece, selectedModels]);
+    }, [globalFilter, datesUpdatePiece, selectedModels, selectedPieces]);
 
     useEffect(() => {
         const fetchData = async () => {
             const allTpeRebuts = await rebutData.getAllTpeRebuts()
             setTpeRebutList(allTpeRebuts)
 
+            console.log(allTpeRebuts)
+
             const modelsData = await stockData.getAllModels()
             const modelsOptions = modelsData.map((item) => ({
                 value: item.id_model,
                 label: item.nom_model,
             }))
-            setModels(modelsOptions)
+            setModelOptions(modelsOptions)
+            setModels(modelsData)
+
+            const allItems = await stockData.getAllItems()
+            const items = allItems.filter((item) => {
+                return item.is_deleted == false && item.type != 'TERMINAL'
+            })
+            const pieceOptions = items.map((p) => ({
+                value: p.id_piece,
+                label: p.nom_piece,
+            }))
+            setPieces(items)
+            setPieceOptions(pieceOptions)
         }
         fetchData()
     }, [])
@@ -100,6 +120,7 @@ export default function AllTpeRebutsList() {
         setGlobalFilter("");
         setDateUpdatePiece(null);
         setSelectedModels([]);
+        setSelectedPieces([])
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -140,10 +161,16 @@ export default function AllTpeRebutsList() {
         const quantite = piecesFonc?.length ? piecesFonc?.length : 0
         return (
             <>
-                <div>
-                    <span className="font-bold text-sm">
-                        {quantite}
-                    </span>
+                <div className="grid grid-cols-2 text-xs">
+                    {piecesFonc?.map((item) => {
+                        return (
+                            <>
+                                <div>
+                                    <span className="font-medium text-blue-600">{item.items.nom_piece} ,</span>
+                                </div>
+                            </>
+                        )
+                    })}
                 </div>
             </>
         )
@@ -156,10 +183,16 @@ export default function AllTpeRebutsList() {
         const quantite = piecesDef?.length ? piecesDef?.length : 0
         return (
             <>
-                <div>
-                    <span className="font-bold text-sm">
-                        {quantite}
-                    </span>
+                <div className="grid grid-cols-2 text-xs">
+                    {piecesDef?.map((item) => {
+                        return (
+                            <>
+                                <div>
+                                    <span className="font-medium opacity-55">{item.items.nom_piece} ,</span>
+                                </div>
+                            </>
+                        )
+                    })}
                 </div>
             </>
         )
@@ -198,14 +231,42 @@ export default function AllTpeRebutsList() {
         )
     }
 
+    const dateUpdateTemplate = (tpe) => {
+        const indexSession = tpe.sn_rebut.length - 1
+        const session = tpe.sn_rebut[indexSession]
+        const date = session ? formatDate(session?.last_modified_at) : 'N/A'
+        return (
+            <>
+                <div>
+                    <span>{date}</span>
+                </div>
+            </>
+        )
+    }
+
     const filteredTpeRebutList = tpeRebutList.filter((item) => {
 
-        // const matchesDatesUpdatesPiece = datesUpdatePiece ? (datesUpdatePiece[0] <= dateDemandeRebut && nextDayDemandeRebut >= dateDemandeRebut) : true;
+        const piecesRebuts = item.pieces_rebut.filter((p) => {
+            return p.etat == 'fonctionnel'
+        })
+        const piecesId = piecesRebuts.map((p) => {
+            return p.piece_id
+        })
+
+        const indexSession = item.sn_rebut.length - 1
+        const session = item.sn_rebut[indexSession]
+        const dateUpdate = new Date(session?.last_modified_at);
+        const dayUpdatesPlus = datesUpdatePiece ? new Date(datesUpdatePiece[1]) : null;
+        dayUpdatesPlus?.setDate(dayUpdatesPlus.getDate() + 1);
+        const nextDayUpdate = dayUpdatesPlus ? new Date(dayUpdatesPlus) : null;
+
+        const matchesDatesUpdates = datesUpdatePiece ? (datesUpdatePiece[0] <= dateUpdate && nextDayUpdate >= dateUpdate) : true;
+        const matchesPiecesFonc = selectedPieces.length > 0 ? selectedPieces.some(p => piecesId.includes(p)) : true;
         const matchesModel = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesModel, matchesGlobalFilter;
+        return matchesDatesUpdates && matchesPiecesFonc && matchesModel && matchesGlobalFilter
     });
 
     const totalTPE = filteredTpeRebutList.length;
@@ -234,15 +295,26 @@ export default function AllTpeRebutsList() {
                         <MultiSelect
                             value={selectedModels}
                             onChange={(e) => setSelectedModels(e.value)}
-                            options={models}
+                            options={modelOptions}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
                             placeholder="Filtrer par modèle"
                             className=""
                         />
+                        <MultiSelect
+                            value={selectedPieces}
+                            onChange={(e) => setSelectedPieces(e.value)}
+                            options={pieceOptions}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par pièces"
+                            className=""
+                        />
                     </div>
-                    {/* <div className="flex justify-normal flex-wrap gap-3">
+                    
+                    <div className="flex justify-normal flex-wrap gap-3">
                         <div>
                             <Label>Dates Updates</Label>
                             <Calendar
@@ -258,7 +330,7 @@ export default function AllTpeRebutsList() {
                                 placeholder="jj/mm/aaaa - jj/mm/aaaa"
                             />
                         </div>
-                    </div> */}
+                    </div>
                 </div>
                 <div className="p-6 pt-0 flex justify-between">
                     <div className="flex space-x-3 items-center">
@@ -284,9 +356,9 @@ export default function AllTpeRebutsList() {
                         <Column field="id" header="ID" sortable></Column>
                         <Column field="serial_number" header="S/N" body={serialNumberTemplate} sortable></Column>
                         <Column field="model_id" header="Modèle" body={modelTemplate} sortable></Column>
-                        <Column header="Total pièces fonctionnelles" body={piecesFoncTemplate} sortable></Column>
-                        <Column header="Total pièces défectueuses" body={piecesDefTemplate} sortable></Column>
-                        {/* <Column header="Dernière modification" body={dateUpdateTemplate} sortable></Column> */}
+                        <Column header="Pièces fonctionnelles" body={piecesFoncTemplate}></Column>
+                        <Column header="Pièces défectueuses" body={piecesDefTemplate}></Column>
+                        <Column header="Dernière modification" body={dateUpdateTemplate} sortable></Column>
                         <Column header="Actions" body={actionTemplate}></Column>
                     </DataTable>
                 </div>

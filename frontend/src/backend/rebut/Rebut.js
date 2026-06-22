@@ -90,4 +90,13 @@ export class Rebut {
         }
     }
 
+    async getAllPiecesRebut() {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getAllPiecesRebut`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }

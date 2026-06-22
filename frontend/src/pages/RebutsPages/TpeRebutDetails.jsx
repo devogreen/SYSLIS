@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { use, useEffect, useState } from "react"
 import { useParams, Link, useNavigate } from "react-router";
 import { Rebut } from "../../backend/rebut/Rebut"
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -10,6 +10,9 @@ import Checkbox from "../../components/form/input/Checkbox";
 import Swal from "sweetalert2";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { Users } from "../../backend/users/Users";
+
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
 
 export default function TpeRebutDetails() {
 
@@ -46,6 +49,12 @@ export default function TpeRebutDetails() {
 
     const [selectedPiecesRecupFonc, setSelectedPiecesRecupFonc] = useState([])
 
+    const [piecesHistorique, setPiecesHistorique] = useState([])
+
+    const [loading, setLoading] = useState(false)
+
+    const [allUsers, setAllUsers] = useState([])
+
     const allPieceDef =
         pieces.length > 0 &&
         selectedPiecesDef?.length === pieces.length;
@@ -58,49 +67,66 @@ export default function TpeRebutDetails() {
         piecesFonc.length > 0 &&
         selectedPiecesRecupFonc?.length === piecesFonc.length;
 
+    const formatDate = (date) => {
+        const d = new Date(date);
+        return d.toLocaleDateString('fr-FR'); // or use any locale you want
+    };
+
     useEffect(() => {
         const fetchData = async () => {
-            const terminalRebut = await rebutData.getTpeRebutDetails(id)
-            setTerminalSn(terminalRebut.serial_number)
-            setTerminalModel(terminalRebut.model_piece?.nom_model)
+            setLoading(true)
+            try {
+                const terminalRebut = await rebutData.getTpeRebutDetails(id)
+                setTerminalSn(terminalRebut?.serial_number)
+                setTerminalModel(terminalRebut?.model_piece?.nom_model)
+                console.log('details : ', terminalRebut)
 
-            const allItems = await stockData.getAllItems()
-            const items = allItems.filter((item) => {
-                return item.is_deleted == false && item.type != 'TERMINAL'
-            })
-            setPieces(items)
+                const allItems = await stockData.getAllItems()
+                const items = allItems.filter((item) => {
+                    return item.is_deleted == false && item.type != 'TERMINAL'
+                })
+                setPieces(items)
 
-            const listePieceFonc = terminalRebut.pieces_rebut?.filter((item) => {
-                return item.etat == 'fonctionnel'
-            })
-            const listePieceFoncId = listePieceFonc.map((item) => {
-                return item.piece_id
-            })
-            console.log(listePieceFonc)
-            setPiecesFonc(listePieceFonc)
-            console.log(listePieceFonc)
-            setSelectedPiecesRec(listePieceFoncId)
+                const listePieceFonc = terminalRebut?.pieces_rebut?.filter((item) => {
+                    return item.etat == 'fonctionnel'
+                })
+                const listePieceFoncId = listePieceFonc?.map((item) => {
+                    return item.piece_id
+                })
+                setPiecesFonc(listePieceFonc)
+                setSelectedPiecesRec(listePieceFoncId)
 
-            const listePieceDef = terminalRebut.pieces_rebut?.filter((item) => {
-                return item.etat == 'defectueux'
-            })
-            const listePieceDefId = listePieceDef.map((item) => {
-                return item.piece_id
-            })
-            setPiecesDef(listePieceDef)
-            setSelectedPiecesDef(listePieceDefId)
+                const listePieceDef = terminalRebut?.pieces_rebut?.filter((item) => {
+                    return item.etat == 'defectueux'
+                })
+                const listePieceDefId = listePieceDef?.map((item) => {
+                    return item.piece_id
+                })
+                setPiecesDef(listePieceDef)
+                setSelectedPiecesDef(listePieceDefId)
 
-            const rolesData = await userData.getUserRoles(userId)
-            const nomRoles = rolesData.roles.map((item) => {
-                return item.nom_role
-            })
+                const indexSession = terminalRebut?.sn_rebut.length - 1
+                setPiecesHistorique(terminalRebut?.sn_rebut[indexSession]?.history_snapshot_piece_rebut)
 
-            if (nomRoles.includes('admin_rebut')) {
-                setIsAdmin(true)
-            }
+                const usersData = await userData.getAllUsers()
+                setAllUsers(usersData)
 
-            if (nomRoles.includes('gestion_rebut')) {
-                setIsGestion(true)
+                const rolesData = await userData.getUserRoles(userId)
+                const nomRoles = rolesData.roles.map((item) => {
+                    return item.nom_role
+                })
+
+                if (nomRoles.includes('admin_rebut')) {
+                    setIsAdmin(true)
+                }
+
+                if (nomRoles.includes('gestion_rebut')) {
+                    setIsGestion(true)
+                }
+            } catch (error) {
+
+            } finally {
+                setLoading(false)
             }
         }
         fetchData()
@@ -248,6 +274,84 @@ export default function TpeRebutDetails() {
             setLoadingValidationLot(false)
         }
     }
+
+    const piecesFoncTemplate = (historique) => {
+        const listeFonc = historique.history_piece_rebut.filter((item) => {
+            return item.etat == 'fonctionnel'
+        })
+        return (
+            <>
+                <div className="grid grid-cols-2 text-xs">
+                    {listeFonc?.map((item) => {
+                        const piece = pieces.find((p) => {
+                            return p.id_piece == item.piece_id
+                        })
+                        if (piece) {
+                            return (
+                                <>
+                                    <div>
+                                        <span className="font-medium">{piece.nom_piece} ,</span>
+                                    </div>
+                                </>
+                            )
+                        }
+                    })}
+                </div>
+            </>
+        )
+    }
+
+    const piecesRecupTemplate = (historique) => {
+        const listeFonc = historique.history_piece_rebut.filter((item) => {
+            return item.etat == 'utilise'
+        })
+        return (
+            <>
+                <div className="grid grid-cols-2 text-xs">
+                    {listeFonc?.map((item) => {
+                        const piece = pieces.find((p) => {
+                            return p.id_piece == item.piece_id
+                        })
+                        if (piece) {
+                            return (
+                                <>
+                                    <div>
+                                        <span className="text-blue-600 font-medium">{piece.nom_piece} ,</span>
+                                    </div>
+                                </>
+                            )
+                        }
+                    })}
+                </div>
+            </>
+        )
+    }
+
+    const userTemplate = (historique) => {
+        const userId = historique.created_by
+        const user = allUsers.find((item) => {
+            return item.id_user == userId
+        })
+        const nomUser = user ? user.fullname : 'N/A'
+
+        return (
+            <>
+                <div>
+                    <span>{nomUser}</span>
+                </div>
+            </>
+        )
+    }
+
+    const dateTemplate = (historique) => {
+        return (
+            <>
+                <div>
+                    <span>{formatDate(historique.created_at)}</span>
+                </div>
+            </>
+        )
+    }
     return (
         <>
             <PageBreadcrumb pageTitle="Détails TPE au rebut" />
@@ -287,26 +391,14 @@ export default function TpeRebutDetails() {
                                             )}
                                             {isGestion ? (
                                                 <>
-                                                    {loadingRetrait ? (
-                                                        <>
-                                                            <div className='text-center'>
-                                                                <span className=''>
-                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                </span>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                onClick={() => {
-                                                                    setIsModalRetraitPieceOpen(true)
-                                                                }}
-                                                            >
-                                                                <span className='mr-4'><i className="pi pi-wrench"></i></span>
-                                                                <span className='text-sm text-gray-700 font-medium'>Récupérer pièces fonctionnelles</span>
-                                                            </button>
-                                                        </>
-                                                    )}
+                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                        onClick={() => {
+                                                            setIsModalRetraitPieceOpen(true)
+                                                        }}
+                                                    >
+                                                        <span className='mr-4'><i className="pi pi-wrench"></i></span>
+                                                        <span className='text-sm text-gray-700 font-medium'>Récupérer pièces fonctionnelles</span>
+                                                    </button>
                                                 </>
                                             ) : (
                                                 <></>
@@ -331,14 +423,14 @@ export default function TpeRebutDetails() {
                                             <span>{terminalModel}</span>
                                         </div>
                                     </div>
-                                    <div className=" border border-black rounded-xl bg-gray-100">
+                                    <div className=" border border-black rounded-xl bg-gray-50">
                                         <img src="/images/logo/terminal_lines_black.png" alt="terminal_image" style={{ width: '500px' }} />
                                     </div>
                                 </div>
                                 {/* <img src="../../public/images/logo/terminal_A8900_sided.png" alt="" style={{width: '500px'}}/> */}
                             </div>
                             <div className="">
-                                <div className="border rounded-2xl p-3 bg-gray-dark">
+                                <div className="border border-black bg-gray-50 rounded-tl-xl rounded-tr-xl p-3">
                                     <div className="space-y-3">
                                         <div className="space-y-3">
                                             <div className="text-center text-green-700">
@@ -355,7 +447,7 @@ export default function TpeRebutDetails() {
                                                     <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
                                                 </div>
                                             </div>
-                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-gray-dark p-0.5">
+                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-black">
                                                 <div className="grid grid-cols-3 gap-1">
                                                     {piecesFonc.map((item) => {
                                                         return (
@@ -384,7 +476,7 @@ export default function TpeRebutDetails() {
                                                     <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>
                                                 </div>
                                             </div>
-                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-gray-dark p-0">
+                                            <div className="min-h-50 max-h-50 overflow-y-auto bg-black p-0">
                                                 <div className="grid grid-cols-3 gap-1">
                                                     {piecesDef.map((item) => {
                                                         return (
@@ -402,6 +494,32 @@ export default function TpeRebutDetails() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <div>
+                    <div>
+                        <span className="text-xl">
+                            Historique des pièces
+                        </span>
+                    </div>
+                    <div className="card">
+                        <DataTable
+                            value={piecesHistorique}
+                            loading={loading}
+                            removableSort
+                            paginator
+                            rows={5}
+                            rowsPerPageOptions={[5, 10, 25, 50, 100, 200, 300, 500, 1000]}
+                            tableStyle={{ minWidth: '50rem', fontSize: '11px' }}
+                            emptyMessage="Aucun historique trouvé"
+                            className="p-datatable-sm">
+
+                            <Column field="id" header="ID" sortable></Column>
+                            <Column field="created_at" header="Date" body={dateTemplate} sortable></Column>
+                            <Column header="Liste pièces fonctionnelles" body={piecesFoncTemplate}></Column>
+                            <Column header="Liste pièces récupérées" body={piecesRecupTemplate}></Column>
+                            <Column field="created_by" header="Utilisateur" body={userTemplate} sortable></Column>
+                        </DataTable>
                     </div>
                 </div>
             </div>

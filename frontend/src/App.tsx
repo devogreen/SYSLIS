@@ -234,6 +234,10 @@ import AllDemandeRebuts from "./pages/RebutsPages/AllDemandeRebuts"
 import AllTpeRebuts from "./pages/RebutsPages/AllTpeRebuts"
 // @ts-ignore
 import TpeRebutDetails from "./pages/RebutsPages/TpeRebutDetails"
+// @ts-ignore
+import AllPiecesRebuts from "./pages/RebutsPages/AllPiecesRebuts"
+// @ts-ignore
+import DemandeRebutDetails from "./pages/RebutsPages/DemandeRebutDetails"
 
 export default function App() {
   return (
@@ -324,6 +328,8 @@ export default function App() {
               <Route path="/toutes-les-demandes-rebut" element={<AllDemandeRebuts />} />
               <Route path="/tpe-rebuts" element={<AllTpeRebuts />} />
               <Route path="/tpe-rebut-details/:id" element={<TpeRebutDetails />} />
+              <Route path="/pieces-rebuts" element={<AllPiecesRebuts />} />
+              <Route path="/demande-rebut-details/:id" element={<DemandeRebutDetails />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />
