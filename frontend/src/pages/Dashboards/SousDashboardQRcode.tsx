@@ -238,7 +238,7 @@ export default function SousDashboardQRcode() {
                 .toLowerCase();
 
               const pourcentageValue =
-                ['generee', 'imprimee', 'recue'].includes(statutNorm) ? 100 : 0;
+                ['generee', 'imprimee', 'recue','livree'].includes(statutNorm) ? 100 : 0;
 
               const dateValue = item?.date_demande;
               const dateObj = dateValue ? new Date(dateValue) : null;
