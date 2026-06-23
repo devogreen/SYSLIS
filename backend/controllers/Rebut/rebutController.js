@@ -975,6 +975,496 @@ const getAllPiecesRebut = async (req, res) => {
     }
 }
 
+// Fonction pour récupérer les données d'une demande de mise au rebut
+const getOneDemandeRebut = async (req, res) => {
+    try {
+        const {
+            id,
+        } = req.params
+
+        const demande = await prisma.demande_rebut.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+            include: {
+                forms: {
+                    include: {
+                        users_forms_created_byTousers: true,
+                        users_forms_updated_byTousers: true,
+                    },
+                },
+                validation_rebut: true,
+            },
+        })
+
+        res.status(200).json(demande);
+    } catch (error) {
+        console.error("Erreur lors de la récupération d'une demande de mise au rebut :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération d'une demande de mise au rebut", error });
+    }
+}
+
+// Fonction pour modifier la liste d'une mise au rebut en attente de validation
+const updateDemandeRebut = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            listeRebut,
+            quantite,
+            userId,
+            dateRebut,
+            isReg,
+        } = req.body
+
+        const demandeRebut = await prisma.demande_rebut.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+        })
+
+        const rebutForm = await prisma.forms.findUnique({
+            where: {
+                id: parseInt(demandeRebut.form_id)
+            },
+        })
+
+        if (!demandeRebut) {
+            console.error('Demande de mise au rebut introuvable !')
+            return res.status(404).json({ message: "Demande de mise au rebut introuvable !" });
+        }
+        if (demandeRebut.statut != 'en_cours' && demandeRebut.statut != 'retourne') {
+            console.error('Statut de la demande de mise au rebut invalide !')
+            return res.status(400).json({ message: "Statut de la demande de mise au rebut invalide !" });
+        }
+        if (rebutForm.is_deleted) {
+            console.error('Demande de mise au rebut déjà supprimée !')
+            return res.status(400).json({ message: "Demande de mise au rebut déjà supprimée !" });
+        }
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const details = typeof listeRebut === "string" ? JSON.parse(listeRebut) : listeRebut;
+
+        const reg = isReg == "false" ? false : true
+        let dateAction = new Date()
+        const dateVer = new Date(dateRebut)
+        if (!isNaN(dateVer.valueOf())) {
+            dateAction = new Date(dateRebut)
+        }
+
+        const updateRebut = await prisma.$transaction(async (tx) => {
+            const updatedRebutForm = await tx.forms.update({
+                where: {
+                    id: rebutForm.id,
+                },
+                data: {
+                    last_modified_at: dateAction,
+                    updated_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                    updated_by: utilisateur.id_user,
+                    is_reg: reg,
+                }
+            })
+            const rebut = await tx.demande_rebut.update({
+                where: {
+                    id: demandeRebut.id,
+                },
+                data: {
+                    statut: 'en_cours',
+                    quantite: parseInt(quantite),
+                    liste_rebut: JSON.stringify(details),
+                }
+            })
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: updatedRebutForm.id,
+                        type_formulaire: 'rebut',
+                        role: 'demandeur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            return {
+                updatedRebutForm,
+                rebut,
+            }
+        })
+
+        /****************    GESTION DES MAILS     *****************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 33,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesValidation = await prisma.user_roles.findMany({
+            where: {
+                role_id: 31,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const validateurs = rolesValidation.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/demande-rebut/${updateRebut.rebut.id}`;
+
+        let subject = `SYSLIS - MODIFICATION DE MISE AU REBUT`;
+        let html = `
+                <p>Bonjour,</p>
+                <p>La demande de mise au rebut #${id} a été modifiée.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (validateurs && validateurs.length > 0) {
+            for (const validateur of validateurs) {
+                await sendMail({
+                    to: validateur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log(`Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`)
+        res.status(201).json({
+            message: `Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`,
+            data: updateRebut,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la modification de la demande de mise au rebut :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour valider une liste de mise au rebut
+const validateDemandeRebut = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            listeRebut,
+            quantite,
+            userId,
+            dateRebut,
+            isReg,
+        } = req.body
+
+        const demandeRebut = await prisma.demande_rebut.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+        })
+
+        const rebutForm = await prisma.forms.findUnique({
+            where: {
+                id: parseInt(demandeRebut.form_id)
+            },
+        })
+
+        if (!demandeRebut) {
+            console.error('Demande de mise au rebut introuvable !')
+            return res.status(404).json({ message: "Demande de mise au rebut introuvable !" });
+        }
+        if (demandeRebut.statut == 'valide') {
+            console.error('Demande de mise au rebut déjà validée !')
+            return res.status(400).json({ message: "Demande de mise au rebut déjà validée !" });
+        }
+        if (demandeRebut.statut != 'en_cours') {
+            console.error('Statut de la demande de mise au rebut invalide !')
+            return res.status(400).json({ message: "Statut de la demande de mise au rebut invalide !" });
+        }
+        if (rebutForm.is_deleted) {
+            console.error('Demande de mise au rebut déjà supprimée !')
+            return res.status(400).json({ message: "Demande de mise au rebut déjà supprimée !" });
+        }
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const details = typeof listeRebut === "string" ? JSON.parse(listeRebut) : listeRebut;
+
+        // const data = []
+        // const historyData = []
+
+        // details.forEach((terminal) => {
+        //     const piecesFonc = terminal.pieces_recuperees
+        //     const piecesDef = terminal.pieces_defectueuses
+
+        //     const duplicates = piecesFonc.filter(id =>
+        //         pieceDef.includes(id)
+        //     );
+
+        //     if (duplicates.length) {
+        //         console.log(`Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`)
+        //         return res.status(400).json({
+        //             message: `Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`
+        //         });
+        //     }
+
+        //     if (Array.isArray(piecesFonc)) {
+        //         data.push(
+        //             ...piecesFonc.map(pieceId => ({
+        //                 piece_id: pieceId,
+        //                 etat: 'fonctionnel',
+        //                 created_by: utilisateur.id_user,
+        //                 created_at: dateAction,
+        //             }))
+        //         );
+        //         historyData.push(
+        //             ...piecesFonc.map(pieceId => ({
+        //                 piece_id: pieceId,
+        //                 etat: 'fonctionnel',
+        //             }))
+        //         )
+        //     }
+
+        //     if (Array.isArray(pieceDef)) {
+        //         data.push(
+        //             ...pieceDef.map(pieceId => ({
+        //                 piece_id: pieceId,
+        //                 etat: 'defectueux',
+        //                 created_by: utilisateur.id_user,
+        //                 created_at: dateAction,
+        //             }))
+        //         );
+        //         historyData.push(
+        //             ...pieceDef.map(pieceId => ({
+        //                 piece_id: pieceId,
+        //                 etat: 'defectueux',
+        //             }))
+        //         )
+        //     }
+        // })
+
+        const reg = isReg == "false" ? false : true
+        let dateAction = new Date()
+        const dateVer = new Date(dateRebut)
+        if (!isNaN(dateVer.valueOf())) {
+            dateAction = new Date(dateRebut)
+        }
+
+        const piecesFonc = typeof listePieceRec === "string" ? JSON.parse(listePieceRec) : listePieceRec;
+        const pieceDef = typeof listePieceDef === "string" ? JSON.parse(listePieceDef) : listePieceDef;
+
+        const duplicates = piecesFonc.filter(id =>
+            pieceDef.includes(id)
+        );
+
+        if (duplicates.length) {
+            console.log("Une pièce ne peut pas être à la fois fonctionnelle et défectueuse.")
+            return res.status(400).json({
+                message: "Une pièce ne peut pas être à la fois fonctionnelle et défectueuse."
+            });
+        }
+
+        const validationRebut = await prisma.$transaction(async (tx) => {
+            const validationForm = await tx.forms.create({
+                data: {
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                    is_reg: isReg,
+                    type: 'validation_rebut',
+                }
+            })
+            const validation = await tx.validation_rebut.create({
+                data: {
+                    demande_id: demandeRebut.id,
+                    form_id: validationForm.id,
+                    type: 'validation',
+                    quantite,
+                    liste_rebut: JSON.stringify(details),
+                }
+            })
+
+            const rebut = await tx.demande_rebut.update({
+                where: {
+                    id: demandeRebut.id,
+                },
+                data: {
+                    statut: 'valide',
+                    liste_rebut: JSON.stringify(details),
+                }
+            })
+
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: validationForm.id,
+                        type_formulaire: 'rebut',
+                        role: 'validateur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            return {
+                updatedRebutForm,
+                rebut,
+            }
+        })
+
+        /****************    GESTION DES MAILS     *****************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 33,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesValidation = await prisma.user_roles.findMany({
+            where: {
+                role_id: 31,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const validateurs = rolesValidation.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/demande-rebut/${validationRebut.rebut.id}`;
+
+        let subject = `SYSLIS - MODIFICATION DE MISE AU REBUT`;
+        let html = `
+                <p>Bonjour,</p>
+                <p>La demande de mise au rebut #${id} a été modifiée.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (validateurs && validateurs.length > 0) {
+            for (const validateur of validateurs) {
+                await sendMail({
+                    to: validateur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log(`Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`)
+        res.status(201).json({
+            message: `Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`,
+            data: validationRebut,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la modification de la demande de mise au rebut :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 module.exports = {
     downloadTemplateRebut,
     extractRebut,
@@ -985,4 +1475,6 @@ module.exports = {
     changeLotPiece,
     recupPieceFonc,
     getAllPiecesRebut,
+    getOneDemandeRebut,
+    updateDemandeRebut,
 }

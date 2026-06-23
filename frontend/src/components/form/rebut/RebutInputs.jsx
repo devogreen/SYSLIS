@@ -598,7 +598,7 @@ export default function RebutInputs() {
             })
             setListeRebut([])
             setQuantiteTotale(0)
-            // navigate('/tous-les-decommissionnements')
+            navigate('/toutes-les-demandes-rebut')
         } catch (error) {
             console.log("Erreur de demande : ", error)
             Swal.fire({
@@ -606,7 +606,7 @@ export default function RebutInputs() {
                 text: "Une erreur est survenue lors de la demande !",
                 icon: "warning"
             })
-            // navigate('/tous-les-decommissionnements')
+            navigate('/toutes-les-demandes-rebut')
         } finally {
             setLoadingValidation(false)
         }

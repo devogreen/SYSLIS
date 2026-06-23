@@ -22,6 +22,7 @@ import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
 import { Stock } from "../../backend/stock/Stock";
 import { set } from "date-fns";
+import { Rebut } from "../../backend/rebut/Rebut";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -33,14 +34,13 @@ addLocale('fr', {
 });
 
 export default function DemandeRebutDetails() {
-    const decomData = new Decom()()
+    const rebutData = new Rebut()
     const userData = new Users()
     const stockData = new Stock()
-    const { id: idDecom } = useParams()
+    const { id } = useParams()
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
     const filesData = new FilesHandler()
-
 
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
@@ -49,27 +49,23 @@ export default function DemandeRebutDetails() {
 
     const [errorData, setErrorData] = useState('')
 
-    const [dateDecom, setDateDecom] = useState('')
-    const [statutDecom, setStatutDecom] = useState('')
+    const [dateRebut, setDateRebut] = useState('')
+    const [statutDecom, setStatutRebut] = useState('')
     const [statutClass, setStatutClass] = useState('')
 
     const [isReg, setIsReg] = useState(false)
-    const [enAttente, setEnAttente] = useState(false)
 
-    const [isLivreur, setIsLivreur] = useState(false)
-    const [isReceveur, setIsReceveur] = useState(false)
-    const [isVerificateur, setIsVerificateur] = useState(false)
+    const [isDemandeur, setIsDemandeur] = useState(false)
     const [isValidateur, setIsValidateur] = useState(false)
 
-    const [listeDecom, setListeDecom] = useState([])
-    const [quantiteDecom, setQuantiteDecom] = useState(0)
+    const [listeRebut, setListeRebut] = useState([])
+    const [quantiteDecom, setQuantiteRebut] = useState(0)
 
-    const [commentaireDecom, setCommentaireDecom] = useState('')
-    const [commentaireReception, setCommentaireReception] = useState('')
-    const [commentaireVerification, setCommentaireVerification] = useState('')
+    const [commentaireRebut, setCommentaireRebut] = useState('')
+    const [commentaireValidation, setCommentaireValidation] = useState('')
 
     const [fileId, setFileId] = useState(null);
-    const [decomFiles, setDecomFiles] = useState([])
+    const [rebutFiles, setRebutFiles] = useState([])
 
     const [messageReception, setMessageReception] = useState('')
     const [messageReturn, setMessageReturn] = useState('')
@@ -93,6 +89,20 @@ export default function DemandeRebutDetails() {
 
     const [loadingExtract, setLoadingExtract] = useState(false)
 
+    const [isEnAttente, setIsEnAttente] = useState(false)
+    const [isRetourne, setIsRetourne] = useState(false)
+    const [isValide, setIsValide] = useState(false)
+
+    const [loadingButtons, setLoadingButtons] = useState(false)
+
+    const [listeModel, setListeModel] = useState([])
+
+    const [nomDemandeur, setNomDemandeur] = useState('')
+    const [nomUpdate, setNomUpdate] = useState('')
+
+    const [dateUpdate, setDateUpdate] = useState('')
+
+    const [isGestion, setIsGestion] = useState(true)
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -103,34 +113,40 @@ export default function DemandeRebutDetails() {
         const fetchData = async () => {
             try {
                 setLoadingData(true)
-                const decom = await decomData.getOneDecom(idDecom)
-                const decomForm = decom.forms
+                const rebut = await rebutData.getOneDemandeRebut(id)
+                const rebutForm = rebut.forms
 
-                if (decomForm.is_deleted) {
+                if (rebutForm.is_deleted) {
                     Swal.fire({
-                        title: "Décommissionnement annulé",
-                        text: "Ce décom a été annulé.",
+                        title: "Mise au rebut annulée",
+                        text: "Ce demande a été annulée.",
                         icon: "warning",
                         confirmButtonColor: "#3085d6",
                         confirmButtonText: "OK"
                     });
-                    navigate('/tous-les-decommissionnements')
+                    navigate('/toutes-les-demandes-rebut')
                     return;
                 }
 
-                const listeDecom = JSON.parse(decom.liste_decom)
-                setListeDecom(listeDecom)
-                setQuantiteDecom(listeDecom.length)
+                const listeRebut = JSON.parse(rebut.liste_rebut)
+                setListeRebut(listeRebut)
+                setQuantiteRebut(listeRebut.length)
+                console.log(listeRebut)
 
-                const statut = decom.statut
+                const statut = rebut.statut
                 let statutClass = ''
-                const dateDecom = formatDate(decomForm.last_modified_at)
-                setDateDecom(dateDecom)
+                const dateRebut = formatDate(rebutForm.created_at)
+                setDateRebut(dateRebut)
+                setNomDemandeur(rebutForm.users_forms_created_byTousers.fullname)
 
-                const regularisation = decomForm.is_reg
+                const dateUpdate = rebutForm.updated_at ? formatDate(rebutForm.updated_at) : null
+                setDateUpdate(dateUpdate)
+                setNomUpdate(rebutForm.users_forms_updated_byTousers?.fullname)
+
+                const regularisation = rebutForm.is_reg
                 if (regularisation) {
                     setIsReg(true)
-                    setDateRegul(decomForm.last_modified_at)
+                    setDateRegul(rebutForm.last_modified_at)
                 }
 
                 const rolesData = await userData.getUserRoles(userId)
@@ -138,52 +154,44 @@ export default function DemandeRebutDetails() {
                     return item.nom_role
                 })
 
-                const indexReception = decom.reception_decom.length - 1
-                const reception = decom.reception_decom[indexReception]
-
-                const indexVerification = decom.retour_decom.length - 1
-                const verification = decom.retour_decom[indexVerification]
+                const indexValidation = rebut.validation_rebut.length - 1
+                const validation = rebut.validation_rebut[indexValidation]
 
                 if (statut == 'en_cours') {
-                    setStatutDecom('en cours')
+                    setStatutRebut('en cours')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-warning-100 text-warning-300')
-                    if (nomRoles.includes('decom')) {
-                        setIsLivreur(true)
+                    setIsEnAttente(true)
+                    if (nomRoles.includes('gestion_rebut')) {
+                        setIsGestion(true)
                     }
-                    if (nomRoles.includes('reception_decom')) {
-                        setIsReceveur(true)
+                    if (nomRoles.includes('demande_rebut')) {
+                        setIsDemandeur(true)
                     }
-                } else if (statut == 'recu' && reception && reception.type == 'validation') {
-                    setStatutDecom('en vérification')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-blue-100 text-blue-300')
-
-                    if (nomRoles.includes('verification_decom')) {
-                        setIsVerificateur(true)
-                    }
-                    if (nomRoles.includes('cloture_decom')) {
+                    if (nomRoles.includes('validation_rebut')) {
                         setIsValidateur(true)
                     }
-                    setChecking(true)
-                } else if (statut == 'retourne' && reception && reception.type == 'retour') {
-                    setStatutDecom('retourné')
+                } else if (statut == 'retourne') {
+                    setStatutRebut('retourné')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-red-100 text-red-300')
-                    if (nomRoles.includes('decom')) {
-                        setIsLivreur(true)
-                    }
-                } else if (statut == 'clos' && verification && verification.type == 'cloture') {
-                    setStatutDecom('clos')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-100 text-gray-400')
-                    setChecking(true)
-                }
 
-                if (statut == 'recu' || statut == 'clos') {
-                    const listeSn = await decomData.getSnDecom(idDecom)
-                    setListeDecom(listeSn)
-                    console.log('Liste SN: ', listeSn)
-                    const listeChecking = listeSn.filter((item) => {
-                        return item.statut == 'checking'
-                    })
-                    setListeChecking(listeChecking)
+                    if (nomRoles.includes('demande_rebut')) {
+                        setIsDemandeur(true)
+                    }
+                    if (nomRoles.includes('validation_rebut')) {
+                        setIsValidateur(true)
+                    }
+                } else if (statut == 'valide') {
+                    setStatutRebut('validé')
+                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-blue-100 text-blue-300')
+                    if (nomRoles.includes('demande_rebut')) {
+                        setIsDemandeur(true)
+                    }
+                    if (nomRoles.includes('validation_rebut')) {
+                        setIsValidateur(true)
+                    }
+                } else if (statut == 'clos' && validation && validation.type == 'cloture') {
+                    setStatutRebut('clos')
+                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-100 text-gray-400')
                 }
 
                 const allItems = await stockData.getAllItems()
@@ -192,16 +200,17 @@ export default function DemandeRebutDetails() {
                 })
                 setPieces(items)
 
-                setCommentaireDecom(decomForm.commentaire)
-                setCommentaireReception(reception?.forms.commentaire)
-                setCommentaireVerification(verification?.forms.commentaire)
+                const modelData = await stockData.getAllModels()
+                setListeModel(modelData)
 
+                setCommentaireRebut(rebutForm.commentaire)
+                setCommentaireValidation(validation?.forms.commentaire)
 
-                const allFiles = await filesData.getAllFormFiles(decomForm.id)
+                const allFiles = await filesData.getAllFormFiles(rebutForm.id)
                 const dFiles = allFiles.filter((item) => {
-                    return item.role == 'livreur'
+                    return item.role == 'demandeur'
                 })
-                setDecomFiles(dFiles)
+                setRebutFiles(dFiles)
 
             } catch (error) {
                 setErrorData('Erreur de données !')
@@ -221,13 +230,13 @@ export default function DemandeRebutDetails() {
                 userId,
             }
             const id = idDecom
-            await decomData.cancelDecom(id, payload)
+            await rebutData.cancelDecom(id, payload)
             Swal.fire({
                 title: "Succès",
                 text: "Décommissionnement annulé avec succès !",
                 icon: "success"
             })
-            navigate('/tous-les-decommissionnements')
+            navigate('/tous-les-rebutmissionnements')
         } catch (error) {
             console.log("Erreur d'annulation : ", error)
             Swal.fire({
@@ -235,7 +244,7 @@ export default function DemandeRebutDetails() {
                 text: "Une erreur est survenue lors de l'annulation !",
                 icon: "warning"
             })
-            navigate('/tous-les-decommissionnements')
+            navigate('/tous-les-rebutmissionnements')
         } finally {
             setLoadingCancel(false)
         }
@@ -321,13 +330,13 @@ export default function DemandeRebutDetails() {
 
     const handleClotureDecom = async () => {
         setIsModalClotureOpen(false)
-        // console.log("Liste checking avant cloture: ", listeDecom)
+        // console.log("Liste checking avant cloture: ", listeRebut)
         try {
             setLoadingVerification(true)
             const payload = {
                 userId,
                 commentaire: messageCloture,
-                listeDecom,
+                listeRebut,
                 isReg,
             }
             const id = idDecom
@@ -387,10 +396,9 @@ export default function DemandeRebutDetails() {
         }
     };
 
-
     return (
         <>
-            <PageBreadcrumb pageTitle={`Détails décom ${idDecom}`} />
+            <PageBreadcrumb pageTitle={`Détails rebut ${id}`} />
             <div>
                 {loadingData ? (
                     <>
@@ -429,8 +437,25 @@ export default function DemandeRebutDetails() {
                                                     <></>
                                                 )}
                                                 <div>
-                                                    <span className="text-sm">{`Décom du ${dateDecom}`}</span>
+                                                    <span className="text-sm">{`Mise au rebut du ${dateRebut}`}</span>
                                                 </div>
+                                                <div className="flex flex-col text-xs">
+                                                    <span className="underline font-light">Demandeur</span>
+                                                    <span>{nomDemandeur}</span>
+                                                </div>
+                                                {dateUpdate ? (
+                                                    <>
+                                                        <div>
+                                                            <span className="text-sm">{`Dernière modification ${dateUpdate}`}</span>
+                                                        </div>
+                                                        <div className="flex flex-col text-xs">
+                                                            <span className="underline font-light">Modifié par</span>
+                                                            <span>{nomUpdate}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
                                                 <div className=''>
                                                     <span className={statutClass}>
                                                         {statutDecom}
@@ -439,130 +464,76 @@ export default function DemandeRebutDetails() {
                                             </div>
                                             <div className="grid grid-cols-2">
                                                 <div className='col-start-2 space-y-0.5'>
-                                                    {isLivreur ? (
+                                                    {loadingButtons ? (
                                                         <>
-                                                            <div>
-                                                                {loadingCancel ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <div className="space-y-0.5">
-                                                                            <Link to={`/modifier-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                                <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
-                                                                                <span className='text-sm text-gray-700 font-medium'>Modifier la liste</span>
-                                                                            </Link>
-                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                                onClick={() => {
-                                                                                    setIsModalCancelOpen(true)
-                                                                                }}
-                                                                            >
-                                                                                <span className='mr-4'><i className="pi pi-times-circle"></i></span>
-                                                                                <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    </>
-                                                                )}
+                                                            <div className='text-center'>
+                                                                <span className=''>
+                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                </span>
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <></>
-                                                    )}
-                                                    {isReceveur ? (
                                                         <>
-                                                            <div>
-                                                                {loadingReception ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <div className="space-y-0.5">
-                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                                onClick={() => {
-                                                                                    setIsModalReceptionOpen(true)
-                                                                                }}
-                                                                            >
-                                                                                <span className='mr-4'><i className="pi pi-check-circle"></i></span>
-                                                                                <span className='text-sm text-gray-700 font-medium'>Confirmer réception</span>
-                                                                            </button>
-                                                                            <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                                onClick={() => {
-                                                                                    setIsModalReturnOpen(true)
-                                                                                }}
-                                                                            >
-                                                                                <span className='mr-4'><i className="pi pi-ban"></i></span>
-                                                                                <span className='text-sm text-gray-700 font-medium'>Retourner décom</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                    {isVerificateur ? (
-                                                        <>
-                                                            {loadingVerification ? (
+                                                            {isEnAttente ? (
                                                                 <>
-                                                                    <div className='text-center'>
-                                                                        <span className=''>
-                                                                            <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                        </span>
-                                                                    </div>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <div>
-                                                                        {isReg ? (
-                                                                            <>
-                                                                                <div className="space-y-0.5">
-                                                                                    <Link to={`/reg-verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                                        <span className='mr-4'><i className="pi pi-clipboard"></i></span>
-                                                                                        <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
-                                                                                    </Link>
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <div className="space-y-0.5">
-                                                                                    <Link to={`/verification-decom/${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
-                                                                                        <span className='mr-4'><i className="pi pi-clipboard"></i></span>
-                                                                                        <span className='text-sm text-gray-700 font-medium'>Vérification technique</span>
-                                                                                    </Link>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                        {listeChecking.length == 0 && isValidateur ? (
-                                                                            <>
+                                                                    {isDemandeur || isGestion ? (
+                                                                        <>
+                                                                            <div className="space-y-0.5">
+                                                                                <Link to={`/modifier-rebut/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                    <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Modifier la liste</span>
+                                                                                </Link>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
+                                                                    {isDemandeur ? (
+                                                                        <>
+                                                                            <div>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                     onClick={() => {
-                                                                                        setIsModalClotureOpen(true)
+                                                                                        setIsModalCancelOpen(true)
                                                                                     }}
                                                                                 >
-                                                                                    <span className='mr-4'><i className="pi pi-circle-fill"></i></span>
-                                                                                    <span className='text-sm text-gray-700 font-medium'>Cloturer décomm</span>
+                                                                                    <span className='mr-4'><i className="pi pi-times-circle"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
                                                                                 </button>
-                                                                            </>
-                                                                        ) : (
-                                                                            <></>
-                                                                        )}
-                                                                    </div>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
+                                                                    {isValidateur ? (
+                                                                        <>
+                                                                            <div className="space-y-0.5">
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalReceptionOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-check-circle"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Confirmer réception</span>
+                                                                                </button>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalReturnOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-ban"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Retourner décom</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
+
                                                                 </>
+                                                            ) : (
+                                                                <></>
                                                             )}
                                                         </>
-                                                    ) : (
-                                                        <></>
                                                     )}
                                                 </div>
                                             </div>
@@ -570,14 +541,14 @@ export default function DemandeRebutDetails() {
                                         {/* Première partie de page avec les commentaires et les fichiers uploads */}
                                         <div>
                                             <div className="space-y-3">
-                                                {commentaireDecom ? (
+                                                {commentaireRebut ? (
                                                     <>
                                                         <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
                                                             <div className='mb-6 pb-2 w-full border-b text-left'>
-                                                                <span className='text-sm mr-2'>Commentaire livreur</span>
+                                                                <span className='text-sm mr-2'>Commentaire demandeur</span>
                                                                 <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                             </div>
-                                                            <p className='text-sm text-blue-500 text-left'>{commentaireDecom}</p>
+                                                            <p className='text-sm text-blue-500 text-left'>{commentaireRebut}</p>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -585,13 +556,13 @@ export default function DemandeRebutDetails() {
                                                 )}
                                                 {/* Les fichiers que le décommissionneur a upload lors du remplissage de formulaire de décom */}
                                                 <div>
-                                                    {decomFiles.length > 0 ? (
+                                                    {rebutFiles.length > 0 ? (
                                                         <>
                                                             <div>
                                                                 <span className="text-xs text-gray-500">Pièce(s) jointe(s) décommissionneur</span>
                                                             </div>
                                                             <div className='grid grid-cols-6 text-xs gap-1'>
-                                                                {decomFiles.map((file) => {
+                                                                {rebutFiles.map((file) => {
                                                                     let icon = 'pi pi-file'
                                                                     let fileClass = 'flex items-center justify-between bg-gray-300 rounded p-0.5'
                                                                     if (file.path.endsWith('.pdf')) {
@@ -630,27 +601,14 @@ export default function DemandeRebutDetails() {
                                                     )}
                                                 </div>
                                                 {/* La suite des commentaires (commentaire de réception) */}
-                                                {commentaireReception ? (
+                                                {commentaireValidation ? (
                                                     <>
                                                         <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
                                                             <div className='mb-6 pb-2 w-full border-b text-left'>
-                                                                <span className='text-sm mr-2'>Commentaire réception</span>
+                                                                <span className='text-sm mr-2'>Commentaire Validation</span>
                                                                 <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                             </div>
-                                                            <p className='text-sm text-blue-500 text-left'>{commentaireReception}</p>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
-                                                {commentaireVerification ? (
-                                                    <>
-                                                        <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                                            <div className='mb-6 pb-2 w-full border-b text-left'>
-                                                                <span className='text-sm mr-2'>Commentaire vérification</span>
-                                                                <span className='text-sm'><i className="pi pi-comment"></i></span>
-                                                            </div>
-                                                            <p className='text-sm text-blue-500 text-left'>{commentaireVerification}</p>
+                                                            <p className='text-sm text-blue-500 text-left'>{commentaireValidation}</p>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -658,7 +616,7 @@ export default function DemandeRebutDetails() {
                                                 )}
                                             </div>
                                         </div>
-                                        {/* Deuxième partie de page avec le tableau de la liste de décommissionnement */}
+                                        {/* Deuxième partie de page avec le tableau de la liste de rebut */}
                                         <div>
                                             <div>
                                                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
@@ -688,254 +646,119 @@ export default function DemandeRebutDetails() {
                                                         </div>
                                                     </div>
                                                     <div className="max-w-full overflow-x-auto">
-                                                        {checking ? (
-                                                            <>
-                                                                <Table>
-                                                                    {/* Table Header */}
-                                                                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                                                                        <TableRow>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                N°
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Point Marchand
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                S/N
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Statut
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Retour technique
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Pièces Défectueuses
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Pièces Récupérées
-                                                                            </TableCell>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    {/* Table Body */}
-                                                                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                                                                        {listeDecom.map((item, index) => {
-                                                                            let statutClass = ''
-                                                                            let statut = item.statut
-                                                                            if (item.statut == 'checking') {
-                                                                                statutClass = 'text-warning-200 font-semi-bold'
-                                                                            } else if (item.statut == 'parametrage') {
-                                                                                statutClass = 'text-blue-200 font-semi-bold'
-                                                                            } else if (item.statut == 'rebus') {
-                                                                                statut = 'rebut'
-                                                                                statutClass = 'text-red-500 font-semi-bold'
-                                                                            }
+                                                        <Table>
+                                                            {/* Table Header */}
+                                                            <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
+                                                                <TableRow>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        N°
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        Point Marchand
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        S/N
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        Retour technique
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        Pièces Défectueuses
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        Pièces Récupérées
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            {/* Table Body */}
+                                                            <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                                                                {listeRebut.map((item, index) => {
+                                                                    const piecesDefectueuses = new Array(...item.pieces_defectueuses)
+                                                                    const piecesRecuperables = new Array(...item.pieces_recuperees)
 
-                                                                            const piecesDefectueuses = JSON.parse(item.pieces_defectueuses)
-                                                                            const piecesRecuperables = JSON.parse(item.pieces_recuperees)
-                                                                            return (
-                                                                                <>
-                                                                                    <TableRow>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            {index + 1}
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400">
-                                                                                            {item.point_marchand}
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            {item.serial_number}
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            <span className={statutClass}>
-                                                                                                {statut}
-                                                                                            </span>
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            {item.commentaire_retour}
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            <div className="grid grid-cols-2 text-xs">
-                                                                                                {piecesDefectueuses?.map((item) => {
-                                                                                                    const piece = pieces.find((p) => {
-                                                                                                        return p.id_piece == parseInt(item)
-                                                                                                    })
-                                                                                                    if (piece) {
-                                                                                                        return (
-                                                                                                            <>
-                                                                                                                <div>
-                                                                                                                    <span className="text-red-700 font-medium">{piece.nom_piece}</span>
-                                                                                                                </div>
-                                                                                                            </>
-                                                                                                        )
-                                                                                                    }
-                                                                                                })}
-                                                                                            </div>
-                                                                                        </TableCell>
-                                                                                        <TableCell
-                                                                                            isHeader
-                                                                                            className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                            <div className="grid grid-cols-2 text-xs">
-                                                                                                {piecesRecuperables?.map((item) => {
-                                                                                                    const piece = pieces.find((p) => {
-                                                                                                        return p.id_piece == parseInt(item)
-                                                                                                    })
-                                                                                                    if (piece) {
-                                                                                                        return (
-                                                                                                            <>
-                                                                                                                <div>
-                                                                                                                    <span className="text-green-700 font-medium">{piece.nom_piece}</span>
-                                                                                                                </div>
-                                                                                                            </>
-                                                                                                        )
-                                                                                                    }
-                                                                                                })}
-                                                                                            </div>
-                                                                                        </TableCell>
-                                                                                    </TableRow>
-                                                                                </>
-                                                                            )
-                                                                        })}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Table>
-                                                                    {/* Table Header */}
-                                                                    <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
-                                                                        <TableRow>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                N°
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Point Marchand
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                S/N
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                TID GIM
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                TID ECOBANK
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Etat
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                RI
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Commercial
-                                                                            </TableCell>
-                                                                            <TableCell
-                                                                                isHeader
-                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                Commentaire
-                                                                            </TableCell>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    {/* Table Body */}
-                                                                    <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                                                                        {listeDecom.map((item, index) => (
+                                                                    const model = listeModel.find((m) => {
+                                                                        return m.id_model == item.modele
+                                                                    })
+                                                                    const nomModel = model ? model.nom_model : '%%%'
+
+                                                                    return (
+                                                                        <>
                                                                             <TableRow>
                                                                                 <TableCell
-                                                                                    isHeader
                                                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                     {index + 1}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    isHeader
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.pointMarchand}
+                                                                                    className="px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400">
+                                                                                    {item.pointMarchand ? item.pointMarchand : 'N/A'}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    isHeader
                                                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.terminalSN}
+                                                                                    <div>
+                                                                                        {item.terminalSN}
+                                                                                    </div>
+                                                                                    <div className=" text-gray-700 font-medium" style={{ fontSize: '11px' }}>{nomModel}</div>
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    isHeader
                                                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.idGim}
+                                                                                    {item.etatTpe}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    isHeader
                                                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.idEcobank}
+                                                                                    <div className="grid grid-cols-2 text-xs">
+                                                                                        {piecesDefectueuses?.map((item) => {
+                                                                                            const piece = pieces.find((p) => {
+                                                                                                return p.id_piece == parseInt(item)
+                                                                                            })
+                                                                                            if (piece) {
+                                                                                                return (
+                                                                                                    <>
+                                                                                                        <div>
+                                                                                                            <span className="text-red-700 font-medium">{piece.nom_piece} ,</span>
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                )
+                                                                                            }
+                                                                                        })}
+                                                                                    </div>
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    isHeader
                                                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    <span style={{ fontSize: '9px' }}>
-                                                                                        {item.etat}
-                                                                                    </span>
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.RI}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    {item.nomCommercial}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                    <span style={{ fontSize: '9px' }}>
-                                                                                        {item.commentaire}
-                                                                                    </span>
+                                                                                    <div className="grid grid-cols-2 text-xs">
+                                                                                        {piecesRecuperables?.map((item) => {
+                                                                                            const piece = pieces.find((p) => {
+                                                                                                return p.id_piece == parseInt(item)
+                                                                                            })
+                                                                                            if (piece) {
+                                                                                                return (
+                                                                                                    <>
+                                                                                                        <div>
+                                                                                                            <span className="text-green-700 font-medium">{piece.nom_piece} ,</span>
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                )
+                                                                                            }
+                                                                                        })}
+                                                                                    </div>
                                                                                 </TableCell>
                                                                             </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </>
-                                                        )}
+                                                                        </>
+                                                                    )
+                                                                })}
+                                                            </TableBody>
+                                                        </Table>
                                                     </div>
                                                 </div>
                                             </div>

@@ -99,4 +99,25 @@ export class Rebut {
         }
     }
 
+    async getOneDemandeRebut(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getOneDemandeRebut/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async updateDemandeRebut(id, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/rebut/updateDemandeRebut/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }
