@@ -1956,6 +1956,13 @@ const regVerifyDecom = async (req, res) => {
 
         const dateAction = new Date()
 
+        const statutMap = {
+            parametrage: 'parametrage',
+            rebus: 'rebus',
+            rebut: 'rebus',
+            checking: 'checking',
+        };
+
         const verification = await prisma.$transaction(async (tx) => {
             const retourDecomForm = await tx.forms.create({
                 data: {
@@ -2002,7 +2009,7 @@ const regVerifyDecom = async (req, res) => {
                             pieces_recuperees: item.pieces_recuperees,
                             pieces_defectueuses: item.pieces_defectueuses,
                             is_ok: item.is_ok,
-                            statut: item.statut,
+                            statut: statutMap[item.statut],
                         }
                     });
                 })
@@ -2017,7 +2024,7 @@ const regVerifyDecom = async (req, res) => {
                             pieces_recuperees: item.pieces_recuperees,
                             pieces_defectueuses: item.pieces_defectueuses,
                             is_ok: item.is_ok,
-                            statut: item.statut,
+                            statut: statutMap[item.statut],
                             updated_at: item.date ? new Date(item.date) : dateAction,
                             last_modified_at: item.date ? new Date(item.date) : dateAction,
                         }
@@ -2029,99 +2036,6 @@ const regVerifyDecom = async (req, res) => {
                 retourDecomForm, retourDecom
             }
         })
-
-        /***********      GESTION DES TPE     ************/
-
-        // const statutMap = {
-        //     parametrage: 4,
-        //     rebus: 5,
-        // };
-
-        // // Récupérer les SN de la liste
-        // const serials = listeVerified.map(item => item.serial_number);
-
-        // // Récupérer les TPE déjà enregistrés dans le PARC
-        // const existingTpes = await prisma.parc_tpe.findMany({
-        //     where: {
-        //         serial_number: { in: serials }
-        //     },
-        //     select: {
-        //         id: true,
-        //         serial_number: true
-        //     }
-        // });
-        // // Faire une liste SN, ID pour les TPE déjà enregistrés
-        // const existingMap = new Map(
-        //     existingTpes.map(e => [e.serial_number, e.id])
-        // );
-
-        // const toCreate = [];
-        // const toUpdate = [];
-
-        // // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-        // listeVerified.forEach(item => {
-        //     if (existingMap.has(item.serial_number)) {
-        //         toUpdate.push(item);
-        //     } else {
-        //         toCreate.push(item);
-        //     }
-        // });
-
-        // // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
-        // if (toCreate.length > 0) {
-        //     await prisma.parc_tpe.createMany({
-        //         data: toCreate.map(item => ({
-        //             serial_number: item.serial_number,
-        //             created_by: utilisateur.id_user,
-        //             created_at: dateAction,
-        //             last_modified_at: dateAction,
-        //             statut_id: statutMap[item.statut],
-        //         }))
-        //     });
-        // }
-
-        // // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-        // await Promise.all(
-        //     toUpdate.map(item =>
-        //         prisma.parc_tpe.update({
-        //             where: { serial_number: item.serial_number },
-        //             data: {
-        //                 updated_by: utilisateur.id_user,
-        //                 updated_at: dateAction,
-        //                 last_modified_at: dateAction,
-        //                 statut_id: statutMap[item.statut],
-        //             }
-        //         })
-        //     )
-        // );
-
-        // // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-        // const allTpes = await prisma.parc_tpe.findMany({
-        //     where: {
-        //         serial_number: { in: serials }
-        //     },
-        //     select: {
-        //         id: true,
-        //         serial_number: true
-        //     }
-        // });
-
-        // // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-        // await prisma.history_tpe.createMany({
-        //     data: allTpes.map(tpe => {
-        //         const item = listeVerified.find(
-        //             i => i.serial_number === tpe.serial_number
-        //         );
-
-        //         return {
-        //             id_tpe: tpe.id,
-        //             created_by: utilisateur.id_user,
-        //             created_at: dateAction,
-        //             statut_id: statutMap[item.statut],
-        //             form_id: decomForm.id,
-        //         };
-        //     })
-        // });
 
         /************** GESTION DES MAILS  **************/
 
