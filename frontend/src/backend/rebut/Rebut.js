@@ -120,4 +120,17 @@ export class Rebut {
             throw error.response.data
         }
     }
+
+    async validateDemandeRebut(id, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/rebut/validateDemandeRebut/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

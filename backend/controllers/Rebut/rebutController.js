@@ -1320,20 +1320,6 @@ const validateDemandeRebut = async (req, res) => {
             dateAction = new Date(dateRebut)
         }
 
-        const piecesFonc = typeof listePieceRec === "string" ? JSON.parse(listePieceRec) : listePieceRec;
-        const pieceDef = typeof listePieceDef === "string" ? JSON.parse(listePieceDef) : listePieceDef;
-
-        const duplicates = piecesFonc.filter(id =>
-            pieceDef.includes(id)
-        );
-
-        if (duplicates.length) {
-            console.log("Une pièce ne peut pas être à la fois fonctionnelle et défectueuse.")
-            return res.status(400).json({
-                message: "Une pièce ne peut pas être à la fois fonctionnelle et défectueuse."
-            });
-        }
-
         const validationRebut = await prisma.$transaction(async (tx) => {
             const validationForm = await tx.forms.create({
                 data: {
@@ -1384,7 +1370,8 @@ const validateDemandeRebut = async (req, res) => {
             }
 
             return {
-                updatedRebutForm,
+                validationForm,
+                validation,
                 rebut,
             }
         })
@@ -1399,26 +1386,26 @@ const validateDemandeRebut = async (req, res) => {
                 users: true
             }
         })
-        const rolesValidation = await prisma.user_roles.findMany({
+        const rolesDemandeur = await prisma.user_roles.findMany({
             where: {
-                role_id: 31,
+                role_id: 30,
             },
             include: {
                 users: true
             }
         })
         const superviseurs = rolesSupervision.map(us => us.users)
-        const validateurs = rolesValidation.map(us => us.users)
+        const demandeurs = rolesDemandeur.map(us => us.users)
 
         let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
         const url = GENERAL_URL
         let link = `${url}/demande-rebut/${validationRebut.rebut.id}`;
 
-        let subject = `SYSLIS - MODIFICATION DE MISE AU REBUT`;
+        let subject = `SYSLIS - VALIDATION DE MISE AU REBUT`;
         let html = `
                 <p>Bonjour,</p>
-                <p>La demande de mise au rebut #${id} a été modifiée.</p>
+                <p>La demande de mise au rebut #${id} a été validée.</p>
                 <ul>
                 <li><strong>Nombre de TPE :</strong> ${quantite}</li>
                 </ul>
@@ -1444,10 +1431,10 @@ const validateDemandeRebut = async (req, res) => {
                 });
             }
         }
-        if (validateurs && validateurs.length > 0) {
-            for (const validateur of validateurs) {
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
                 await sendMail({
-                    to: validateur.email,
+                    to: demandeur.email,
                     subject,
                     html,
                 });
@@ -1477,4 +1464,5 @@ module.exports = {
     getAllPiecesRebut,
     getOneDemandeRebut,
     updateDemandeRebut,
+    validateDemandeRebut,
 }

@@ -507,21 +507,19 @@ export default function DemandeRebutDetails() {
                                                                     {isValidateur ? (
                                                                         <>
                                                                             <div className="space-y-0.5">
-                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                                    onClick={() => {
-                                                                                        setIsModalReceptionOpen(true)
-                                                                                    }}
-                                                                                >
-                                                                                    <span className='mr-4'><i className="pi pi-check-circle"></i></span>
-                                                                                    <span className='text-sm text-gray-700 font-medium'>Confirmer réception</span>
-                                                                                </button>
+                                                                                <div className="space-y-0.5">
+                                                                                    <Link to={`/valider-rebut/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                        <span className='mr-4'><i className="pi pi-check-circle"></i></span>
+                                                                                        <span className='text-sm text-gray-700 font-medium'>Valider demande</span>
+                                                                                    </Link>
+                                                                                </div>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                     onClick={() => {
                                                                                         setIsModalReturnOpen(true)
                                                                                     }}
                                                                                 >
                                                                                     <span className='mr-4'><i className="pi pi-ban"></i></span>
-                                                                                    <span className='text-sm text-gray-700 font-medium'>Retourner décom</span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Retourner demande</span>
                                                                                 </button>
                                                                             </div>
                                                                         </>
