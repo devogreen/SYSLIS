@@ -12,6 +12,7 @@ const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
+const { all } = require("../../routes/rebutRoutes");
 
 const formatDate = (isoDate) => {
     const date = new Date(isoDate);
@@ -993,7 +994,11 @@ const getOneDemandeRebut = async (req, res) => {
                         users_forms_updated_byTousers: true,
                     },
                 },
-                validation_rebut: true,
+                validation_rebut: {
+                    include: {
+                        forms: true,
+                    },
+                },
             },
         })
 
@@ -1204,9 +1209,10 @@ const validateDemandeRebut = async (req, res) => {
         const {
             commentaire,
             listeRebut,
+            listeValidee,
             quantite,
             userId,
-            dateRebut,
+            dateValidation,
             isReg,
         } = req.body
 
@@ -1259,65 +1265,13 @@ const validateDemandeRebut = async (req, res) => {
         }
 
         const details = typeof listeRebut === "string" ? JSON.parse(listeRebut) : listeRebut;
-
-        // const data = []
-        // const historyData = []
-
-        // details.forEach((terminal) => {
-        //     const piecesFonc = terminal.pieces_recuperees
-        //     const piecesDef = terminal.pieces_defectueuses
-
-        //     const duplicates = piecesFonc.filter(id =>
-        //         pieceDef.includes(id)
-        //     );
-
-        //     if (duplicates.length) {
-        //         console.log(`Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`)
-        //         return res.status(400).json({
-        //             message: `Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`
-        //         });
-        //     }
-
-        //     if (Array.isArray(piecesFonc)) {
-        //         data.push(
-        //             ...piecesFonc.map(pieceId => ({
-        //                 piece_id: pieceId,
-        //                 etat: 'fonctionnel',
-        //                 created_by: utilisateur.id_user,
-        //                 created_at: dateAction,
-        //             }))
-        //         );
-        //         historyData.push(
-        //             ...piecesFonc.map(pieceId => ({
-        //                 piece_id: pieceId,
-        //                 etat: 'fonctionnel',
-        //             }))
-        //         )
-        //     }
-
-        //     if (Array.isArray(pieceDef)) {
-        //         data.push(
-        //             ...pieceDef.map(pieceId => ({
-        //                 piece_id: pieceId,
-        //                 etat: 'defectueux',
-        //                 created_by: utilisateur.id_user,
-        //                 created_at: dateAction,
-        //             }))
-        //         );
-        //         historyData.push(
-        //             ...pieceDef.map(pieceId => ({
-        //                 piece_id: pieceId,
-        //                 etat: 'defectueux',
-        //             }))
-        //         )
-        //     }
-        // })
+        const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
 
         const reg = isReg == "false" ? false : true
         let dateAction = new Date()
-        const dateVer = new Date(dateRebut)
+        const dateVer = new Date(dateValidation)
         if (!isNaN(dateVer.valueOf())) {
-            dateAction = new Date(dateRebut)
+            dateAction = new Date(dateValidation)
         }
 
         const validationRebut = await prisma.$transaction(async (tx) => {
@@ -1328,7 +1282,7 @@ const validateDemandeRebut = async (req, res) => {
                     created_by: utilisateur.id_user,
                     nom_user: utilisateur.fullname,
                     commentaire,
-                    is_reg: isReg,
+                    is_reg: reg,
                     type: 'validation_rebut',
                 }
             })
@@ -1337,8 +1291,8 @@ const validateDemandeRebut = async (req, res) => {
                     demande_id: demandeRebut.id,
                     form_id: validationForm.id,
                     type: 'validation',
-                    quantite,
-                    liste_rebut: JSON.stringify(details),
+                    quantite: parseInt(quantite),
+                    liste_rebut: JSON.stringify(detailsValidee),
                 }
             })
 
@@ -1441,16 +1395,484 @@ const validateDemandeRebut = async (req, res) => {
             }
         }
 
-        console.log(`Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`)
+        console.log(`Demande de mise au rebut ${id} validée avec succès par ${utilisateur.username}`)
         res.status(201).json({
-            message: `Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`,
+            message: `Demande de mise au rebut ${id} validée avec succès par ${utilisateur.username}`,
             data: validationRebut,
         });
     } catch (error) {
-        console.error("Erreur lors de la modification de la demande de mise au rebut :", error);
+        console.error("Erreur lors de la validation de la demande de mise au rebut :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
 }
+
+// Fonction pour cloturer une demande de décommisssionnement: Cela créera en même temps une nouvelle session rebut pour chaque TPE de la liste et devra update leur statut dans le parc
+// const cloturerDemandeRebut = async (req, res) => {
+//     try {
+//         const {
+//             id
+//         } = req.params
+//         const {
+//             commentaire,
+//             listeValidee,
+//             quantite,
+//             userId,
+//             dateValidation,
+//             isReg,
+//         } = req.body
+
+//         const demandeRebut = await prisma.demande_rebut.findUnique({
+//             where: {
+//                 id: parseInt(id)
+//             },
+//         })
+
+//         if (!demandeRebut) {
+//             console.error('Demande de mise au rebut introuvable !')
+//             return res.status(404).json({ message: "Demande de mise au rebut introuvable !" });
+//         }
+//         if (demandeRebut.statut != 'valide') {
+//             console.error('Statut de la demande de mise au rebut invalide !')
+//             return res.status(400).json({ message: "Statut de la demande de mise au rebut invalide !" });
+//         }
+
+//         const rebutForm = await prisma.forms.findUnique({
+//             where: {
+//                 id: parseInt(demandeRebut.form_id)
+//             },
+//         })
+
+//         if (rebutForm.is_deleted) {
+//             console.error('Demande de mise au rebut déjà supprimée !')
+//             return res.status(400).json({ message: "Demande de mise au rebut déjà supprimée !" });
+//         }
+
+//         const utilisateur = await prisma.users.findUnique({
+//             where: {
+//                 id_user: parseInt(userId)
+//             }
+//         })
+//         if (!utilisateur) {
+//             console.error('Utilisteur introuvable !')
+//             return res.status(404).json({ message: "Utilisateur introuvable !" });
+//         }
+
+//         const reg = isReg == "false" || isReg == false ? false : true
+//         let dateAction = new Date()
+//         const dateVer = new Date(dateValidation)
+//         if (!isNaN(dateVer.valueOf())) {
+//             dateAction = new Date(dateValidation)
+//         }
+
+//         const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
+
+//         const pieceData = []
+//         const historyData = []
+
+//         for (const terminal of detailsValidee) {
+//             const piecesFonc = terminal.pieces_recuperees
+//             const piecesDef = terminal.pieces_defectueuses
+
+//             const duplicates = piecesFonc.filter(id =>
+//                 piecesDef.includes(id)
+//             );
+
+//             if (duplicates.length) {
+//                 console.log(`Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`)
+//                 return res.status(400).json({
+//                     message: `Le terminal ${terminal.terminalSN} présentes des pièces à la fois fonctionnelles et défectueuses.`
+//                 });
+//             }
+
+//             if (Array.isArray(piecesFonc)) {
+//                 pieceData.push(
+//                     ...piecesFonc.map(pieceId => ({
+//                         piece_id: pieceId,
+//                         etat: 'fonctionnel',
+//                         created_by: utilisateur.id_user,
+//                         created_at: dateAction,
+//                         serial: terminal.terminalSN,
+//                     }))
+//                 );
+//                 historyData.push(
+//                     ...piecesFonc.map(pieceId => ({
+//                         piece_id: pieceId,
+//                         etat: 'fonctionnel',
+//                     }))
+//                 )
+//             }
+
+//             if (Array.isArray(piecesDef)) {
+//                 pieceData.push(
+//                     ...piecesDef.map(pieceId => ({
+//                         piece_id: pieceId,
+//                         etat: 'defectueux',
+//                         created_by: utilisateur.id_user,
+//                         created_at: dateAction,
+//                         serial: terminal.terminalSN,
+//                     }))
+//                 );
+//                 historyData.push(
+//                     ...piecesDef.map(pieceId => ({
+//                         piece_id: pieceId,
+//                         etat: 'defectueux',
+//                     }))
+//                 )
+//             }
+//         }
+
+//         let allTpes = null
+//         // Récupérer les SN de la liste
+//         const serials = detailsValidee.map(item => item.terminalSN);
+
+//         const cloture = await prisma.$transaction(async (tx) => {
+
+//             // 1. Create only missing ones
+//             await tx.parc_tpe.createMany({
+//                 data: serials.map(item => ({
+//                     serial_number: item,
+//                     created_by: utilisateur.id_user,
+//                     created_at: dateAction,
+//                     last_modified_at: dateAction,
+//                     statut_id: 5,
+//                 })),
+//                 skipDuplicates: true
+//             });
+
+//             // 2. Update ALL (existing + newly created)
+//             await tx.parc_tpe.updateMany({
+//                 where: {
+//                     serial_number: { in: serials }
+//                 },
+//                 data: {
+//                     updated_by: utilisateur.id_user,
+//                     updated_at: dateAction,
+//                     last_modified_at: dateAction,
+//                     statut_id: 5,
+//                 }
+//             });
+
+//             // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+//             allTpes = await tx.parc_tpe.findMany({
+//                 where: {
+//                     serial_number: { in: serials }
+//                 },
+//                 select: {
+//                     id: true,
+//                     serial_number: true
+//                 }
+//             });
+
+//             // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+//             await tx.history_tpe.createMany({
+//                 data: allTpes.map(tpe => ({
+//                     id_tpe: tpe.id,
+//                     created_by: utilisateur.id_user,
+//                     created_at: dateAction,
+//                     statut_id: 5,
+//                     form_id: rebutForm.id,
+//                 }))
+//             });
+
+//             // Création des sessions rebuts pour chaque TPE
+//             const rebutSessions = await Promise.all(
+//                 allTpes.map(tpe =>
+//                     tx.sn_rebut.create({
+//                         data: {
+//                             sn_id: tpe.id,
+//                             created_at: dateAction,
+//                             last_modified_at: dateAction,
+//                             created_by: utilisateur.id_user,
+//                         }
+//                     })
+//                 )
+//             )
+
+//             // Création des snapshots des pièces pour chaque TPE mis au rebut
+//             const snapshots = await Promise.all(
+//                 rebutSessions.map(session =>
+//                     tx.history_snapshot_piece_rebut.create({
+//                         data: {
+//                             rebut_id: session.id,
+//                             created_by: utilisateur.id_user,
+//                             created_at: dateAction,
+//                         }
+//                     })
+//                 )
+//             )
+
+//             // Créer les pieces rebuts pour chaque TPE du par nouvellement mis au rebut
+//             await Promise.all(
+//                 allTpes.map(tpe =>
+//                     tx.pieces_rebut.createMany({
+//                         data: pieceData.map(item => {
+//                             if (item.serial == tpe.serial_number) {
+//                                 return {
+//                                     ...item,
+//                                     sn_id: tpe.id,
+//                                 }
+//                             }
+//                         })
+//                     })
+//                 )
+//             );
+
+//             // Enregistrement des historiques des pièces rebuts
+//             await Promise.all(
+//                 snapshots.map(snap =>
+//                     tx.history_piece_rebut.createMany({
+//                         data: historyData.map(item => ({
+//                             ...item,
+//                             snap_id: snap.id,
+//                         }))
+//                     })
+//                 )
+//             )
+
+
+//             return {
+//                 allTpes,
+//                 rebut_sessions,
+//                 snapshots,
+//             }
+//         })
+
+//     } catch (error) {
+
+//     }
+// }
+
+// Clôture d'une demande de mise au rebut.
+const cloturerDemandeRebut = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            commentaire,
+            listeValidee,
+            quantite,
+            userId,
+            dateValidation,
+            // isReg,
+        } = req.body;
+
+        const REBUT_STATUT_ID = 5; // statut "rebut"
+
+        const demandeId = parseInt(id, 10);
+        if (Number.isNaN(demandeId)) {
+            console.error("Identifiant de demande invalide.")
+            return res.status(400).json({ message: "Identifiant de demande invalide." });
+        }
+
+        // 1. Charger et valider la demande AVANT d'accéder à ses champs
+        const demandeRebut = await prisma.demande_rebut.findUnique({
+            where: { id: demandeId },
+        });
+        if (!demandeRebut) {
+            console.error("Demande de mise au rebut introuvable !")
+            return res.status(404).json({ message: "Demande de mise au rebut introuvable !" });
+        }
+        if (demandeRebut.statut !== "valide") {
+            console.error("Statut de la demande de mise au rebut invalide !")
+            return res.status(400).json({ message: "Statut de la demande de mise au rebut invalide !" });
+        }
+
+        const rebutForm = await prisma.forms.findUnique({
+            where: { id: parseInt(demandeRebut.form_id, 10) },
+        });
+        if (!rebutForm) {
+            console.error("Formulaire de rebut introuvable !")
+            return res.status(404).json({ message: "Formulaire de rebut introuvable !" });
+        }
+        if (rebutForm.is_deleted) {
+            console.error("Demande de mise au rebut déjà supprimée !")
+            return res.status(400).json({ message: "Demande de mise au rebut déjà supprimée !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId, 10) },
+        });
+        if (!utilisateur) {
+            console.error("Utilisateur introuvable !")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        // Date d'action
+        let dateAction = new Date();
+        const dateVer = new Date(dateValidation);
+        if (!Number.isNaN(dateVer.valueOf())) {
+            dateAction = dateVer;
+        }
+
+        // 2. Parser et valider la liste AVANT la transaction
+        const detailsValidee =
+            typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
+        if (!Array.isArray(detailsValidee) || detailsValidee.length === 0) {
+            return res.status(400).json({ message: "Liste validée vide ou invalide." });
+        }
+
+        // On garde les pièces groupées PAR terminal pour pouvoir relier
+        // chaque pièce à la bonne session / au bon snapshot plus tard.
+        const terminaux = [];
+        for (const terminal of detailsValidee) {
+            const piecesFonc = Array.isArray(terminal.pieces_recuperees)
+                ? terminal.pieces_recuperees
+                : [];
+            const piecesDef = Array.isArray(terminal.pieces_defectueuses)
+                ? terminal.pieces_defectueuses
+                : [];
+
+            // une pièce ne peut pas être à la fois fonctionnelle et défectueuse
+            const duplicates = piecesFonc.filter((pieceId) => piecesDef.includes(pieceId));
+            if (duplicates.length) {
+                // return ICI fonctionne car on est dans le corps de la fonction (pas un forEach)
+                return res.status(400).json({
+                    message: `Le terminal ${terminal.terminalSN} présente des pièces à la fois fonctionnelles et défectueuses.`,
+                });
+            }
+
+            const pieces = [
+                ...piecesFonc.map((pieceId) => ({ piece_id: pieceId, etat: "fonctionnel" })),
+                ...piecesDef.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+            ];
+
+            terminaux.push({ serial: terminal.terminalSN, pieces });
+        }
+
+        const serials = terminaux.map((t) => t.serial);
+
+        // 3. Toutes les écritures dans UNE transaction, en séquentiel
+        const result = await prisma.$transaction(async (tx) => {
+
+            const clotureForm = await tx.forms.create({
+                data: {
+                    commentaire,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'validation_rebut',
+                }
+            })
+            const cloture = await tx.validation_rebut.create({
+                data: {
+                    demande_id: demandeId,
+                    form_id: clotureForm.id,
+                    type: 'cloture',
+                    quantite,
+                    liste_rebut: JSON.stringify(listeValidee),
+                }
+            })
+            
+            // Créer uniquement les parc_tpe manquants
+            await tx.parc_tpe.createMany({
+                data: serials.map((serial) => ({
+                    serial_number: serial,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: REBUT_STATUT_ID,
+                })),
+                skipDuplicates: true,
+            });
+
+            // Mettre TOUS les TPE (existants + nouveaux) au statut rebut
+            await tx.parc_tpe.updateMany({
+                where: { serial_number: { in: serials } },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: REBUT_STATUT_ID,
+                },
+            });
+
+            // Récupérer les ids
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true },
+            });
+            const tpeBySerial = new Map(allTpes.map((tpe) => [tpe.serial_number, tpe]));
+
+            // Historique du changement de statut parc
+            await tx.history_tpe.createMany({
+                data: allTpes.map((tpe) => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: REBUT_STATUT_ID,
+                    form_id: rebutForm.id, // était "decomForm.id" (non défini)
+                })),
+            });
+
+            // Par terminal : session -> snapshot -> pièces -> historique pièces.
+            // Séquentiel : on a besoin des ids générés, et un client tx
+            // ne doit pas être utilisé en parallèle (single connection).
+            for (const t of terminaux) {
+                const tpe = tpeBySerial.get(t.serial);
+                if (!tpe) continue;
+
+                // create() (et non createMany) car on a besoin de l'id retourné
+                const session = await tx.sn_rebut.create({
+                    data: {
+                        sn_id: tpe.id,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                const snapshot = await tx.history_snapshot_piece_rebut.create({
+                    data: {
+                        rebut_id: session.id,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                    },
+                });
+
+                if (t.pieces.length) {
+                    await tx.pieces_rebut.createMany({
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            sn_id: tpe.id,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+
+                    await tx.history_piece_rebut.createMany({
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            snap_id: snapshot.id,
+                        })),
+                    });
+                }
+            }
+
+            // CONFIRM: clôturer la demande elle-même (valeur de statut à adapter)
+            await tx.demande_rebut.update({
+                where: { id: demandeId },
+                data: {
+                    statut: 'clos', // CONFIRM: la valeur attendue par votre schéma
+                },
+            });
+
+            return { tpe_traites: allTpes.length };
+        });
+
+        console.log(`Demande de mise au rebut ${demandeId} clôturée avec succès par ${utilisateur.username}.`)
+        return res.status(200).json({
+            message: `Demande de mise au rebut ${demandeId} clôturée avec succès par ${utilisateur.username}.`,
+            ...result,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la clôture de la demande de rebut :", error);
+        return res
+            .status(500)
+            .json({ message: "Erreur interne lors de la clôture de la demande de rebut." });
+    }
+};
 
 module.exports = {
     downloadTemplateRebut,
@@ -1465,4 +1887,5 @@ module.exports = {
     getOneDemandeRebut,
     updateDemandeRebut,
     validateDemandeRebut,
+    cloturerDemandeRebut,
 }

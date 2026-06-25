@@ -50,7 +50,7 @@ export default function DemandeRebutDetails() {
     const [errorData, setErrorData] = useState('')
 
     const [dateRebut, setDateRebut] = useState('')
-    const [statutDecom, setStatutRebut] = useState('')
+    const [statutRebut, setStatutRebut] = useState('')
     const [statutClass, setStatutClass] = useState('')
 
     const [isReg, setIsReg] = useState(false)
@@ -59,7 +59,7 @@ export default function DemandeRebutDetails() {
     const [isValidateur, setIsValidateur] = useState(false)
 
     const [listeRebut, setListeRebut] = useState([])
-    const [quantiteDecom, setQuantiteRebut] = useState(0)
+    const [quantiteRebut, setQuantiteRebut] = useState(0)
 
     const [commentaireRebut, setCommentaireRebut] = useState('')
     const [commentaireValidation, setCommentaireValidation] = useState('')
@@ -103,6 +103,12 @@ export default function DemandeRebutDetails() {
     const [dateUpdate, setDateUpdate] = useState('')
 
     const [isGestion, setIsGestion] = useState(true)
+
+    const [totalValide, setTotalValide] = useState(0)
+
+    const [listeValidee, setListeValidee] = useState([])
+
+    const [commentaireCloture, setCommentaireCloture] = useState('')
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -154,8 +160,13 @@ export default function DemandeRebutDetails() {
                     return item.nom_role
                 })
 
-                const indexValidation = rebut.validation_rebut.length - 1
+                const indexValidation = rebut.validation_rebut.filter((item) => { return item.type == 'validation' }).length - 1
                 const validation = rebut.validation_rebut[indexValidation]
+                setTotalValide(validation?.quantite)
+
+                const clotures = rebut.validation_rebut.filter((item) => { return item.type == 'cloture' })
+                const cloture = clotures.at(-1)
+                console.log(cloture)
 
                 if (statut == 'en_cours') {
                     setStatutRebut('en cours')
@@ -182,15 +193,19 @@ export default function DemandeRebutDetails() {
                     }
                 } else if (statut == 'valide') {
                     setStatutRebut('validé')
+                    setIsValide(true)
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-blue-100 text-blue-300')
+                    const listeValide = JSON.parse(validation.liste_rebut)
+                    setListeValidee(listeValide)
                     if (nomRoles.includes('demande_rebut')) {
                         setIsDemandeur(true)
                     }
                     if (nomRoles.includes('validation_rebut')) {
                         setIsValidateur(true)
                     }
-                } else if (statut == 'clos' && validation && validation.type == 'cloture') {
+                } else if (statut == 'clos') {
                     setStatutRebut('clos')
+                    setIsValide(true)
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-100 text-gray-400')
                 }
 
@@ -205,6 +220,7 @@ export default function DemandeRebutDetails() {
 
                 setCommentaireRebut(rebutForm.commentaire)
                 setCommentaireValidation(validation?.forms.commentaire)
+                setCommentaireCloture(cloture?.forms.commentaire)
 
                 const allFiles = await filesData.getAllFormFiles(rebutForm.id)
                 const dFiles = allFiles.filter((item) => {
@@ -328,27 +344,26 @@ export default function DemandeRebutDetails() {
         }
     }
 
-    const handleClotureDecom = async () => {
+    const handleClotureRebut = async () => {
         setIsModalClotureOpen(false)
         // console.log("Liste checking avant cloture: ", listeRebut)
         try {
             setLoadingVerification(true)
             const payload = {
-                userId,
                 commentaire: messageCloture,
-                listeRebut,
-                isReg,
+                listeValidee,
+                quantite: totalValide,
+                userId,
             }
-            const id = idDecom
 
-            await decomData.clotureDecom(id, payload)
+            await rebutData.cloturerDemandeRebut(id, payload)
 
             Swal.fire({
                 title: "Succès",
-                text: "Décom clôturé avec succès !",
+                text: "Mise au rebut clôturée avec succès !",
                 icon: "success"
             })
-            navigate('/tous-les-decommissionnements')
+            navigate('/toutes-les-demandes-rebut')
         } catch (error) {
             console.log("Erreur de la réception : ", error)
             Swal.fire({
@@ -356,7 +371,7 @@ export default function DemandeRebutDetails() {
                 text: "Une erreur est survenue lors de la clôture !",
                 icon: "warning"
             })
-            navigate('/tous-les-decommissionnements')
+            navigate('/toutes-les-demandes-rebut')
         } finally {
             setLoadingVerification(false)
         }
@@ -458,7 +473,7 @@ export default function DemandeRebutDetails() {
                                                 )}
                                                 <div className=''>
                                                     <span className={statutClass}>
-                                                        {statutDecom}
+                                                        {statutRebut}
                                                     </span>
                                                 </div>
                                             </div>
@@ -527,6 +542,28 @@ export default function DemandeRebutDetails() {
                                                                         <></>
                                                                     )}
 
+                                                                </>
+                                                            ) : (
+                                                                <></>
+                                                            )}
+                                                            {isValide ? (
+                                                                <>
+                                                                    {isDemandeur ? (
+                                                                        <>
+                                                                            <div>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalClotureOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-circle-fill"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Cloturer la demande</span>
+                                                                                </button>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <></>
+                                                                    )}
                                                                 </>
                                                             ) : (
                                                                 <></>
@@ -603,10 +640,23 @@ export default function DemandeRebutDetails() {
                                                     <>
                                                         <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
                                                             <div className='mb-6 pb-2 w-full border-b text-left'>
-                                                                <span className='text-sm mr-2'>Commentaire Validation</span>
+                                                                <span className='text-sm mr-2'>Commentaire validation</span>
                                                                 <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                             </div>
                                                             <p className='text-sm text-blue-500 text-left'>{commentaireValidation}</p>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <></>
+                                                )}
+                                                {commentaireCloture ? (
+                                                    <>
+                                                        <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                            <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                                <span className='text-sm mr-2'>Commentaire cloture</span>
+                                                                <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                            </div>
+                                                            <p className='text-sm text-blue-500 text-left'>{commentaireCloture}</p>
                                                         </div>
                                                     </>
                                                 ) : (
@@ -620,9 +670,12 @@ export default function DemandeRebutDetails() {
                                                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                                                     <div className="flex justify-between p-4 pb-0">
                                                         <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
-                                                            <span>Total : {quantiteDecom}</span>
+                                                            <div className="space-x-2">
+                                                                <span>Total : {quantiteRebut}</span>
+                                                                {isValide ? (<><span>Total validé : {totalValide}</span></>) : (<></>)}
+                                                            </div>
                                                         </div>
-                                                        <div>
+                                                        {/* <div>
                                                             {loadingExtract ?
                                                                 (
                                                                     <>
@@ -641,7 +694,7 @@ export default function DemandeRebutDetails() {
                                                                     </>
                                                                 )
                                                             }
-                                                        </div>
+                                                        </div> */}
                                                     </div>
                                                     <div className="max-w-full overflow-x-auto">
                                                         <Table>
@@ -691,30 +744,38 @@ export default function DemandeRebutDetails() {
                                                                     })
                                                                     const nomModel = model ? model.nom_model : '%%%'
 
+                                                                    const classList = "px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400"
+
+                                                                    const selected = item.is_selected
+
+                                                                    const classValidation = item.is_selected ? '' : 'px-4 py-3 text-gray-500 text-start text-xs opacity-20 line-through'
+
                                                                     return (
                                                                         <>
                                                                             <TableRow>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     {index + 1}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     {item.pointMarchand ? item.pointMarchand : 'N/A'}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     <div>
                                                                                         {item.terminalSN}
                                                                                     </div>
-                                                                                    <div className=" text-gray-700 font-medium" style={{ fontSize: '11px' }}>{nomModel}</div>
+                                                                                    <div className=" text-gray-700 font-medium" style={{ fontSize: '11px' }}>
+                                                                                        {nomModel}
+                                                                                    </div>
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     {item.etatTpe}
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     <div className="grid grid-cols-2 text-xs">
                                                                                         {piecesDefectueuses?.map((item) => {
                                                                                             const piece = pieces.find((p) => {
@@ -724,7 +785,7 @@ export default function DemandeRebutDetails() {
                                                                                                 return (
                                                                                                     <>
                                                                                                         <div>
-                                                                                                            <span className="text-red-700 font-medium">{piece.nom_piece} ,</span>
+                                                                                                            <span className={isValide ? (selected ? "text-red-700 font-medium" : '') : "text-red-700 font-medium"}>{piece.nom_piece} ,</span>
                                                                                                         </div>
                                                                                                     </>
                                                                                                 )
@@ -733,7 +794,7 @@ export default function DemandeRebutDetails() {
                                                                                     </div>
                                                                                 </TableCell>
                                                                                 <TableCell
-                                                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                    className={isValide ? (classValidation ? classValidation : classList) : classList}>
                                                                                     <div className="grid grid-cols-2 text-xs">
                                                                                         {piecesRecuperables?.map((item) => {
                                                                                             const piece = pieces.find((p) => {
@@ -743,7 +804,7 @@ export default function DemandeRebutDetails() {
                                                                                                 return (
                                                                                                     <>
                                                                                                         <div>
-                                                                                                            <span className="text-green-700 font-medium">{piece.nom_piece} ,</span>
+                                                                                                            <span className={isValide ? (selected ? "text-green-700 font-medium" : '') : "text-green-700 font-medium"}>{piece.nom_piece} ,</span>
                                                                                                         </div>
                                                                                                     </>
                                                                                                 )
@@ -803,7 +864,7 @@ export default function DemandeRebutDetails() {
                         <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Confirmer</span>
                     </div>
                     <div className="text-center text-sm font-medium">
-                        <span>Confirmer la réception de {quantiteDecom} TPE(s) à décommissionner</span>
+                        <span>Confirmer la réception de {quantiteRebut} TPE(s) à décommissionner</span>
                     </div>
                     {isReg ? (
                         <>
@@ -882,7 +943,7 @@ export default function DemandeRebutDetails() {
                         <span className="p-3 rounded bg-black text-white font-medium">Clôture</span>
                     </div>
                     <div className="text-center text-sm font-medium">
-                        <span>Êtes-vous sûr de vouloir clôturer ce décommissionnement ?</span>
+                        <span>Êtes-vous sûr de vouloir clôturer cette mise au rebut pour {totalValide} TPE(s) ?</span>
                     </div>
                     <div>
                         <Label>Commentaire</Label>
@@ -904,7 +965,7 @@ export default function DemandeRebutDetails() {
                             </div>
                             <div className="w-full flex justify-center items-center">
                                 <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={handleClotureDecom}
+                                    onClick={handleClotureRebut}
                                 >
                                     Oui
                                 </button>

@@ -240,6 +240,8 @@ import AllPiecesRebuts from "./pages/RebutsPages/AllPiecesRebuts"
 import DemandeRebutDetails from "./pages/RebutsPages/DemandeRebutDetails"
 // @ts-ignore
 import ModifyRebutForm from "./pages/Forms/RebutForms/ModifyRebutForm"
+// @ts-ignore
+import ValiderRebutForm from "./pages/Forms/RebutForms/ValiderRebutForm"
 
 export default function App() {
   return (
@@ -333,6 +335,7 @@ export default function App() {
               <Route path="/pieces-rebuts" element={<AllPiecesRebuts />} />
               <Route path="/demande-rebut-details/:id" element={<DemandeRebutDetails />} />
               <Route path="/modifier-rebut/:id" element={<ModifyRebutForm />} />
+              <Route path="/valider-rebut/:id" element={<ValiderRebutForm />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

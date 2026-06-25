@@ -7,7 +7,7 @@ const uploadExcel = require("../middlewares/uploadExcel");
 const {
     downloadTemplateRebut, extractRebut, demandeRebut, getAllDemandesRebut, getAllTpeRebuts,
     getTpeRebutDetails, changeLotPiece, recupPieceFonc, getAllPiecesRebut, getOneDemandeRebut,
-    updateDemandeRebut, validateDemandeRebut,
+    updateDemandeRebut, validateDemandeRebut, cloturerDemandeRebut,
 } = require("../controllers/Rebut/rebutController")
 
 router.post('/downloadTemplateRebut', downloadTemplateRebut);
@@ -28,5 +28,6 @@ router.put('/updateDemandeRebut/:id', uploadAll.fields([
 router.put('/validateDemandeRebut/:id', uploadAll.fields([
     { name: 'files' },
 ]), validateDemandeRebut)
+router.put('/cloturerDemandeRebut/:id', cloturerDemandeRebut)
 
 module.exports = router

@@ -370,8 +370,6 @@ export default function RebutInputs() {
     const handleChangeSn = async (value) => {
         setTerminalName('')
         setStatutTpe('')
-        setSelectedModel(null)
-        setNomModel('')
         setTerminalSN(value)
         try {
             const pointMarchand = merchantList.find((terminal) => {

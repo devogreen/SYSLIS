@@ -133,4 +133,13 @@ export class Rebut {
             throw error.response.data
         }
     }
+
+    async cloturerDemandeRebut(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/rebut/cloturerDemandeRebut/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }
