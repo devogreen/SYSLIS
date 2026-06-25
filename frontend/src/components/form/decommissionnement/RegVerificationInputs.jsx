@@ -100,6 +100,7 @@ export default function RegVerificationInputs() {
     const optionStatuts = [
         { value: 'Paramétrage', label: 'Paramétrage' },
         { value: 'Rebut', label: 'Rebut' },
+        { value: 'A Reparer', label: 'A Reparer' },
     ]
 
     useEffect(() => {
@@ -200,6 +201,9 @@ export default function RegVerificationInputs() {
             } else if (terminal.statut == 'rebus' || terminal.statut == 'rebut') {
                 setIsRebut(true)
                 setSelectedStatut('Rebut')
+            } else if (terminal.statut == 'a reparer') {
+                setIsAreparer(true)
+                setSelectedStatut('A Reparer')
             }
             setIndexPiece(value)
         }
@@ -262,6 +266,9 @@ export default function RegVerificationInputs() {
         if (isRebut && selectedPiecesDef.length == 0) {
             setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
             return
+        } if (isAreparer && selectedPiecesDef.length == 0) {
+            setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
+            return
         }
         setIsModalConfirmOpen(true)
         setErrorAjout('')
@@ -288,6 +295,11 @@ export default function RegVerificationInputs() {
             listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
             listeDecom[indexPiece].statut = 'rebut'
             listeDecom[indexPiece].retour = (etatTpe ? etatTpe : '')
+        } else if (isAreparer) {
+            listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
+            listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
+            listeDecom[indexPiece].statut = 'a_reparer'
+            listeDecom[indexPiece].retour = etatTpe
         }
         if (!isParam && !isRebut) {
             listeDecom[indexPiece].statut = 'checking'
@@ -307,6 +319,8 @@ export default function RegVerificationInputs() {
         setIsRAS(false)
         setIsProblem(false)
         setIsRebut(false)
+        setIsParam(false)
+        setIsAreparer(false)
         setEtatTpe('')
         setSelectedPiecesDef([])
         setSelectedPiecesRec([])
@@ -359,10 +373,17 @@ export default function RegVerificationInputs() {
         if (value == 'Paramétrage') {
             setIsParam(true)
             setIsRebut(false)
+            setIsAreparer(false)
         } else if (value == 'Rebut') {
             setIsRebut(true)
             setIsParam(false)
             setIsRAS(false)
+            setIsAreparer(false)
+        } else if (value == 'A Reparer') {
+            setIsAreparer(true)
+            setIsParam(false)
+            setIsRAS(false)
+            setIsRebut(false)
         }
     }
     return (
@@ -698,6 +719,115 @@ export default function RegVerificationInputs() {
                                                             ) : (
                                                                 <></>
                                                             )}
+                                                            {isAreparer ? (
+                                                                <>
+                                                                    <div>
+                                                                        <div className="space-y-6">
+                                                                            <div className="space-y-3">
+                                                                                <button className="flex space-x-2" onClick={() => setExpandedPieceDef(!expandedPieceDef)}>
+                                                                                    <span className="text-sm font-semibold">Pièces défectueuses ou absentes <span className="text-red-700">*</span></span>
+                                                                                    {expandedPieceDef ? (
+                                                                                        <span><i className="pi pi-angle-down"></i></span>
+                                                                                    ) : (
+                                                                                        <span><i className="pi pi-angle-up"></i></span>
+                                                                                    )}
+                                                                                </button>
+                                                                                {expandedPieceDef ? (
+                                                                                    <>
+                                                                                        <div>
+                                                                                            <div>
+                                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                                    <Checkbox
+                                                                                                        checked={allPieceDef}
+                                                                                                        onChange={handleSelectAllPieceDef}
+                                                                                                        label="TOUT"
+                                                                                                    />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="grid grid-cols-2">
+                                                                                                {pieces.map((item) => {
+                                                                                                    return (
+                                                                                                        <>
+                                                                                                            <div>
+                                                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                                                    <Checkbox
+                                                                                                                        checked={selectedPiecesDef?.includes(item.id_piece)}
+                                                                                                                        onChange={() => handleSelectPieceDef(item.id_piece)}
+                                                                                                                        label={item.nom_piece} />
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        </>
+                                                                                                    )
+                                                                                                })}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <></>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="space-y-3">
+                                                                                <button className="flex space-x-2" onClick={() => setExpandedPieceRec(!expandedPieceRec)}>
+                                                                                    <span className="text-sm font-semibold">Pièces fonctionnelles</span>
+                                                                                    {expandedPieceRec ? (
+                                                                                        <span><i className="pi pi-angle-down"></i></span>
+                                                                                    ) : (
+                                                                                        <span><i className="pi pi-angle-up"></i></span>
+                                                                                    )}
+                                                                                </button>
+                                                                                {expandedPieceRec ? (
+                                                                                    <>
+                                                                                        <div>
+                                                                                            <div>
+                                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                                    <Checkbox
+                                                                                                        checked={allPieceFunc}
+                                                                                                        onChange={handleSelectAllPieceRec}
+                                                                                                        label="TOUT"
+                                                                                                    />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="grid grid-cols-2">
+                                                                                                {pieces.map((item) => {
+                                                                                                    return (
+                                                                                                        <>
+                                                                                                            <div className="flex items-center gap-3 my-2">
+                                                                                                                <Checkbox
+                                                                                                                    checked={selectedPiecesRec?.includes(item.id_piece)}
+                                                                                                                    onChange={() => handleSelectPieceRec(item.id_piece)}
+                                                                                                                    label={item.nom_piece} />
+                                                                                                            </div>
+                                                                                                        </>
+                                                                                                    )
+                                                                                                })}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <></>
+                                                                                )}
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                    <Checkbox
+                                                                                        className="text-xl"
+                                                                                        checked={isRI}
+                                                                                        onChange={(e) => {
+                                                                                            if (isRI) {
+                                                                                                setIsRI(false)
+                                                                                            } else {
+                                                                                                setIsRI(true)
+                                                                                            }
+                                                                                        }}
+                                                                                        label="RAPPORT D'INCIDENT" />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <></>
+                                                            )}
                                                             <div className="space-y-4">
                                                                 <div>
                                                                     <Label>Autre</Label>
@@ -807,6 +937,8 @@ export default function RegVerificationInputs() {
                                                 statutClass = 'text-blue-200 font-semi-bold'
                                             } else if (item.statut == 'rebus' || item.statut == 'rebut') {
                                                 statutClass = 'text-red-500 font-semi-bold'
+                                            } else if (item.statut == 'a_reparer') {
+                                                statutClass = 'text-blue-600 font-semi-bold'
                                             }
 
                                             const piecesDefectueuses = JSON.parse(item.pieces_defectueuses)

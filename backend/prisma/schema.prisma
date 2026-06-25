@@ -1288,6 +1288,7 @@ enum sn_decom_statut {
   parametrage
   rebus
   checking
+  a_reparer
 }
 
 enum retour_decom_type {

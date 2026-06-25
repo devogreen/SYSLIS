@@ -150,6 +150,7 @@ export default function VerificationDecomInputs() {
         setIsProblem(false)
         setIsRebut(false)
         setIsParam(false)
+        setIsAreparer(false)
         setSelectedStatut(null)
         setSelectedPiecesDef([])
         setSelectedPiecesRec([])
@@ -272,10 +273,10 @@ export default function VerificationDecomInputs() {
         } else if (isAreparer) {
             listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
             listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
-            listeDecom[indexPiece].statut = 'a reparer'
+            listeDecom[indexPiece].statut = 'a_reparer'
             listeDecom[indexPiece].retour = etatTpe
         }
-        if (!isParam && !isRebut && !isAreparer) {
+        if (isParam == false && isRebut == false && isAreparer == false) {
             listeDecom[indexPiece].statut = 'checking'
             listeDecom[indexPiece].pieces_defectueuses = []
             listeDecom[indexPiece].pieces_recuperees = []
@@ -293,6 +294,8 @@ export default function VerificationDecomInputs() {
         setIsRAS(false)
         setIsProblem(false)
         setIsRebut(false)
+        setIsParam(false)
+        setIsAreparer(false)
         setEtatTpe('')
         setSelectedPiecesDef([])
         setSelectedPiecesRec([])
@@ -345,10 +348,12 @@ export default function VerificationDecomInputs() {
         if (value == 'Paramétrage') {
             setIsParam(true)
             setIsRebut(false)
+            setIsAreparer(false)
         } else if (value == 'Rebut') {
             setIsRebut(true)
             setIsParam(false)
             setIsRAS(false)
+            setIsAreparer(false)
         } else if (value == 'A Reparer') {
             setIsAreparer(true)
             setIsParam(false)
@@ -895,7 +900,7 @@ export default function VerificationDecomInputs() {
                                                 statutClass = 'text-blue-200 font-semi-bold'
                                             } else if (item.statut == 'rebus' || item.statut == 'rebut') {
                                                 statutClass = 'text-red-500 font-semi-bold'
-                                            } else if (item.statut == 'a reparer') {
+                                            } else if (item.statut == 'a_reparer') {
                                                 statutClass = 'text-blue-600 font-semi-bold'
                                             }
 

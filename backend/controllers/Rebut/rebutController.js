@@ -12,7 +12,6 @@ const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
-const { all } = require("../../routes/rebutRoutes");
 
 const formatDate = (isoDate) => {
     const date = new Date(isoDate);

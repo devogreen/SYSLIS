@@ -743,6 +743,8 @@ export default function DecomDetails() {
                                                                             } else if (item.statut == 'rebus') {
                                                                                 statut = 'rebut'
                                                                                 statutClass = 'text-red-500 font-semi-bold'
+                                                                            } else if (item.statut == 'a_reparer') {
+                                                                                statutClass = 'text-blue-600 font-semi-bold'
                                                                             }
 
                                                                             const piecesDefectueuses = JSON.parse(item.pieces_defectueuses)
