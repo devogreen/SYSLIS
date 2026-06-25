@@ -60,6 +60,7 @@ export default function RegVerificationInputs() {
     const [isProblem, setIsProblem] = useState(false)
     const [isRebut, setIsRebut] = useState(false)
     const [isParam, setIsParam] = useState(false)
+    const [isAreparer, setIsAreparer] = useState(false)
 
     const [isRI, setIsRI] = useState(false)
     const [etatTpe, setEtatTpe] = useState('')
@@ -201,7 +202,7 @@ export default function RegVerificationInputs() {
             } else if (terminal.statut == 'rebus' || terminal.statut == 'rebut') {
                 setIsRebut(true)
                 setSelectedStatut('Rebut')
-            } else if (terminal.statut == 'a reparer') {
+            } else if (terminal.statut == 'a_reparer') {
                 setIsAreparer(true)
                 setSelectedStatut('A Reparer')
             }
@@ -251,7 +252,7 @@ export default function RegVerificationInputs() {
 
     const handleConfirm = () => {
 
-        if (isParam == false && isRebut == false) {
+        if (isParam == false && isRebut == false && isAreparer == false) {
             setErrorAjout("Vous devez choisir un statut !")
             return
         }
@@ -266,7 +267,8 @@ export default function RegVerificationInputs() {
         if (isRebut && selectedPiecesDef.length == 0) {
             setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
             return
-        } if (isAreparer && selectedPiecesDef.length == 0) {
+        } 
+        if (isAreparer && selectedPiecesDef.length == 0) {
             setErrorAjout("Vous devez choisir au moins une pièce défectueuse !")
             return
         }
@@ -301,7 +303,7 @@ export default function RegVerificationInputs() {
             listeDecom[indexPiece].statut = 'a_reparer'
             listeDecom[indexPiece].retour = etatTpe
         }
-        if (!isParam && !isRebut) {
+        if (isParam == false && isRebut == false && isAreparer == false) {
             listeDecom[indexPiece].statut = 'checking'
             listeDecom[indexPiece].pieces_defectueuses = []
             listeDecom[indexPiece].pieces_recuperees = []

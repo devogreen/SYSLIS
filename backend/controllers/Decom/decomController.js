@@ -1962,7 +1962,7 @@ const regVerifyDecom = async (req, res) => {
             rebus: 'rebus',
             rebut: 'rebus',
             checking: 'checking',
-            a_reparer: 'a reparer',
+            a_reparer: 'a_reparer',
         };
 
         const verification = await prisma.$transaction(async (tx) => {

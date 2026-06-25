@@ -177,7 +177,7 @@ export default function VerificationDecomInputs() {
             } else if (terminal.statut == 'rebus' || terminal.statut == 'rebut') {
                 setIsRebut(true)
                 setSelectedStatut('Rebut')
-            } else if (terminal.statut == 'a reparer') {
+            } else if (terminal.statut == 'a_reparer') {
                 setIsAreparer(true)
                 setSelectedStatut('A Reparer')
             }
