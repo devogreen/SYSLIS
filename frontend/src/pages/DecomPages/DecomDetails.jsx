@@ -93,6 +93,7 @@ export default function DecomDetails() {
 
     const [loadingExtract, setLoadingExtract] = useState(false)
 
+    const [totals, setTotals] = useState([])
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -202,6 +203,10 @@ export default function DecomDetails() {
                     return item.role == 'livreur'
                 })
                 setDecomFiles(dFiles)
+
+                const totals = {
+                    
+                }
 
             } catch (error) {
                 setErrorData('Erreur de données !')
@@ -663,8 +668,11 @@ export default function DecomDetails() {
                                             <div>
                                                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                                                     <div className="flex justify-between p-4 pb-0">
-                                                        <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
+                                                        <div className='p-4 pb-0 text-xs text-gray-600 space-x-3'>
                                                             <span>Total : {quantiteDecom}</span>
+                                                            <span>a réparer : 0</span>
+                                                            <span>paramétrage : 0</span>
+                                                            <span>rebut: 0</span>
                                                         </div>
                                                         <div>
                                                             {loadingExtract ?
