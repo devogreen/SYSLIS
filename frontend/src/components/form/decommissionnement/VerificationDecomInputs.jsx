@@ -156,6 +156,7 @@ export default function VerificationDecomInputs() {
         setSelectedPiecesRec([])
         const terminal = listeDecom.at(value)
         if (terminal) {
+            console.log(terminal)
             setSelectedTpe(terminal)
 
             const piecesDef = terminal.pieces_defectueuses ? JSON.parse(terminal.pieces_defectueuses) : []
@@ -170,14 +171,13 @@ export default function VerificationDecomInputs() {
 
                 if (terminal.is_ok) {
                     setIsRAS(true)
-                    setIsParam(false)
-                } else if (!terminal.is_ok) {
+                } else if (terminal.is_ok == false) {
                     setIsProblem(true)
                 }
             } else if (terminal.statut == 'rebus' || terminal.statut == 'rebut') {
                 setIsRebut(true)
                 setSelectedStatut('Rebut')
-            } else if (terminal.statut == 'a reparer') {
+            } else if (terminal.statut == 'a_reparer') {
                 setIsAreparer(true)
                 setSelectedStatut('A Reparer')
             }
@@ -257,29 +257,31 @@ export default function VerificationDecomInputs() {
             if (isRAS) {
                 listeDecom[indexPiece].is_ok = true
                 listeDecom[indexPiece].statut = 'parametrage'
-                listeDecom[indexPiece].retour = etatTpe
+                listeDecom[indexPiece].retour = etatTpe.trim()
+                listeDecom[indexPiece].pieces_recuperees = '[]'
+                listeDecom[indexPiece].pieces_defectueuses = '[]'
             } else if (isProblem) {
                 listeDecom[indexPiece].is_ok = false
                 listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
                 listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
                 listeDecom[indexPiece].statut = 'parametrage'
-                listeDecom[indexPiece].retour = etatTpe
+                listeDecom[indexPiece].retour = etatTpe.trim()
             }
         } else if (isRebut) {
             listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
             listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
             listeDecom[indexPiece].statut = 'rebut'
-            listeDecom[indexPiece].retour = etatTpe
+            listeDecom[indexPiece].retour = etatTpe.trim()
         } else if (isAreparer) {
             listeDecom[indexPiece].pieces_defectueuses = JSON.stringify(selectedPiecesDef)
             listeDecom[indexPiece].pieces_recuperees = JSON.stringify(selectedPiecesRec)
             listeDecom[indexPiece].statut = 'a_reparer'
-            listeDecom[indexPiece].retour = etatTpe
+            listeDecom[indexPiece].retour = etatTpe.trim()
         }
         if (isParam == false && isRebut == false && isAreparer == false) {
             listeDecom[indexPiece].statut = 'checking'
-            listeDecom[indexPiece].pieces_defectueuses = []
-            listeDecom[indexPiece].pieces_recuperees = []
+            listeDecom[indexPiece].pieces_defectueuses = '[]'
+            listeDecom[indexPiece].pieces_recuperees = '[]'
         }
         // console.log(listeDecom)
         const checked = listeChecked.find(item => {
@@ -291,6 +293,7 @@ export default function VerificationDecomInputs() {
                 : [...prev, listeDecom[indexPiece]]
         );
         setSelectedTpe(null)
+        setIndexPiece(null)
         setIsRAS(false)
         setIsProblem(false)
         setIsRebut(false)
@@ -360,6 +363,16 @@ export default function VerificationDecomInputs() {
             setIsRAS(false)
             setIsRebut(false)
         }
+    }
+
+    const totalRebut = listeDecom.filter((item) => { return item.statut == 'rebut' || item.statut == 'rebus' }).length
+    const totalParam = listeDecom.filter((item) => { return item.statut == 'parametrage' }).length
+    const totalRepar = listeDecom.filter((item) => { return item.statut == 'a_reparer' }).length
+
+    const totals = {
+        rebut: totalRebut,
+        param: totalParam,
+        a_reparer: totalRepar,
     }
 
     return (
@@ -840,8 +853,11 @@ export default function VerificationDecomInputs() {
                 <div>
                     <div>
                         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-                            <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
+                            <div className='p-4 pb-0 text-xs text-gray-600 space-x-3'>
                                 <span>Total : {quantiteTotale}</span>
+                                <span className=" font-medium">a réparer : <span className="text-blue-600">{totals.a_reparer}</span></span>
+                                <span className=" font-medium">paramétrage : <span className="text-blue-300">{totals.param}</span></span>
+                                <span className=" font-medium">rebut : <span className="text-red-500">{totals.rebut}</span></span>
                             </div>
                             <div className="max-w-full overflow-x-auto">
                                 <Table>

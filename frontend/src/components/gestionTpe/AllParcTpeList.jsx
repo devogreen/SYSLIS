@@ -177,7 +177,7 @@ export default function AllParcTpeList() {
             statut = 'diagnostic';
             statutClass = 'text-center text-xs font-semibold rounded-xl text-orange-400'
         } else {
-            statut = { statutTpe }
+            statut = statutTpe
             statutClass = 'text-center text-xs font-semibol'
         }
         return (
