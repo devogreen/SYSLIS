@@ -41,7 +41,6 @@ export default function DecomDetails() {
     const navigate = useNavigate()
     const filesData = new FilesHandler()
 
-
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
     const [loadingReception, setLoadingReception] = useState(false)

@@ -2517,6 +2517,320 @@ const exportOneDecomToExcel = async (req, res) => {
     }
 }
 
+// Fonction pour avoir la liste de tous les TPE avec le statut 'a_reparer' et 'repare' provenant d'une vérification de décommissionnement
+const getAllTpeRepare = async (req, res) => {
+    try {
+        const tpe = await prisma.parc_tpe.findMany({
+            where: {
+                statut_id: {
+                    in: [10, 11],
+                },
+            },
+            include: {
+                model_piece: true,
+                statut_tpe: true,
+            },
+            orderBy: {
+                last_modified_at: 'desc',
+            },
+        });
+
+        res.status(200).json(tpe);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des TPE à réparer :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE à réparer", error });
+    }
+}
+
+const reparerTpe = async (req, res) => {
+    try {
+        const {
+            sn: terminalSn,
+        } = req.params
+        const {
+            userId,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        const dateAction = new Date()
+
+        const modification = await prisma.$transaction(async (tx) => {
+            const tpe = await tx.parc_tpe.upsert({
+                where: {
+                    serial_number: terminalSn,
+                },
+                update: {
+                    updated_at: dateAction,
+                    updated_by: utilisateur.id_user,
+                    last_modified_at: dateAction,
+                    statut_id: 10,
+                },
+                create: {
+                    serial_number: terminalSn,
+                    created_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    last_modified_at: dateAction,
+                    statut_id: 10,
+                }
+            })
+
+            await tx.history_tpe.create({
+                data: {
+                    id_tpe: tpe.id,
+                    created_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    statut_id: 10,
+                }
+            })
+
+            return {
+                tpe,
+            }
+        })
+
+        console.log('Opération effectuée avec succès !')
+        res.status(201).json({
+            message: 'Opération effectuée avec succès !',
+            data: modification,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'opération :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+function getCellValue(cell) {
+    if (!cell || cell.value == null) return "";
+    if (typeof cell.value === "object" && cell.value.richText) {
+        return cell.value.richText.map(t => t.text).join("");
+    }
+    return String(cell.value).trim();
+}
+const normalize = (value) => {
+    if (value === null || value === undefined) return null;
+    return String(value).trim();
+};
+
+
+const extractSnReparation = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(file.buffer);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const requireHeader = "SERIAL NUMBER"
+
+        if (!headers[requireHeader]) {
+            console.log(`Colonne requise manquante : ${requireHeader}`)
+            return res.status(400).json({
+                message: `Missing required column: ${requireHeader}`
+            });
+        }
+
+        const serials = [];
+        const snSet = new Set()
+        let duplicateError = null;
+        let formatError = null;
+        let statutError = null;
+        const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const sn = normalize(row.getCell(headers[requireHeader]).value);
+            if (!sn) return;
+
+            if (snSet.has(sn)) {
+                duplicateError = {
+                    rowNumber,
+                    sn,
+                };
+                return;
+            }
+            if (sn.length != 10 || !isOnlyDigits(sn)) {
+                formatError = {
+                    rowNumber,
+                    sn,
+                };
+                return;
+            }
+
+            snSet.add(sn)
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (formatError) {
+            return res.status(400).json({
+                message: `SN invalide à la ligne ${formatError.rowNumber} pour le SN ${formatError.sn}`,
+            });
+        }
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le SN ${duplicateError.sn}`,
+            });
+        }
+
+        let statut = 'non enregistré'
+        const listeSn = [...snSet]
+        for (let sn of listeSn) {
+            const serial_number = await prisma.parc_tpe.findUnique({
+                where: {
+                    serial_number: sn
+                },
+                include: {
+                    statut_tpe: true
+                }
+            })
+            if (serial_number.statut_tpe.statut != 'a_reparer') {
+                console.error(`Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`)
+                return res.status(400).json({
+                    message: `Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`,
+                });
+            }
+            if (serial_number) {
+                statut = serial_number.statut_tpe.statut
+            }
+            const element = {
+                sn,
+                statut,
+            }
+            serials.push(element)
+        }
+
+        if (statutError) {
+
+        }
+        // const serialList = [...serials]
+        // console.log(serials)
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: serials,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const reparerListeTpe = async (req, res) => {
+    try {
+        const {
+            userId,
+            serials,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        if (serials.length == 0) {
+            console.error('Liste vide !')
+            return res.status(400).json({ message: "Liste vide !" });
+        }
+        const dateAction = new Date()
+
+        const modification = await prisma.$transaction(async (tx) => {
+            // 1. Create only missing ones
+            await tx.parc_tpe.createMany({
+                data: serials.map(item => ({
+                    serial_number: item,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 10,
+                })),
+                skipDuplicates: true
+            });
+
+            // 2. Update ALL (existing + newly created)
+            await tx.parc_tpe.updateMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: 10,
+                }
+            });
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            const allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: 10,
+                }))
+            });
+
+            return {
+                allTpes,
+            }
+        })
+
+        console.log('Liste de SN modifiée avec succès !')
+        res.status(201).json({
+            message: 'Liste de SN modifiée avec succès !',
+            data: modification,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la modification :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -2532,4 +2846,8 @@ module.exports = {
     extractDecom,
     downloadTemplateDecom,
     exportOneDecomToExcel,
+    getAllTpeRepare,
+    reparerTpe,
+    extractSnReparation,
+    reparerListeTpe,
 }

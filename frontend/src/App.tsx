@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router";
+import { BrowserRouter as Router, Routes, Route, RouterProvider } from "react-router";
 import SignIn from "./pages/AuthPages/SignIn";
 import SignUp from "./pages/AuthPages/SignUp";
 import NotFound from "./pages/OtherPage/NotFound";
@@ -243,6 +243,12 @@ import ModifyRebutForm from "./pages/Forms/RebutForms/ModifyRebutForm"
 // @ts-ignore
 import ValiderRebutForm from "./pages/Forms/RebutForms/ValiderRebutForm"
 
+
+// @ts-ignore
+import AllTpeRepare from "./pages/ReparationPages/AllTpeRepare"
+// @ts-ignore
+import ReparationTpeForm from "./pages/Forms/ReparationTpeForms/ReparationTpeForm"
+
 export default function App() {
   return (
     <>
@@ -336,6 +342,10 @@ export default function App() {
               <Route path="/demande-rebut-details/:id" element={<DemandeRebutDetails />} />
               <Route path="/modifier-rebut/:id" element={<ModifyRebutForm />} />
               <Route path="/valider-rebut/:id" element={<ValiderRebutForm />} />
+
+              {/* Gestion des TPE à réparer */}
+              <Route path="/tpe-a-reparer" element={<AllTpeRepare />} />
+              <Route path="/reparation-tpe" element={<ReparationTpeForm />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

@@ -216,7 +216,7 @@ const normalize = (value) => {
     return String(value).trim();
 };
 
-// Fonction d'extraction de fichier excel pour régularisation des demandes QR CODES.
+
 const extractSn = async (req, res) => {
     try {
         const {

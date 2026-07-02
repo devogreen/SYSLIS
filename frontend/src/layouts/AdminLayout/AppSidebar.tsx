@@ -108,10 +108,12 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles: [23], pro: false },
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
+      { name: "TPE à réparer", path: "/tpe-a-reparer", pro: false },
+      { name: "Réparation TPE", path: "/reparation-tpe", pro: false},
     ],
   },
   {
-    name: "Gestion des Rebuts",
+    name: "Gestion des rebuts",
     icon: <MaintenanceCircle />,
     roles: [30, 31, 32, 33],
     subItems: [

@@ -7,7 +7,7 @@ const uploadExcel = require("../middlewares/uploadExcel");
 const {
     faireDecom, getAllDecoms, getOneDecom, modifyDecom, cancelDecom, receptionDecom, returnDecom,
     getSnDecom, verifyDecom, clotureDecom, regVerifyDecom, extractDecom, downloadTemplateDecom,
-    exportOneDecomToExcel,
+    exportOneDecomToExcel, getAllTpeRepare, reparerTpe, extractSnReparation, reparerListeTpe,
 } = require("../controllers/Decom/decomController")
 
 router.post('/faireDecom', uploadAll.fields([
@@ -28,4 +28,9 @@ router.put('/regVerifyDecom/:id', regVerifyDecom);
 router.post('/extractDecom', uploadExcel.single('file'), extractDecom);
 router.get('/downloadTemplateDecom', downloadTemplateDecom);
 router.get('/exportOneDecomToExcel/:id', exportOneDecomToExcel);
+router.get('/getAllTpeRepare', getAllTpeRepare);
+router.put('/reparerTpe/:sn', reparerTpe);
+router.post('/extractSnReparation', uploadExcel.single("file"), extractSnReparation);
+router.post('/reparerListeTpe', reparerListeTpe);
+
 module.exports = router
