@@ -2542,70 +2542,88 @@ const getAllTpeRepare = async (req, res) => {
     }
 }
 
-const reparerTpe = async (req, res) => {
-    try {
-        const {
-            sn: terminalSn,
-        } = req.params
-        const {
-            userId,
-        } = req.body
+// const reparerTpe = async (req, res) => {
+//     try {
+//         const {
+//             sn: terminalSn,
+//         } = req.params
+//         const {
+//             userId,
+//         } = req.body
 
-        const utilisateur = await prisma.users.findUnique({
-            where: {
-                id_user: parseInt(userId),
-            },
-        })
-        if (!utilisateur) {
-            console.error('Utilisateur non enregistré !')
-            return res.status(404).json({ message: "Utilisateur non enregistré !" });
-        }
-        const dateAction = new Date()
+//         const utilisateur = await prisma.users.findUnique({
+//             where: {
+//                 id_user: parseInt(userId),
+//             },
+//         })
+//         if (!utilisateur) {
+//             console.error('Utilisateur non enregistré !')
+//             return res.status(404).json({ message: "Utilisateur non enregistré !" });
+//         }
+//         const dateAction = new Date()
 
-        const modification = await prisma.$transaction(async (tx) => {
-            const tpe = await tx.parc_tpe.upsert({
-                where: {
-                    serial_number: terminalSn,
-                },
-                update: {
-                    updated_at: dateAction,
-                    updated_by: utilisateur.id_user,
-                    last_modified_at: dateAction,
-                    statut_id: 10,
-                },
-                create: {
-                    serial_number: terminalSn,
-                    created_at: dateAction,
-                    created_by: utilisateur.id_user,
-                    last_modified_at: dateAction,
-                    statut_id: 10,
-                }
-            })
+//         const modification = await prisma.$transaction(async (tx) => {
+//             const tpe = await tx.parc_tpe.upsert({
+//                 where: {
+//                     serial_number: terminalSn,
+//                 },
+//                 update: {
+//                     updated_at: dateAction,
+//                     updated_by: utilisateur.id_user,
+//                     last_modified_at: dateAction,
+//                     statut_id: 10,
+//                 },
+//                 create: {
+//                     serial_number: terminalSn,
+//                     created_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     last_modified_at: dateAction,
+//                     statut_id: 10,
+//                 }
+//             })
 
-            await tx.history_tpe.create({
-                data: {
-                    id_tpe: tpe.id,
-                    created_at: dateAction,
-                    created_by: utilisateur.id_user,
-                    statut_id: 10,
-                }
-            })
+//             await tx.history_tpe.create({
+//                 data: {
+//                     id_tpe: tpe.id,
+//                     created_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     statut_id: 10,
+//                 }
+//             })
 
-            return {
-                tpe,
-            }
-        })
+//             const reparationForm = await tx.forms.create({
+//                 data: {
+//                     created_at: dateAction,
+//                     last_modified_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     nom_user: utilisateur.fullname,
+//                     type: 'reparation_tpe',
+//                     commentaire,
+//                 }
+//             })
 
-        console.log('Opération effectuée avec succès !')
-        res.status(201).json({
-            message: 'Opération effectuée avec succès !',
-            data: modification,
-        });
-    } catch (error) {
-        console.error("Erreur lors de l'opération :", error);
-        res.status(500).json({ message: "Erreur interne", error });
-    }
-}
+//             const reparation = await tx.reparation_tpe.create({
+//                 data: {
+//                     form_id: reparationForm.id,
+//                     quantite: 1,
+//                 }
+//             })
+
+//             return {
+//                 tpe,
+//             }
+//         })
+
+//         console.log('Opération effectuée avec succès !')
+//         res.status(201).json({
+//             message: 'Opération effectuée avec succès !',
+//             data: modification,
+//         });
+//     } catch (error) {
+//         console.error("Erreur lors de l'opération :", error);
+//         res.status(500).json({ message: "Erreur interne", error });
+//     }
+// }
 
 function getCellValue(cell) {
     if (!cell || cell.value == null) return "";
@@ -2750,7 +2768,8 @@ const reparerListeTpe = async (req, res) => {
     try {
         const {
             userId,
-            serials,
+            listeSn,
+            quantite,
         } = req.body
 
         const utilisateur = await prisma.users.findUnique({
@@ -2766,9 +2785,84 @@ const reparerListeTpe = async (req, res) => {
             console.error('Liste vide !')
             return res.status(400).json({ message: "Liste vide !" });
         }
+
+        const detailsListe =
+            typeof listeSn === "string" ? JSON.parse(listeSn) : listeSn;
+        if (!Array.isArray(detailsListe) || detailsListe.length === 0) {
+            return res.status(400).json({ message: "Liste S/N vide ou invalide." });
+        }
+
         const dateAction = new Date()
+        
+        const STATUT_REPARE_ID = 10
+        const terminaux = [];
+        const piecesUpdate = []
+        for (const terminal of detailsListe) {
+            const piecesDef = Array.isArray(terminal.pieces_defectueuses)
+                ? terminal.pieces_defectueuses
+                : [];
+
+            // const pieces = [
+            //     ...piecesDef.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+            // ];
+
+            const pieces = [
+                ...piecesDef.map(pieceId => ({
+                    sn_id: terminal.id,
+                    piece_id: pieceId,
+                    etat: 'repare',
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                }))
+            ]
+
+            terminaux.push({ serial: terminal.terminalSN, pieces });
+        }
+
+        const serials = terminaux.map((t) => t.serial);
 
         const modification = await prisma.$transaction(async (tx) => {
+
+            const reparationForm = await tx.forms.create({
+                data: {
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'reparation_tpe',
+                    commentaire,
+                }
+            })
+
+            const reparation = await tx.reparation_tpe.create({
+                data: {
+                    form_id: reparationForm.id,
+                    quantite: parseInt(quantite),
+                    liste_sn: JSON.stringify(detailsListe)
+                }
+            })
+
+            const livraisonForm = await tx.forms.create({
+                data: {
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'livraison_tpe_repare',
+                    commentaire,
+                }
+            })
+
+            const livraison = await tx.livraison_tpe_repare.create({
+                data: {
+                    form_id: livraisonForm.id,
+                    reparation_id: reparation.id,
+                    statut: 'en_cours',
+                    quantite: parseInt(quantite),
+                    liste_sn: json.stringify(detailsListe),
+                }
+            })
+
             // 1. Create only missing ones
             await tx.parc_tpe.createMany({
                 data: serials.map(item => ({
@@ -2776,7 +2870,7 @@ const reparerListeTpe = async (req, res) => {
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     last_modified_at: dateAction,
-                    statut_id: 10,
+                    statut_id: STATUT_REPARE_ID,
                 })),
                 skipDuplicates: true
             });
@@ -2790,7 +2884,7 @@ const reparerListeTpe = async (req, res) => {
                     updated_by: utilisateur.id_user,
                     updated_at: dateAction,
                     last_modified_at: dateAction,
-                    statut_id: 10,
+                    statut_id: STATUT_REPARE_ID,
                 }
             });
 
@@ -2811,9 +2905,41 @@ const reparerListeTpe = async (req, res) => {
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: 10,
+                    statut_id: STATUT_REPARE_ID,
+                    form_id: reparationForm.id,
                 }))
             });
+
+            for (const t of terminaux) {
+                const tpe = allTpes.find((item) => item.serial_number == t.serial);
+                if (!tpe) continue;
+
+                if (t.pieces.length) {
+                    await tx.pieces_a_reparer.updateMany({
+                        where: {
+                            sn_id: tpe.id
+                        },
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat : 'repare',
+                            sn_id: tpe.id,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+
+                    await tx.mouvement_piece_a_reparer.createMany({
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            reparation_id: reparation.id,
+                            ancien_etat: 'defectueux',
+                            nouvel_etat: 'repare',
+                            created_at: dateAction,
+                            created_by: utilisateur.id_user,
+                        }))
+                    })
+                }
+            }
 
             return {
                 allTpes,
