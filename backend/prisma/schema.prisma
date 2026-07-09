@@ -1421,11 +1421,13 @@ enum statut_livraison_tpe_repare {
   livre
   retourne
   annule
+  clos
 }
 
 enum type_reception_tpe_repare {
   reception
   retour
+  cloture
 }
 
 enum etat_piece_a_reparer {

@@ -234,7 +234,7 @@ const extractSn = async (req, res) => {
 
         // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.worksheets[0];
 
         if (!worksheet) {

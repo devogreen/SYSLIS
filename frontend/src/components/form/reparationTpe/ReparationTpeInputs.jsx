@@ -14,6 +14,7 @@ import { Modal } from "../../ui/modal";
 import { useParams, Link, useNavigate } from "react-router";
 import { useDropzone } from "react-dropzone"
 import { Decom } from "../../../backend/decom/decom";
+import { Calendar } from "primereact/calendar";
 
 export default function ReparationTpeInputs() {
 
@@ -53,6 +54,12 @@ export default function ReparationTpeInputs() {
     const [isModalStatutsOpen, setIsModalStatutsOpen] = useState(false)
 
     const [isModalConfirmMultipleOpen, setIsModalConfirmMultipleOpen] = useState(false)
+
+    const [commentaire, setCommentaire] = useState('')
+
+    const [isReg, setIsReg] = useState(false)
+    const [selectedDate, setSelectedDate] = useState(null)
+    const [errorValidation, setErrorValidation] = useState('')
 
     useEffect(() => {
         const fetchData = async () => {
@@ -187,6 +194,10 @@ export default function ReparationTpeInputs() {
     }
 
     const handleValidate = async () => {
+        if (isReg && !selectedDate) {
+            setErrorValidation("Vous devez choisir une date en cas de régularisation !")
+            return
+        }
         setIsModalConfirmOpen(false)
         setIsModalConfirmMultipleOpen(false)
         try {
@@ -207,10 +218,13 @@ export default function ReparationTpeInputs() {
                 const serials = listeSn.map((item) => {
                     return item.sn
                 })
+                console.log(listeSn)
                 const payload = {
                     statutId: selectedStatut,
                     userId,
-                    serials,
+                    listeSn: JSON.stringify(listeSn),
+                    commentaire,
+                    isReg,
                 }
                 await decomData.reparerListeTpe(payload)
                 Swal.fire({
@@ -244,6 +258,7 @@ export default function ReparationTpeInputs() {
             setStatutTpe('')
         }
     }
+
     return (
         <>
             <div className="space-y-3">
@@ -538,14 +553,64 @@ export default function ReparationTpeInputs() {
                     <div>
                         <div className="space-y-2">
                             <div className="text-xl font-semibold text-center">
-                                <span>{listeSn.length} TPEs</span>
+                                <span>{listeSn.length} TPEs à réparer</span>
                             </div>
                             <div className="text-center text-sm ">
                                 <div className="">
                                     <span className="font-medium">Nouveau Statut : </span>
-                                    <span className="font-bold text-blue-600">{nomStatut}</span>
+                                    <span className="font-bold text-blue-600">réparé</span>
                                 </div>
                             </div>
+                            <div>
+                                <div>
+                                    <Label>Commentaire</Label>
+                                    <TextArea
+                                        type="text"
+                                        placeholder="Ajoutez un commentaire"
+                                        value={commentaire}
+                                        onChange={(value) => setCommentaire(value)}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-3 my-2">
+                                    <Checkbox
+                                        checked={isReg}
+                                        onChange={(e) => {
+                                            if (isReg) {
+                                                setIsReg(false)
+                                            } else {
+                                                setIsReg(true)
+                                            }
+                                        }}
+                                        label="Régularisation"
+                                    />
+                                </div>
+                            </div>
+                            {isReg ? (
+                                <>
+                                    <div>
+                                        <Label>Date Opération <span className="text-red-700">*</span></Label>
+                                        <Calendar
+                                            value={selectedDate}
+                                            locale="fr"
+                                            onChange={(e) => setSelectedDate(e.value)}
+                                            dateFormat="dd/mm/yy"
+                                            placeholder="dd/mm/yyyy"
+                                            minDate={new Date(selectedDate)}
+                                            maxDate={new Date()}
+                                            className="w-full"
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <></>
+                            )}
+                        </div>
+                        <div>
+                            <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
+                                {errorValidation}
+                            </span>
                         </div>
                     </div>
                     <div>

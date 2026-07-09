@@ -180,9 +180,28 @@ export class Decom {
             throw error.response.data;
         }
     }
+
     async reparerListeTpe(payload) {
         try {
             const response = await axios.post(`${urlBase}/api/decom/reparerListeTpe`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getAllLivraisonReparation() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllLivraisonReparation`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getOneLivraisonReparation(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getOneLivraisonReparation/${id}`)
             return response.data;
         } catch (error) {
             throw error.response.data

@@ -91,7 +91,7 @@ const faireDecom = async (req, res) => {
             const nouveauDecom = await tx.form_decom.create({
                 data: {
                     statut: 'en_cours',
-                    quantite: parseInt(quantite),
+                    quantite: terminaux.length(),
                     liste_decom: JSON.stringify(details),
                     form_id: decomForm.id,
                 }
@@ -2655,7 +2655,7 @@ const extractSnReparation = async (req, res) => {
 
         // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(file.buffer);
+        await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.worksheets[0];
 
         if (!worksheet) {
@@ -2741,15 +2741,21 @@ const extractSnReparation = async (req, res) => {
             if (serial_number) {
                 statut = serial_number.statut_tpe.statut
             }
+            const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
+                where: {
+                    sn_id: serial_number.id,
+                },
+                select: {
+                    piece_id: true,
+                },
+            })
+            const listePiece = new Array(...pieces_a_reparer)
             const element = {
                 sn,
                 statut,
+                listePiece,
             }
             serials.push(element)
-        }
-
-        if (statutError) {
-
         }
         // const serialList = [...serials]
         // console.log(serials)
@@ -2769,7 +2775,7 @@ const reparerListeTpe = async (req, res) => {
         const {
             userId,
             listeSn,
-            quantite,
+            commentaire,
         } = req.body
 
         const utilisateur = await prisma.users.findUnique({
@@ -2781,14 +2787,10 @@ const reparerListeTpe = async (req, res) => {
             console.error('Utilisateur non enregistré !')
             return res.status(404).json({ message: "Utilisateur non enregistré !" });
         }
-        if (serials.length == 0) {
-            console.error('Liste vide !')
-            return res.status(400).json({ message: "Liste vide !" });
-        }
-
         const detailsListe =
             typeof listeSn === "string" ? JSON.parse(listeSn) : listeSn;
         if (!Array.isArray(detailsListe) || detailsListe.length === 0) {
+            console.error("Liste S/N vide ou invalide.")
             return res.status(400).json({ message: "Liste S/N vide ou invalide." });
         }
 
@@ -2798,8 +2800,8 @@ const reparerListeTpe = async (req, res) => {
         const terminaux = [];
         const piecesUpdate = []
         for (const terminal of detailsListe) {
-            const piecesDef = Array.isArray(terminal.pieces_defectueuses)
-                ? terminal.pieces_defectueuses
+            const piecesDef = Array.isArray(terminal.listePiece)
+                ? terminal.listePiece
                 : [];
 
             // const pieces = [
@@ -2816,12 +2818,12 @@ const reparerListeTpe = async (req, res) => {
                 }))
             ]
 
-            terminaux.push({ serial: terminal.terminalSN, pieces });
+            terminaux.push({ serial: terminal.sn, pieces });
         }
 
         const serials = terminaux.map((t) => t.serial);
 
-        const modification = await prisma.$transaction(async (tx) => {
+        const operation = await prisma.$transaction(async (tx) => {
 
             const reparationForm = await tx.forms.create({
                 data: {
@@ -2837,7 +2839,7 @@ const reparerListeTpe = async (req, res) => {
             const reparation = await tx.reparation_tpe.create({
                 data: {
                     form_id: reparationForm.id,
-                    quantite: parseInt(quantite),
+                    quantite: terminaux.length,
                     liste_sn: JSON.stringify(detailsListe)
                 }
             })
@@ -2858,8 +2860,8 @@ const reparerListeTpe = async (req, res) => {
                     form_id: livraisonForm.id,
                     reparation_id: reparation.id,
                     statut: 'en_cours',
-                    quantite: parseInt(quantite),
-                    liste_sn: json.stringify(detailsListe),
+                    quantite: terminaux.length,
+                    liste_sn: JSON.stringify(detailsListe),
                 }
             })
 
@@ -2943,17 +2945,149 @@ const reparerListeTpe = async (req, res) => {
 
             return {
                 allTpes,
+                livraisonForm,
+                livraison,
             }
         })
 
-        console.log('Liste de SN modifiée avec succès !')
+        /************ GESTION MAIL  ************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+
+        const subject = `SYSLIS - LIVRAISON TPE REPARE`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Un lot de TPE réparés on été livrés par ${utilisateur.fullname}.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la livraison à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log('TPE réparés avec succès !')
         res.status(201).json({
-            message: 'Liste de SN modifiée avec succès !',
-            data: modification,
+            message: 'TPE réparés avec succès !',
+            data: operation,
         });
     } catch (error) {
-        console.error("Erreur lors de la modification :", error);
+        console.error("Erreur lors de l'opération :", error);
         res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const getAllLivraisonReparation = async (req, res) => {
+    try {
+        const livraisons = await prisma.livraison_tpe_repare.findMany({
+            include: {
+                forms: true,
+                reception_tpe_repare: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+            orderBy: {
+                forms: {
+                    last_modified_at: 'desc',
+                }
+            },
+        });
+
+        res.status(200).json(livraisons);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des livraisons de TPE réparés :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de TPE réparés", error });
+    }
+}
+
+const getOneLivraisonReparation = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+
+        const livraison = await prisma.livraison_tpe_repare.findUnique({
+            where: {
+                id: parseInt(id)
+            }, include: {
+                forms: {
+                    include: {
+                        users_forms_created_byTousers: true,
+                        users_forms_updated_byTousers: true,
+                    },
+                },
+                reception_tpe_repare: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+        })
+        console.log(`Livraison des réparations ${id}`)
+        res.status(200).json(livraison);
+    } catch (error) {
+        console.error("Erreur lors de la récupération de la livraison : ", error)
+        res.status(500).json({ message: "Erreur lors de la récupération de la livraison : ", error });
     }
 }
 
@@ -2973,7 +3107,9 @@ module.exports = {
     downloadTemplateDecom,
     exportOneDecomToExcel,
     getAllTpeRepare,
-    reparerTpe,
+    // reparerTpe,
     extractSnReparation,
     reparerListeTpe,
+    getAllLivraisonReparation,
+    getOneLivraisonReparation,
 }
