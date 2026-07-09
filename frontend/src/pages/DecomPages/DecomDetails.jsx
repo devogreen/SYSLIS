@@ -41,7 +41,6 @@ export default function DecomDetails() {
     const navigate = useNavigate()
     const filesData = new FilesHandler()
 
-
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
     const [loadingReception, setLoadingReception] = useState(false)
@@ -92,7 +91,6 @@ export default function DecomDetails() {
     const [errorReception, setErrorReception] = useState('')
 
     const [loadingExtract, setLoadingExtract] = useState(false)
-
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -388,6 +386,16 @@ export default function DecomDetails() {
     };
 
 
+    const totalRebut = listeDecom.filter((item) => { return item.statut == 'rebut' || item.statut == 'rebus' }).length
+    const totalParam = listeDecom.filter((item) => { return item.statut == 'parametrage' }).length
+    const totalRepar = listeDecom.filter((item) => { return item.statut == 'a_reparer' }).length
+
+    const totals = {
+        rebut: totalRebut,
+        param: totalParam,
+        a_reparer: totalRepar,
+    }
+
     return (
         <>
             <PageBreadcrumb pageTitle={`Détails décom ${idDecom}`} />
@@ -663,8 +671,17 @@ export default function DecomDetails() {
                                             <div>
                                                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                                                     <div className="flex justify-between p-4 pb-0">
-                                                        <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
+                                                        <div className='p-4 pb-0 text-xs text-gray-600 space-x-3'>
                                                             <span>Total : {quantiteDecom}</span>
+                                                            {checking ? (
+                                                                <>
+                                                                    <span className=" font-medium">a réparer : <span className="text-blue-600">{totals.a_reparer}</span></span>
+                                                                    <span className=" font-medium">paramétrage : <span className="text-blue-300">{totals.param}</span></span>
+                                                                    <span className=" font-medium">rebut : <span className="text-red-500">{totals.rebut}</span></span>
+                                                                </>
+                                                            ) : (
+                                                                <></>
+                                                            )}
                                                         </div>
                                                         <div>
                                                             {loadingExtract ?

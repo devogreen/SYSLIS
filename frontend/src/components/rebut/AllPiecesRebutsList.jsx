@@ -142,12 +142,22 @@ export default function AllPiecesRebutsList() {
     //     setPiecesRebut(filteredPieces)
     // }
 
+    const nomPieceTemplate = (piece) => {
+        return (
+            <>
+                <div>
+                    <span className="text-sm font-medium">{piece.nom_piece}</span>
+                </div>
+            </>
+        )
+    }
+
     const piecesFoncTemplate = (piece) => {
         const total = pieceTotals[`${piece.id_piece}_fonctionnel`] || 0
         return (
             <>
                 <div>
-                    <span className="text-sm font-medium">{total}</span>
+                    <span className="text-xl font-medium">{total}</span>
                 </div>
             </>
         )
@@ -295,7 +305,7 @@ export default function AllPiecesRebutsList() {
                         className="p-datatable-sm">
 
                         <Column field="id_piece" header="ID" sortable></Column>
-                        <Column field="nom_piece" header="Nom" sortable></Column>
+                        <Column field="nom_piece" header="Nom" body={nomPieceTemplate} sortable></Column>
                         <Column header="Total fonctionnels" body={piecesFoncTemplate}></Column>
                         <Column header="Total défectueux" body={piecesDefTemplate}></Column>
                         <Column header="Total utilisé" body={piecesRecupTemplate}></Column>

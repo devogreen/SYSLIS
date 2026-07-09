@@ -146,5 +146,66 @@ export class Decom {
             throw error.response?.data || { message: "Export failed" };
         }
     }
+
+    async getAllTpeRepare() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllTpeRepare`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async reparerTpe(sn, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/reparerTpe/${sn}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async extractSnReparation(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/extractSnReparation`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async reparerListeTpe(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/reparerListeTpe`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getAllLivraisonReparation() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllLivraisonReparation`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getOneLivraisonReparation(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getOneLivraisonReparation/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
     
 }

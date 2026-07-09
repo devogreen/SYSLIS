@@ -18,6 +18,7 @@ import {
   BaseLinePhoneIcon,
   TrashBinIcon,
   MaintenanceCircle,
+  BoltIcon,
 } from "../../icons";
 import { useSidebar } from "../../context/SidebarContext";
 import SidebarWidget from "./SidebarWidget";
@@ -108,10 +109,13 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles: [23], pro: false },
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
+      { name: "TPE à réparer", path: "/tpe-a-reparer", roles: [23, 24, 25, 26], pro: false },
+      { name: "Réparation TPE", path: "/reparation-tpe", roles: [25], pro: false},
+      { name: "Livraison TPE réparés", path: "/livraison-reparation", roles: [23, 24, 25, 26], pro: false},
     ],
   },
   {
-    name: "Gestion des Rebuts",
+    name: "Gestion des rebuts",
     icon: <MaintenanceCircle />,
     roles: [30, 31, 32, 33],
     subItems: [
@@ -142,6 +146,14 @@ const navItems: NavItem[] = [
       { name: "REG Décommissionnement", path: "/regularisation-decom", roles: [23], pro: false },
     ],
   },
+  {
+    icon: <BoltIcon />,
+    name: "Admin",
+    roles: [6],
+    subItems: [
+      { name: "Liaison pièces TPE", path: "/admin-liaison-pieces-tpe", pro: false },
+    ]
+  }
 
 ];
 

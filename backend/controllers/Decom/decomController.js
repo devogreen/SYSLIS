@@ -91,7 +91,7 @@ const faireDecom = async (req, res) => {
             const nouveauDecom = await tx.form_decom.create({
                 data: {
                     statut: 'en_cours',
-                    quantite: parseInt(quantite),
+                    quantite: terminaux.length(),
                     liste_decom: JSON.stringify(details),
                     form_id: decomForm.id,
                 }
@@ -960,6 +960,8 @@ const receptionDecom = async (req, res) => {
             return {
                 receptionForm, reception
             }
+        }, {
+            timeout: 20000,
         })
 
         /************** GESTION DES MAILS  **************/
@@ -997,7 +999,7 @@ const receptionDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `RECEPTION DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - RECEPTION DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Le décommissionnement ${decom.id} a été réceptionné.</p>
@@ -1248,13 +1250,13 @@ const getSnDecom = async (req, res) => {
             where: {
                 decom_id: parseInt(id),
             },
-            include: {
-                retour_technique: {
-                    include: {
-                        forms: true,
-                    },
-                },
-            },
+            // include: {
+            //     retour_technique: {
+            //         include: {
+            //             forms: true,
+            //         },
+            //     },
+            // },
         })
         res.status(200).json(listeSn);
     } catch (error) {
@@ -1322,6 +1324,21 @@ const verifyDecom = async (req, res) => {
             a_reparer: 'a_reparer',
         };
 
+        // const dataUpdate = []
+
+        // for (terminal of listeVerified) {
+        //     dataUpdate.push({
+        //         id: terminal.id,
+        //         commentaire_retour: terminal.retour,
+        //         pieces_recuperees: terminal.pieces_recuperees,
+        //         pieces_defectueuses: terminal.pieces_defectueuses,
+        //         is_ok: terminal.is_ok,
+        //         statut: statutMap[terminal.statut],
+        //         updated_at: dateAction,
+        //         last_modified_at: dateAction,
+        //     })
+        // }
+
         const verification = await prisma.$transaction(async (tx) => {
             const retourDecomForm = await tx.forms.create({
                 data: {
@@ -1340,39 +1357,39 @@ const verifyDecom = async (req, res) => {
                 }
             })
 
-            const retourTechPromises = listeVerified.map(item =>
-                tx.forms.create({
-                    data: {
-                        type: 'retour_technique',
-                        created_by: utilisateur.id_user,
-                        created_at: dateAction,
-                        last_modified_at: dateAction,
-                        nom_user: utilisateur.fullname,
-                    }
-                })
-            );
+            // const retourTechPromises = listeVerified.map(item =>
+            //     tx.forms.create({
+            //         data: {
+            //             type: 'retour_technique',
+            //             created_by: utilisateur.id_user,
+            //             created_at: dateAction,
+            //             last_modified_at: dateAction,
+            //             nom_user: utilisateur.fullname,
+            //         }
+            //     })
+            // );
 
-            const retourTechForms = await Promise.all(retourTechPromises);
+            // const retourTechForms = await Promise.all(retourTechPromises);
 
-            await Promise.all(
-                retourTechForms.map((form, index) => {
-                    const item = listeVerified[index];
+            // await Promise.all(
+            //     retourTechForms.map((form, index) => {
+            //         const item = listeVerified[index];
 
-                    return tx.retour_technique.create({
-                        data: {
-                            form_id: form.id,
-                            decom_id: decom.id,
-                            retour_id: retourDecom.id,
-                            sn_id: item.id,
-                            commentaire_retour: item.retour,
-                            pieces_recuperees: item.pieces_recuperees,
-                            pieces_defectueuses: item.pieces_defectueuses,
-                            is_ok: item.is_ok,
-                            statut: statutMap[item.statut],
-                        }
-                    });
-                })
-            );
+            //         return tx.retour_technique.create({
+            //             data: {
+            //                 form_id: form.id,
+            //                 decom_id: decom.id,
+            //                 retour_id: retourDecom.id,
+            //                 sn_id: item.id,
+            //                 commentaire_retour: item.retour,
+            //                 pieces_recuperees: item.pieces_recuperees,
+            //                 pieces_defectueuses: item.pieces_defectueuses,
+            //                 is_ok: item.is_ok,
+            //                 statut: statutMap[item.statut],
+            //             }
+            //         });
+            //     })
+            // );
 
             await Promise.all(
                 listeVerified.map(item =>
@@ -1394,6 +1411,8 @@ const verifyDecom = async (req, res) => {
             return {
                 retourDecomForm, retourDecom
             }
+        }, {
+            timeout: 20000,
         })
 
         /***********      GESTION DES TPE     ************/
@@ -1524,7 +1543,7 @@ const verifyDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `NOUVELLE VERIFICATION DE DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - NOUVELLE VERIFICATION DE DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
@@ -1573,335 +1592,6 @@ const verifyDecom = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la vérification :", error);
-        res.status(500).json({ message: "Erreur interne", error });
-    }
-}
-
-const clotureDecom = async (req, res) => {
-    try {
-        const {
-            id
-        } = req.params
-        const {
-            userId,
-            commentaire,
-            listeDecom,
-            isReg,
-        } = req.body
-
-        const decom = await prisma.form_decom.findUnique({
-            where: {
-                id: parseInt(id),
-            },
-        })
-        if (!decom) {
-            console.error('Erreur: décommissionnement introuvale !')
-            return res.status(404).json({ message: "decom introuvable !" });
-        }
-        if (decom.statut != 'recu') {
-            console.error('Statut de décommissionnement non conforme !')
-            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
-        }
-        if (decom.statut == 'clos') {
-            console.error('Décommissionnement déjà clôturé !')
-            return res.status(400).json({ message: "Décommissionnement déjà clôturé !" });
-        }
-        const decomForm = await prisma.forms.findUnique({
-            where: {
-                id: decom.form_id
-            }
-        })
-        if (decomForm.is_deleted) {
-            console.error('Décommissionnement annulé !')
-            return res.status(400).json({ message: "Décommissionnement annulé !" });
-        }
-
-        const utilisateur = await prisma.users.findUnique({
-            where: {
-                id_user: parseInt(userId),
-            },
-        })
-        if (!utilisateur) {
-            console.error('Utilisateur non enregistré !')
-            return res.status(404).json({ message: "Utilisateur non enregistré !" });
-        }
-
-        const listeVerified = typeof listeDecom === "string"
-            ? JSON.parse(listeDecom)
-            : listeDecom;
-
-        const dateAction = new Date()
-
-        const addOneSecond = (date) => new Date(new Date(date).getTime() + 5000);
-
-        const statutMap = {
-            parametrage: 4,
-            rebus: 5,
-            rebut: 5,
-        };
-
-        const cloturation = await prisma.$transaction(async (tx) => {
-            const retourDecomForm = await tx.forms.create({
-                data: {
-                    type: 'retour_decom',
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    nom_user: utilisateur.fullname,
-                    commentaire,
-                },
-            })
-            const retourDecom = await tx.retour_decom.create({
-                data: {
-                    form_id: retourDecomForm.id,
-                    decom_id: decom.id,
-                    type: 'cloture',
-                },
-            })
-            await tx.form_decom.update({
-                where: {
-                    id: decom.id,
-                },
-                data: {
-                    statut: 'clos',
-                },
-            })
-
-            /***********      GESTION DES TPE     ************/
-
-            // Récupérer les SN de la liste
-            const serials = listeVerified.map(item => item.serial_number);
-
-            // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-            // Faire une liste SN, ID pour les TPE déjà enregistrés
-            const existingMap = new Map(
-                existingTpes.map(e => [e.serial_number, e.id])
-            );
-
-            const toCreate = [];
-            const toUpdate = [];
-
-            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-            listeVerified.forEach(item => {
-                if (existingMap.has(item.serial_number)) {
-                    toUpdate.push(item);
-                } else {
-                    toCreate.push(item);
-                }
-            });
-
-            // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
-            if (toCreate.length > 0) {
-                await tx.parc_tpe.createMany({
-                    data: toCreate.map(item => ({
-                        serial_number: item.serial_number,
-                        created_by: utilisateur.id_user,
-                        created_at: item.created_at ? addOneSecond(item.created_at) : addOneSecond(dateAction),
-                        last_modified_at: item.last_modified_at ? addOneSecond(item.last_modified_at) : addOneSecond(dateAction),
-                        statut_id: statutMap[item.statut],
-                    }))
-                });
-            }
-
-            if (isReg == false) {
-                // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-                await Promise.all(
-                    toUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: { serial_number: item.serial_number },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: item.updated_at ? addOneSecond(item.updated_at) : addOneSecond(dateAction),
-                                last_modified_at: item.last_modified_at ? addOneSecond(item.last_modified_at) : addOneSecond(dateAction),
-                                statut_id: statutMap[item.statut],
-                            }
-                        })
-                    )
-                );
-            } else {
-                // Récupérer les TPE existants avec leur date de modification
-                const existingTpesWithDates = await tx.parc_tpe.findMany({
-                    where: {
-                        serial_number: {
-                            in: toUpdate.map(item => item.serial_number)
-                        }
-                    },
-                    select: {
-                        serial_number: true,
-                        last_modified_at: true,
-                    }
-                });
-
-                // Créer une map pour accès rapide
-                const tpeDateMap = new Map(
-                    existingTpesWithDates.map(tpe => [
-                        tpe.serial_number,
-                        tpe.last_modified_at
-                    ])
-                );
-
-                // Filtrer seulement ceux dont la date est plus ancienne
-                const filteredToUpdate = toUpdate.filter(item => {
-                    const lastModified = tpeDateMap.get(item.serial_number);
-
-                    // Si aucune date existe, on autorise l'update
-                    if (!lastModified) return true;
-
-                    return new Date(lastModified) <= new Date(dateAction);
-                });
-
-                // Faire les updates seulement pour ceux autorisés
-                await Promise.all(
-                    filteredToUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: {
-                                serial_number: item.serial_number
-                            },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: dateAction,
-                                last_modified_at: dateAction,
-                                statut_id: statutMap[item.statut],
-                            }
-                        })
-                    )
-                );
-            }
-
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true,
-                }
-            });
-
-            const uniqueMap = new Map();
-
-            listeVerified.forEach(item => {
-                uniqueMap.set(item.serial_number, item);
-            });
-
-            const uniqueListeVerified = [...uniqueMap.values()];
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => {
-                    const item = uniqueListeVerified.find(
-                        i => i.serial_number === tpe.serial_number
-                    );
-
-                    return {
-                        id_tpe: tpe.id,
-                        created_by: utilisateur.id_user,
-                        created_at: item.created_at ? addOneSecond(item.created_at) : addOneSecond(dateAction),
-                        statut_id: statutMap[item.statut],
-                        form_id: decomForm.id,
-                    };
-                })
-            });
-
-            return {
-                retourDecomForm,
-                retourDecom,
-                allTpes,
-            }
-        })
-
-
-        /************ GESTION MAIL  ************/
-
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
-
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
-
-        const subject = `CLOTURE DE DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Le décommissionnement ${decom.id} a été clôturé.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-
-        console.log(`Utilisateur ${userId} a cloturé le décommissionnement avec succès !`)
-        res.status(201).json({
-            message: `Utilisateur ${userId} a cloturé le décommissionnement avec succès !`,
-            data: cloturation,
-        });
-
-    } catch (error) {
-        console.error("Erreur lors de la cloture :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
 }
@@ -1983,39 +1673,39 @@ const regVerifyDecom = async (req, res) => {
                 }
             })
 
-            const retourTechPromises = listeVerified.map(item =>
-                tx.forms.create({
-                    data: {
-                        type: 'retour_technique',
-                        created_by: utilisateur.id_user,
-                        created_at: dateAction,
-                        last_modified_at: dateAction,
-                        nom_user: utilisateur.fullname,
-                    }
-                })
-            );
+            // const retourTechPromises = listeVerified.map(item =>
+            //     tx.forms.create({
+            //         data: {
+            //             type: 'retour_technique',
+            //             created_by: utilisateur.id_user,
+            //             created_at: dateAction,
+            //             last_modified_at: dateAction,
+            //             nom_user: utilisateur.fullname,
+            //         }
+            //     })
+            // );
 
-            const retourTechForms = await Promise.all(retourTechPromises);
+            // const retourTechForms = await Promise.all(retourTechPromises);
 
-            await Promise.all(
-                retourTechForms.map((form, index) => {
-                    const item = listeVerified[index];
+            // await Promise.all(
+            //     retourTechForms.map((form, index) => {
+            //         const item = listeVerified[index];
 
-                    return tx.retour_technique.create({
-                        data: {
-                            form_id: form.id,
-                            decom_id: decom.id,
-                            retour_id: retourDecom.id,
-                            sn_id: item.id,
-                            commentaire_retour: item.retour,
-                            pieces_recuperees: item.pieces_recuperees,
-                            pieces_defectueuses: item.pieces_defectueuses,
-                            is_ok: item.is_ok,
-                            statut: statutMap[item.statut],
-                        }
-                    });
-                })
-            );
+            //         return tx.retour_technique.create({
+            //             data: {
+            //                 form_id: form.id,
+            //                 decom_id: decom.id,
+            //                 retour_id: retourDecom.id,
+            //                 sn_id: item.id,
+            //                 commentaire_retour: item.retour,
+            //                 pieces_recuperees: item.pieces_recuperees,
+            //                 pieces_defectueuses: item.pieces_defectueuses,
+            //                 is_ok: item.is_ok,
+            //                 statut: statutMap[item.statut],
+            //             }
+            //         });
+            //     })
+            // );
 
             await Promise.all(
                 listeVerified.map(item =>
@@ -2074,7 +1764,7 @@ const regVerifyDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `REGULARISATION DE VERIFICATION DE DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - REGULARISATION DE VERIFICATION DE DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
@@ -2126,6 +1816,373 @@ const regVerifyDecom = async (req, res) => {
         res.status(500).json({ message: "Erreur interne", error });
     }
 }
+
+// Clôture d'un décommissionnement.
+// Gère plusieurs statuts + la régularisation : si un SN a déjà un statut courant
+// et que la date de régularisation est antérieure, on crée UNIQUEMENT un historique
+// de statut ; sinon le process complet se déroule (incl. le process rebut, identique
+// à cloturerDemandeRebut, quand le statut vaut 'rebut'/'rebus').
+//
+// CONFIRM markers = à vérifier contre votre schéma Prisma.
+const clotureDecom = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { userId, commentaire, listeDecom, isReg } = req.body;
+
+        const REBUT_STATUT_ID = 5;
+        const statutMap = {
+            parametrage: 4,
+            rebus: 5,
+            rebut: 5,
+            a_reparer: 11,
+        };
+
+        const reg = isReg === true || isReg === "true"; // normalise le booléen
+
+        // ---- Validation ----
+        const decom = await prisma.form_decom.findUnique({
+            where: { id: parseInt(id, 10) },
+        });
+        if (!decom) {
+            console.error("Décommissionnement introuvable !")
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        if (decom.statut === "clos") {
+            console.error("Décommissionnement déjà clôturé !")
+            return res.status(400).json({ message: "Décommissionnement déjà clôturé !" });
+        }
+        if (decom.statut !== "recu") {
+            console.error("Statut de décommissionnement non conforme !")
+            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
+        }
+
+        const decomForm = await prisma.forms.findUnique({
+            where: { id: decom.form_id },
+        });
+        if (!decomForm) {
+            console.error("Formulaire de décommissionnement introuvable !")
+            return res.status(404).json({ message: "Formulaire de décommissionnement introuvable !" });
+        }
+        if (decomForm.is_deleted) {
+            console.error("Décommissionnement annulé !")
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId, 10) },
+        });
+        if (!utilisateur) {
+            console.error("Utilisateur non enregistré !")
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        const listeVerified =
+            typeof listeDecom === "string" ? JSON.parse(listeDecom) : listeDecom;
+        if (!Array.isArray(listeVerified) || listeVerified.length === 0) {
+            console.error("Liste de décommissionnement vide ou invalide.")
+            return res.status(400).json({ message: "Liste de décommissionnement vide ou invalide." });
+        }
+
+        const dateAction = new Date();
+
+        // ATTENTION : ajoute 5 secondes (et non 1). Conservé tel quel — à renommer si non voulu.
+        const addOneSecond = (date) => new Date(new Date(date).getTime() + 5000);
+
+        // CONFIRM : source de la date de régularisation d'une ligne.
+        // C'est elle qui sert à décider si une régularisation est antérieure au statut courant.
+        const getRegDate = (item) =>
+            item.last_modified_at ? new Date(item.last_modified_at) : dateAction;
+
+        // Dédoublonnage par SN (dernière occurrence gagne)
+        const uniqueMap = new Map();
+        listeVerified.forEach((item) => uniqueMap.set(item.serial_number, item));
+        const uniqueItems = [...uniqueMap.values()];
+
+        // ---- Validations métier AVANT la transaction ----
+        const statutInconnu = uniqueItems.find((item) => statutMap[item.statut] === undefined);
+        if (statutInconnu) {
+            console.error(`Statut inconnu pour le terminal ${statutInconnu.serial_number} : ${statutInconnu.statut}`)
+            return res.status(400).json({
+                message: `Statut inconnu pour le terminal ${statutInconnu.serial_number} : ${statutInconnu.statut}`,
+            });
+        }
+
+        // Pour les lignes 'rebut' : une pièce ne peut pas être à la fois fonctionnelle et défectueuse
+        for (const item of uniqueItems) {
+            if (statutMap[item.statut] !== REBUT_STATUT_ID) continue;
+            const piecesRecup = typeof item.pieces_recuperees === "string" ? JSON.parse(item.pieces_recuperees) : item.pieces_recuperees;
+            const piecesDef = typeof item.pieces_defectueuses === "string" ? JSON.parse(item.pieces_defectueuses) : item.pieces_defectueuses;
+            const fonc = Array.isArray(piecesRecup) ? piecesRecup : [];
+            const def = Array.isArray(piecesDef) ? piecesDef : [];
+            const duplicates = fonc.filter((pieceId) => def.includes(pieceId));
+            if (duplicates.length) {
+                console.error(`Le terminal ${item.serial_number} présente des pièces à la fois fonctionnelles et défectueuses.`)
+                return res.status(400).json({
+                    message: `Le terminal ${item.serial_number} présente des pièces à la fois fonctionnelles et défectueuses.`,
+                });
+            }
+        }
+
+        // ---- Transaction (tout en séquentiel) ----
+        const cloturation = await prisma.$transaction(async (tx) => {
+            const retourDecomForm = await tx.forms.create({
+                data: {
+                    type: "retour_decom",
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                },
+            });
+
+            const retourDecom = await tx.retour_decom.create({
+                data: {
+                    form_id: retourDecomForm.id,
+                    decom_id: decom.id,
+                    type: "cloture",
+                },
+            });
+
+            await tx.form_decom.update({
+                where: { id: decom.id },
+                data: { statut: "clos" },
+            });
+
+            /***********      GESTION DES TPE     ************/
+
+            const serials = uniqueItems.map((item) => item.serial_number);
+
+            // TPE déjà présents dans le parc, avec leur date de statut courant
+            const existingTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true, last_modified_at: true },
+            });
+            const existingMap = new Map(existingTpes.map((e) => [e.serial_number, e]));
+
+            // Partition : à créer / à mettre à jour (process complet) / historique seul (régul. antérieure)
+            const proceedCreate = [];
+            const proceedUpdate = [];
+            const historyOnly = []; // régularisation antérieure au statut courant
+
+            for (const item of uniqueItems) {
+                const existing = existingMap.get(item.serial_number);
+                if (!existing) {
+                    proceedCreate.push(item); // pas encore au parc -> on crée, rien à comparer
+                    continue;
+                }
+                const isBackdated =
+                    reg &&
+                    existing.last_modified_at &&
+                    getRegDate(item) < new Date(existing.last_modified_at);
+
+                if (isBackdated) historyOnly.push(item);
+                else proceedUpdate.push(item);
+            }
+
+            // 1. Créer les nouveaux TPE
+            if (proceedCreate.length) {
+                await tx.parc_tpe.createMany({
+                    data: proceedCreate.map((item) => ({
+                        serial_number: item.serial_number,
+                        created_by: utilisateur.id_user,
+                        created_at: item.created_at ? addOneSecond(item.created_at) : addOneSecond(dateAction),
+                        last_modified_at: item.last_modified_at
+                            ? addOneSecond(item.last_modified_at)
+                            : addOneSecond(dateAction),
+                        statut_id: statutMap[item.statut],
+                    })),
+                });
+            }
+
+            // 2. Mettre à jour le statut courant des TPE existants non concernés par une régul. antérieure
+            //    (update requiert serial_number @unique dans le schéma — CONFIRM)
+            for (const item of proceedUpdate) {
+                await tx.parc_tpe.update({
+                    where: { serial_number: item.serial_number },
+                    data: {
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: statutMap[item.statut],
+                    },
+                });
+            }
+
+            // 3. Récupérer les ids de TOUS les SN (créés, mis à jour, ou historique seul)
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true },
+            });
+            const idBySerial = new Map(allTpes.map((t) => [t.serial_number, t.id]));
+
+            // 4. Historique de statut pour TOUS (y compris les régularisations antérieures)
+            await tx.history_tpe.createMany({
+                data: uniqueItems.map((item) => ({
+                    id_tpe: idBySerial.get(item.serial_number),
+                    created_by: utilisateur.id_user,
+                    created_at: item.created_at
+                        ? addOneSecond(item.created_at)
+                        : addOneSecond(getRegDate(item)),
+                    statut_id: statutMap[item.statut],
+                    form_id: decomForm.id,
+                })),
+            });
+
+            // 5. Process REBUT — uniquement pour les lignes qui "proceed" (jamais les régul. antérieures)
+            const rebutItems = [...proceedCreate, ...proceedUpdate].filter(
+                (item) => statutMap[item.statut] === REBUT_STATUT_ID
+            );
+
+            for (const item of rebutItems) {
+                const tpeId = idBySerial.get(item.serial_number);
+                if (!tpeId) continue;
+
+                const piecesRecup = typeof item.pieces_recuperees === "string" ? JSON.parse(item.pieces_recuperees) : item.pieces_recuperees;
+                const piecesDef = typeof item.pieces_defectueuses === "string" ? JSON.parse(item.pieces_defectueuses) : item.pieces_defectueuses;
+                const fonc = Array.isArray(piecesRecup) ? piecesRecup : [];
+                const def = Array.isArray(piecesDef) ? piecesDef : [];
+                const pieces = [
+                    ...fonc.map((pieceId) => ({ piece_id: pieceId, etat: "fonctionnel" })),
+                    ...def.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+                ];
+
+                // create() (pas createMany) car on a besoin des ids générés
+                const session = await tx.sn_rebut.create({
+                    data: {
+                        sn_id: tpeId,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                const snapshot = await tx.history_snapshot_piece_rebut.create({
+                    data: {
+                        rebut_id: session.id,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                    },
+                });
+
+                if (pieces.length) {
+                    await tx.pieces_rebut.createMany({
+                        data: pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            sn_id: tpeId,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+
+                    await tx.history_piece_rebut.createMany({
+                        data: pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            snap_id: snapshot.id,
+                        })),
+                    });
+                }
+            }
+
+            return {
+                retourDecomForm,
+                retourDecom,
+                tpe_traites: proceedCreate.length + proceedUpdate.length,
+                tpe_historique_seul: historyOnly.length,
+                tpe_rebut: rebutItems.length,
+            };
+        }, {
+            timeout: 20000,
+        });
+
+        /************ GESTION MAIL  ************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/decom-details/${decom.id}`;
+
+        const subject = `SYSLIS - CLOTURE DE DECOMMISSIONNEMENT`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Le décommissionnement ${decom.id} a été clôturé.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la demande à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log(`Décommissionnement clôturé avec succès par ${utilisateur.username}`)
+        return res.status(200).json({
+            message: "Décommissionnement clôturé avec succès.",
+            ...cloturation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la clôture du décommissionnement :", error);
+        return res
+            .status(500)
+            .json({ message: "Erreur interne lors de la clôture du décommissionnement." });
+    }
+};
 
 // Fonction pour extraire la valeur d'une cellule, en gérant les différents types de contenu (texte simple, texte enrichi, etc.)
 function getCellValue(cell) {
@@ -2460,6 +2517,580 @@ const exportOneDecomToExcel = async (req, res) => {
     }
 }
 
+// Fonction pour avoir la liste de tous les TPE avec le statut 'a_reparer' et 'repare' provenant d'une vérification de décommissionnement
+const getAllTpeRepare = async (req, res) => {
+    try {
+        const tpe = await prisma.parc_tpe.findMany({
+            where: {
+                statut_id: {
+                    in: [10, 11],
+                },
+            },
+            include: {
+                model_piece: true,
+                statut_tpe: true,
+            },
+            orderBy: {
+                last_modified_at: 'desc',
+            },
+        });
+
+        res.status(200).json(tpe);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des TPE à réparer :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE à réparer", error });
+    }
+}
+
+// const reparerTpe = async (req, res) => {
+//     try {
+//         const {
+//             sn: terminalSn,
+//         } = req.params
+//         const {
+//             userId,
+//         } = req.body
+
+//         const utilisateur = await prisma.users.findUnique({
+//             where: {
+//                 id_user: parseInt(userId),
+//             },
+//         })
+//         if (!utilisateur) {
+//             console.error('Utilisateur non enregistré !')
+//             return res.status(404).json({ message: "Utilisateur non enregistré !" });
+//         }
+//         const dateAction = new Date()
+
+//         const modification = await prisma.$transaction(async (tx) => {
+//             const tpe = await tx.parc_tpe.upsert({
+//                 where: {
+//                     serial_number: terminalSn,
+//                 },
+//                 update: {
+//                     updated_at: dateAction,
+//                     updated_by: utilisateur.id_user,
+//                     last_modified_at: dateAction,
+//                     statut_id: 10,
+//                 },
+//                 create: {
+//                     serial_number: terminalSn,
+//                     created_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     last_modified_at: dateAction,
+//                     statut_id: 10,
+//                 }
+//             })
+
+//             await tx.history_tpe.create({
+//                 data: {
+//                     id_tpe: tpe.id,
+//                     created_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     statut_id: 10,
+//                 }
+//             })
+
+//             const reparationForm = await tx.forms.create({
+//                 data: {
+//                     created_at: dateAction,
+//                     last_modified_at: dateAction,
+//                     created_by: utilisateur.id_user,
+//                     nom_user: utilisateur.fullname,
+//                     type: 'reparation_tpe',
+//                     commentaire,
+//                 }
+//             })
+
+//             const reparation = await tx.reparation_tpe.create({
+//                 data: {
+//                     form_id: reparationForm.id,
+//                     quantite: 1,
+//                 }
+//             })
+
+//             return {
+//                 tpe,
+//             }
+//         })
+
+//         console.log('Opération effectuée avec succès !')
+//         res.status(201).json({
+//             message: 'Opération effectuée avec succès !',
+//             data: modification,
+//         });
+//     } catch (error) {
+//         console.error("Erreur lors de l'opération :", error);
+//         res.status(500).json({ message: "Erreur interne", error });
+//     }
+// }
+
+function getCellValue(cell) {
+    if (!cell || cell.value == null) return "";
+    if (typeof cell.value === "object" && cell.value.richText) {
+        return cell.value.richText.map(t => t.text).join("");
+    }
+    return String(cell.value).trim();
+}
+const normalize = (value) => {
+    if (value === null || value === undefined) return null;
+    return String(value).trim();
+};
+
+
+const extractSnReparation = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const requireHeader = "SERIAL NUMBER"
+
+        if (!headers[requireHeader]) {
+            console.log(`Colonne requise manquante : ${requireHeader}`)
+            return res.status(400).json({
+                message: `Missing required column: ${requireHeader}`
+            });
+        }
+
+        const serials = [];
+        const snSet = new Set()
+        let duplicateError = null;
+        let formatError = null;
+        let statutError = null;
+        const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const sn = normalize(row.getCell(headers[requireHeader]).value);
+            if (!sn) return;
+
+            if (snSet.has(sn)) {
+                duplicateError = {
+                    rowNumber,
+                    sn,
+                };
+                return;
+            }
+            if (sn.length != 10 || !isOnlyDigits(sn)) {
+                formatError = {
+                    rowNumber,
+                    sn,
+                };
+                return;
+            }
+
+            snSet.add(sn)
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (formatError) {
+            return res.status(400).json({
+                message: `SN invalide à la ligne ${formatError.rowNumber} pour le SN ${formatError.sn}`,
+            });
+        }
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le SN ${duplicateError.sn}`,
+            });
+        }
+
+        let statut = 'non enregistré'
+        const listeSn = [...snSet]
+        for (let sn of listeSn) {
+            const serial_number = await prisma.parc_tpe.findUnique({
+                where: {
+                    serial_number: sn
+                },
+                include: {
+                    statut_tpe: true
+                }
+            })
+            if (serial_number.statut_tpe.statut != 'a_reparer') {
+                console.error(`Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`)
+                return res.status(400).json({
+                    message: `Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`,
+                });
+            }
+            if (serial_number) {
+                statut = serial_number.statut_tpe.statut
+            }
+            const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
+                where: {
+                    sn_id: serial_number.id,
+                },
+                select: {
+                    piece_id: true,
+                },
+            })
+            const listePiece = new Array(...pieces_a_reparer)
+            const element = {
+                sn,
+                statut,
+                listePiece,
+            }
+            serials.push(element)
+        }
+        // const serialList = [...serials]
+        // console.log(serials)
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: serials,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const reparerListeTpe = async (req, res) => {
+    try {
+        const {
+            userId,
+            listeSn,
+            commentaire,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        const detailsListe =
+            typeof listeSn === "string" ? JSON.parse(listeSn) : listeSn;
+        if (!Array.isArray(detailsListe) || detailsListe.length === 0) {
+            console.error("Liste S/N vide ou invalide.")
+            return res.status(400).json({ message: "Liste S/N vide ou invalide." });
+        }
+
+        const dateAction = new Date()
+        
+        const STATUT_REPARE_ID = 10
+        const terminaux = [];
+        const piecesUpdate = []
+        for (const terminal of detailsListe) {
+            const piecesDef = Array.isArray(terminal.listePiece)
+                ? terminal.listePiece
+                : [];
+
+            // const pieces = [
+            //     ...piecesDef.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+            // ];
+
+            const pieces = [
+                ...piecesDef.map(pieceId => ({
+                    sn_id: terminal.id,
+                    piece_id: pieceId,
+                    etat: 'repare',
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                }))
+            ]
+
+            terminaux.push({ serial: terminal.sn, pieces });
+        }
+
+        const serials = terminaux.map((t) => t.serial);
+
+        const operation = await prisma.$transaction(async (tx) => {
+
+            const reparationForm = await tx.forms.create({
+                data: {
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'reparation_tpe',
+                    commentaire,
+                }
+            })
+
+            const reparation = await tx.reparation_tpe.create({
+                data: {
+                    form_id: reparationForm.id,
+                    quantite: terminaux.length,
+                    liste_sn: JSON.stringify(detailsListe)
+                }
+            })
+
+            const livraisonForm = await tx.forms.create({
+                data: {
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'livraison_tpe_repare',
+                    commentaire,
+                }
+            })
+
+            const livraison = await tx.livraison_tpe_repare.create({
+                data: {
+                    form_id: livraisonForm.id,
+                    reparation_id: reparation.id,
+                    statut: 'en_cours',
+                    quantite: terminaux.length,
+                    liste_sn: JSON.stringify(detailsListe),
+                }
+            })
+
+            // 1. Create only missing ones
+            await tx.parc_tpe.createMany({
+                data: serials.map(item => ({
+                    serial_number: item,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: STATUT_REPARE_ID,
+                })),
+                skipDuplicates: true
+            });
+
+            // 2. Update ALL (existing + newly created)
+            await tx.parc_tpe.updateMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: STATUT_REPARE_ID,
+                }
+            });
+
+            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+            const allTpes = await tx.parc_tpe.findMany({
+                where: {
+                    serial_number: { in: serials }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
+            });
+
+            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            await tx.history_tpe.createMany({
+                data: allTpes.map(tpe => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: STATUT_REPARE_ID,
+                    form_id: reparationForm.id,
+                }))
+            });
+
+            for (const t of terminaux) {
+                const tpe = allTpes.find((item) => item.serial_number == t.serial);
+                if (!tpe) continue;
+
+                if (t.pieces.length) {
+                    await tx.pieces_a_reparer.updateMany({
+                        where: {
+                            sn_id: tpe.id
+                        },
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat : 'repare',
+                            sn_id: tpe.id,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+
+                    await tx.mouvement_piece_a_reparer.createMany({
+                        data: t.pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            reparation_id: reparation.id,
+                            ancien_etat: 'defectueux',
+                            nouvel_etat: 'repare',
+                            created_at: dateAction,
+                            created_by: utilisateur.id_user,
+                        }))
+                    })
+                }
+            }
+
+            return {
+                allTpes,
+                livraisonForm,
+                livraison,
+            }
+        })
+
+        /************ GESTION MAIL  ************/
+
+        const rolesSupervision = await prisma.user_roles.findMany({
+            where: {
+                role_id: 26,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesVerification = await prisma.user_roles.findMany({
+            where: {
+                role_id: 25,
+            },
+            include: {
+                users: true
+            }
+        })
+        const rolesDecom = await prisma.user_roles.findMany({
+            where: {
+                role_id: 23,
+            },
+            include: {
+                users: true
+            }
+        })
+        const superviseurs = rolesSupervision.map(us => us.users)
+        const verificateurs = rolesVerification.map(us => us.users)
+        const demandeurs = rolesDecom.map(us => us.users)
+
+        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+        const url = GENERAL_URL
+        let link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+
+        const subject = `SYSLIS - LIVRAISON TPE REPARE`;
+        let html = `
+            <p>Bonjour,</p>
+            <p>Un lot de TPE réparés on été livrés par ${utilisateur.fullname}.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez la livraison à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        if (superviseurs && superviseurs.length > 0) {
+            for (const superviseur of superviseurs) {
+                await sendMail({
+                    to: superviseur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+        if (demandeurs && demandeurs.length > 0) {
+            for (const demandeur of demandeurs) {
+                await sendMail({
+                    to: demandeur.email,
+                    subject,
+                    html,
+                });
+            }
+        }
+
+        console.log('TPE réparés avec succès !')
+        res.status(201).json({
+            message: 'TPE réparés avec succès !',
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'opération :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const getAllLivraisonReparation = async (req, res) => {
+    try {
+        const livraisons = await prisma.livraison_tpe_repare.findMany({
+            include: {
+                forms: true,
+                reception_tpe_repare: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+            orderBy: {
+                forms: {
+                    last_modified_at: 'desc',
+                }
+            },
+        });
+
+        res.status(200).json(livraisons);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des livraisons de TPE réparés :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de TPE réparés", error });
+    }
+}
+
+const getOneLivraisonReparation = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+
+        const livraison = await prisma.livraison_tpe_repare.findUnique({
+            where: {
+                id: parseInt(id)
+            }, include: {
+                forms: {
+                    include: {
+                        users_forms_created_byTousers: true,
+                        users_forms_updated_byTousers: true,
+                    },
+                },
+                reception_tpe_repare: {
+                    include: {
+                        forms: true,
+                    },
+                },
+            },
+        })
+        console.log(`Livraison des réparations ${id}`)
+        res.status(200).json(livraison);
+    } catch (error) {
+        console.error("Erreur lors de la récupération de la livraison : ", error)
+        res.status(500).json({ message: "Erreur lors de la récupération de la livraison : ", error });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -2475,4 +3106,10 @@ module.exports = {
     extractDecom,
     downloadTemplateDecom,
     exportOneDecomToExcel,
+    getAllTpeRepare,
+    // reparerTpe,
+    extractSnReparation,
+    reparerListeTpe,
+    getAllLivraisonReparation,
+    getOneLivraisonReparation,
 }
