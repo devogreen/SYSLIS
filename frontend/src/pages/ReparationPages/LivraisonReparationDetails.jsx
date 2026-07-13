@@ -47,7 +47,6 @@ export default function LivraisonReparationDetails() {
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
     const [loadingReception, setLoadingReception] = useState(false)
-    const [loadingVerification, setLoadingVerification] = useState(false)
 
     const [errorData, setErrorData] = useState('')
 
@@ -57,10 +56,10 @@ export default function LivraisonReparationDetails() {
 
     const [isReg, setIsReg] = useState(false)
 
-    const [isLivreur, setIsDemandeur] = useState(false)
-    const [isValidateur, setIsValidateur] = useState(false)
+    const [isLivreur, setIsLivreur] = useState(false)
+    const [isReception, setIsReception] = useState(false)
 
-    const [listeReparation, setListeRebut] = useState([])
+    const [listeReparation, setListeReparation] = useState([])
     const [quantiteReparation, setQuantiteReparation] = useState(0)
 
     const [commentaireRebut, setCommentaireLivraison] = useState('')
@@ -106,7 +105,7 @@ export default function LivraisonReparationDetails() {
 
     const [isGestion, setIsGestion] = useState(true)
 
-    const [totalLivre, setTotalRecu] = useState(0)
+    const [totalRecu, setTotalRecu] = useState(0)
 
     const [listeValidee, setListeValidee] = useState([])
 
@@ -137,7 +136,7 @@ export default function LivraisonReparationDetails() {
                 }
 
                 const listeReparation = JSON.parse(livraison.liste_sn)
-                setListeRebut(listeReparation)
+                setListeReparation(listeReparation)
                 setQuantiteReparation(listeReparation.length)
                 console.log(listeReparation)
 
@@ -177,33 +176,34 @@ export default function LivraisonReparationDetails() {
                     if (nomRoles.includes('gestion_livraison')) {
                         setIsGestion(true)
                     }
-                    if (nomRoles.includes('demande_livraison')) {
-                        setIsDemandeur(true)
+                    if (nomRoles.includes('reparation')) {
+                        setIsLivreur(true)
                     }
-                    if (nomRoles.includes('reception_tpe_repare')) {
-                        setIsValidateur(true)
+                    if (nomRoles.includes('reception_reparation')) {
+                        setIsReception(true)
                     }
                 } else if (statut == 'retourne') {
                     setStatutLivraison('retourné')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-red-100 text-red-300')
 
-                    if (nomRoles.includes('demande_livraison')) {
-                        setIsDemandeur(true)
+                    if (nomRoles.includes('reparation')) {
+                        setIsLivreur(true)
                     }
                     if (nomRoles.includes('reception_tpe_repare')) {
-                        setIsValidateur(true)
+                        setIsReception(true)
                     }
                 } else if (statut == 'livre') {
                     setStatutLivraison('Livré')
                     setIsLivre(true)
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-blue-100 text-blue-300')
-                    const listeValide = JSON.parse(reception.liste_livraison)
+                    const listeValide = JSON.parse(reception.liste_sn)
                     setListeValidee(listeValide)
-                    if (nomRoles.includes('demande_livraison')) {
-                        setIsDemandeur(true)
+                    console.log("Liste validée : ", listeValide)
+                    if (nomRoles.includes('reparation')) {
+                        setIsLivreur(true)
                     }
                     if (nomRoles.includes('reception_tpe_repare')) {
-                        setIsValidateur(true)
+                        setIsReception(true)
                     }
                 } else if (statut == 'clos') {
                     setStatutLivraison('clos')
@@ -346,26 +346,26 @@ export default function LivraisonReparationDetails() {
         }
     }
 
-    const handleClotureRebut = async () => {
+    const handleClotureLivraison = async () => {
         setIsModalClotureOpen(false)
-        // console.log("Liste checking avant cloture: ", listeReparation)
+        console.log("Liste validée : ", listeValidee)
         try {
-            setLoadingVerification(true)
+            setLoadingButtons(true)
             const payload = {
                 commentaire: messageCloture,
                 listeValidee,
-                quantite: totalLivre,
+                quantite: totalRecu,
                 userId,
             }
 
-            await livraisonData.cloturerDemandeRebut(id, payload)
+            await decomData.cloturerLivraisonReparation(id, payload)
 
             Swal.fire({
                 title: "Succès",
-                text: "Mise au livraison clôturée avec succès !",
+                text: "Livraison de TPE réparés clôturée avec succès !",
                 icon: "success"
             })
-            navigate('/toutes-les-demandes-livraison')
+            navigate('/toutes-livraisons-reparation')
         } catch (error) {
             console.log("Erreur de la réception : ", error)
             Swal.fire({
@@ -373,9 +373,9 @@ export default function LivraisonReparationDetails() {
                 text: "Une erreur est survenue lors de la clôture !",
                 icon: "warning"
             })
-            navigate('/toutes-les-demandes-livraison')
+            navigate('/toutes-livraisons-reparation')
         } finally {
-            setLoadingVerification(false)
+            setLoadingButtons(false)
         }
     }
 
@@ -415,7 +415,7 @@ export default function LivraisonReparationDetails() {
 
     return (
         <>
-            <PageBreadcrumb pageTitle={`Détails livraison ${id}`} />
+            <PageBreadcrumb pageTitle={`Détails livraison de TPE réparés #${id}`} />
             <div>
                 {loadingData ? (
                     <>
@@ -454,7 +454,7 @@ export default function LivraisonReparationDetails() {
                                                     <></>
                                                 )}
                                                 <div>
-                                                    <span className="text-sm">{`Mise au livraison du ${dateLivraison}`}</span>
+                                                    <span className="text-sm">{`Livraison du ${dateLivraison}`}</span>
                                                 </div>
                                                 <div className="flex flex-col text-xs">
                                                     <span className="underline font-light">Livreur</span>
@@ -491,9 +491,9 @@ export default function LivraisonReparationDetails() {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            {/* {isEnAttente ? (
+                                                            {isEnAttente ? (
                                                                 <>
-                                                                    {isLivreur || isGestion ? (
+                                                                    {/* {isLivreur || isGestion ? (
                                                                         <>
                                                                             <div className="space-y-0.5">
                                                                                 <Link to={`/modifier-livraison/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
@@ -504,8 +504,8 @@ export default function LivraisonReparationDetails() {
                                                                         </>
                                                                     ) : (
                                                                         <></>
-                                                                    )}
-                                                                    {isLivreur ? (
+                                                                    )} */}
+                                                                    {/* {isLivreur ? (
                                                                         <>
                                                                             <div>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
@@ -520,24 +520,24 @@ export default function LivraisonReparationDetails() {
                                                                         </>
                                                                     ) : (
                                                                         <></>
-                                                                    )}
-                                                                    {isValidateur ? (
+                                                                    )} */}
+                                                                    {isReception ? (
                                                                         <>
                                                                             <div className="space-y-0.5">
                                                                                 <div className="space-y-0.5">
-                                                                                    <Link to={`/valider-livraison/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
+                                                                                    <Link to={`/reception-livraison-reparation/${id}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
                                                                                         <span className='mr-4'><i className="pi pi-check-circle"></i></span>
-                                                                                        <span className='text-sm text-gray-700 font-medium'>Valider demande</span>
+                                                                                        <span className='text-sm text-gray-700 font-medium'>Confirmer Réception</span>
                                                                                     </Link>
                                                                                 </div>
-                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                {/* <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
                                                                                     onClick={() => {
                                                                                         setIsModalReturnOpen(true)
                                                                                     }}
                                                                                 >
                                                                                     <span className='mr-4'><i className="pi pi-ban"></i></span>
                                                                                     <span className='text-sm text-gray-700 font-medium'>Retourner demande</span>
-                                                                                </button>
+                                                                                </button> */}
                                                                             </div>
                                                                         </>
                                                                     ) : (
@@ -569,7 +569,7 @@ export default function LivraisonReparationDetails() {
                                                                 </>
                                                             ) : (
                                                                 <></>
-                                                            )} */}
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -674,7 +674,7 @@ export default function LivraisonReparationDetails() {
                                                         <div className='p-4 pb-0 text-xs text-gray-600 flex flex-col'>
                                                             <div className="space-x-2">
                                                                 <span>Total : {quantiteReparation}</span>
-                                                                {isLivre ? (<><span>Total livré : {totalLivre}</span></>) : (<></>)}
+                                                                {isLivre ? (<><span>Total livré : {totalRecu}</span></>) : (<></>)}
                                                             </div>
                                                         </div>
                                                         {/* <div>
@@ -711,12 +711,17 @@ export default function LivraisonReparationDetails() {
                                                                     <TableCell
                                                                         isHeader
                                                                         className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                        Marchand
+                                                                    </TableCell>
+                                                                    <TableCell
+                                                                        isHeader
+                                                                        className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                         S/N
                                                                     </TableCell>
                                                                     <TableCell
                                                                         isHeader
                                                                         className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                        Pièces Réparés
+                                                                        Pièces Réparées
                                                                     </TableCell>
                                                                 </TableRow>
                                                             </TableHeader>
@@ -746,24 +751,27 @@ export default function LivraisonReparationDetails() {
                                                                                 <TableCell
                                                                                     className={isLivre ? (classValidation ? classValidation : classList) : classList}>
                                                                                     <div>
+                                                                                        {item.marchand}
+                                                                                    </div>
+                                                                                </TableCell>
+                                                                                <TableCell
+                                                                                    className={isLivre ? (classValidation ? classValidation : classList) : classList}>
+                                                                                    <div>
                                                                                         {item.sn}
                                                                                     </div>
-                                                                                    {/* <div className=" text-gray-700 font-medium" style={{ fontSize: '11px' }}>
-                                                                                        {nomModel}
-                                                                                    </div> */}
                                                                                 </TableCell>
                                                                                 <TableCell
                                                                                     className={isLivre ? (classValidation ? classValidation : classList) : classList}>
                                                                                     <div className="grid grid-cols-2 text-xs">
                                                                                         {piecesReparees?.map((item) => {
                                                                                             const piece = pieces.find((p) => {
-                                                                                                return p.id_piece == parseInt(item)
+                                                                                                return p.id_piece == parseInt(item.piece_id)
                                                                                             })
                                                                                             if (piece) {
                                                                                                 return (
                                                                                                     <>
                                                                                                         <div>
-                                                                                                            <span className={isLivre ? (selected ? "text-blue-700 font-medium" : '') : "text-green-700 font-medium"}>{piece.nom_piece} ,</span>
+                                                                                                            <span className={isLivre ? (selected ? "text-blue-700 font-medium" : '') : "text-gray-700 font-medium"}>{piece.nom_piece} ,</span>
                                                                                                         </div>
                                                                                                     </>
                                                                                                 )
@@ -902,7 +910,7 @@ export default function LivraisonReparationDetails() {
                         <span className="p-3 rounded bg-black text-white font-medium">Clôture</span>
                     </div>
                     <div className="text-center text-sm font-medium">
-                        <span>Êtes-vous sûr de vouloir clôturer cette mise au livraison pour {totalLivre} TPE(s) ?</span>
+                        <span>Êtes-vous sûr de vouloir clôturer la livraison pour {totalRecu} TPE(s) ?</span>
                     </div>
                     <div>
                         <Label>Commentaire</Label>
@@ -924,7 +932,7 @@ export default function LivraisonReparationDetails() {
                             </div>
                             <div className="w-full flex justify-center items-center">
                                 <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={handleClotureRebut}
+                                    onClick={handleClotureLivraison}
                                 >
                                     Oui
                                 </button>

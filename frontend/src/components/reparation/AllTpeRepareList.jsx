@@ -67,20 +67,27 @@ export default function AllTpeRepareList() {
     const [pieceOptions, setPieceOptions] = useState([])
     const [selectedPieces, setSelectedPieces] = useState([])
 
-    const [datesUpdatePiece, setDateUpdatePiece] = useState(
-        savedFilters?.datesUpdatePiece
-            ? savedFilters.datesUpdatePiece.map((d) => new Date(d))
+    const [datesUpdate, setDatesUpdate] = useState(
+        savedFilters?.datesUpdate
+            ? savedFilters.datesUpdate.map((d) => new Date(d))
             : null
     );
+    const optionsEtat = [
+        { label: 'Réparé', value: 'repare' },
+        { label: 'A Réparer', value: 'defectueux' },
+    ];
+    const [selectedEtats, setSelectedEtats] = useState(savedFilters?.selectedEtats || []);
+
 
     useEffect(() => {
         saveFilters({
             globalFilter,
-            datesUpdatePiece: datesUpdatePiece?.map(d => d?.toISOString()),
+            datesUpdate: datesUpdate?.map(d => d?.toISOString()),
             selectedModels,
             selectedPieces,
+            selectedEtats,
         });
-    }, [globalFilter, datesUpdatePiece, selectedModels, selectedPieces]);
+    }, [globalFilter, datesUpdate, selectedModels, selectedPieces, selectedEtats]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -119,9 +126,10 @@ export default function AllTpeRepareList() {
 
     const handleClearFilters = () => {
         setGlobalFilter("");
-        setDateUpdatePiece(null);
+        setDatesUpdate(null);
         setSelectedModels([]);
         setSelectedPieces([])
+        setSelectedEtats([])
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -134,21 +142,27 @@ export default function AllTpeRepareList() {
         return (
             <>
                 <span className="font-medium">
-                    {tpe.serial_number}
+                    {tpe.parc_tpe?.serial_number}
                 </span>
             </>
         )
     }
 
-    const statutTemplate = (tpe) => {
+    const etatTemplate = (tpe) => {
+        let etatClass = ''
+        let etat = ''
+
+        if (tpe.etat == 'defectueux') {
+            etat = 'à réparer'
+            etatClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 text-red-700'
+        } else if (tpe.etat == 'repare') {
+            etat = 'réparé'
+            etatClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 text-blue-700'
+        }
         return (
-            <>
-                <div>
-                    <span className="font-medium">
-                        {tpe.model_piece?.nom_model}
-                    </span>
-                </div>
-            </>
+            <div>
+                <span className={etatClass}>{etat}</span>
+            </div>
         )
     }
 
@@ -175,25 +189,25 @@ export default function AllTpeRepareList() {
     }
 
     const piecesDefTemplate = (tpe) => {
-        // const piecesDef = tpe.pieces_rebut.filter((item) => {
-        //     return item.etat == 'defectueux'
-        // })
-        // const quantite = piecesDef?.length ? piecesDef?.length : 0
-        // return (
-        //     <>
-        //         <div className="grid grid-cols-2 text-xs">
-        //             {piecesDef?.map((item) => {
-        //                 return (
-        //                     <>
-        //                         <div>
-        //                             <span className="font-medium opacity-55">{item.items.nom_piece} ,</span>
-        //                         </div>
-        //                     </>
-        //                 )
-        //             })}
-        //         </div>
-        //     </>
-        // )
+        const piecesDef = tpe.pieces_a_reparer.filter((item) => {
+            return item.etat == 'defectueux'
+        })
+        const quantite = piecesDef?.length ? piecesDef?.length : 0
+        return (
+            <>
+                <div className="grid grid-cols-2 text-xs">
+                    {piecesDef?.map((item) => {
+                        return (
+                            <>
+                                <div>
+                                    <span className="font-medium opacity-55">{item.items.nom_piece} ,</span>
+                                </div>
+                            </>
+                        )
+                    })}
+                </div>
+            </>
+        )
     }
 
     const actionTemplate = (tpe) => {
@@ -229,7 +243,7 @@ export default function AllTpeRepareList() {
         )
     }
 
-    const dateUpdateTemplate = (tpe) => {
+    const dateCreationTemplate = (tpe) => {
         // const indexSession = tpe.sn_rebut.length - 1
         // const session = tpe.sn_rebut[indexSession]
         // const date = session ? formatDate(session?.last_modified_at) : 'N/A'
@@ -253,18 +267,19 @@ export default function AllTpeRepareList() {
 
         // const indexSession = item.sn_rebut.length - 1
         // const session = item.sn_rebut[indexSession]
-        // const dateUpdate = new Date(session?.last_modified_at);
-        // const dayUpdatesPlus = datesUpdatePiece ? new Date(datesUpdatePiece[1]) : null;
-        // dayUpdatesPlus?.setDate(dayUpdatesPlus.getDate() + 1);
-        // const nextDayUpdate = dayUpdatesPlus ? new Date(dayUpdatesPlus) : null;
+        const dateUpdate = new Date(item.last_modified_at);
+        const dayUpdatesPlus = datesUpdate ? new Date(datesUpdate[1]) : null;
+        dayUpdatesPlus?.setDate(dayUpdatesPlus.getDate() + 1);
+        const nextDayUpdate = dayUpdatesPlus ? new Date(dayUpdatesPlus) : null;
 
-        // const matchesDatesUpdates = datesUpdatePiece ? (datesUpdatePiece[0] <= dateUpdate && nextDayUpdate >= dateUpdate) : true;
+        const matchesDatesUpdates = datesUpdate ? (datesUpdate[0] <= dateUpdate && nextDayUpdate >= dateUpdate) : true;
         // const matchesPiecesFonc = selectedPieces.length > 0 ? selectedPieces.some(p => piecesId.includes(p)) : true;
+        const matchesEtat = selectedEtats.length > 0 ? selectedEtats.includes(item.etat) : true;
         const matchesModel = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesModel && matchesGlobalFilter
+        return matchesDatesUpdates && matchesEtat && matchesModel && matchesGlobalFilter
     });
 
     const totalTPE = filteredTpeMaintenance.length;
@@ -290,18 +305,34 @@ export default function AllTpeRepareList() {
                         </span>
                     </div>
                     <div className="grid grid-cols-3 gap-3 pb-0">
-                        {/* <MultiSelect
-                            value={selectedModels}
-                            onChange={(e) => setSelectedModels(e.value)}
-                            options={modelOptions}
+                        <MultiSelect
+                            value={selectedEtats}
+                            onChange={(e) => setSelectedEtats(e.value)}
+                            options={optionsEtat}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
-                            placeholder="Filtrer par modèle"
+                            placeholder="Filtrer par état"
                             className=""
-                        /> */}
+                        />
                     </div>
-
+                    <div className="flex justify-normal flex-wrap gap-3">
+                        <div>
+                            <Label>Dates Updates</Label>
+                            <Calendar
+                                value={datesUpdate}
+                                onChange={(e) => {
+                                    setDatesUpdate(e.value)
+                                }}
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
+                            />
+                        </div>
+                    </div>
                 </div>
                 <div className="p-6 pt-0 flex justify-between">
                     <div className="flex space-x-3 items-center">
@@ -325,9 +356,12 @@ export default function AllTpeRepareList() {
                         className="p-datatable-sm">
 
                         <Column field="id" header="ID" sortable></Column>
-                        <Column field="serial_number" header="S/N" body={serialNumberTemplate} sortable></Column>
-                        <Column field="statut_tpe.statut" header="Statut" sortable></Column>
+                        <Column field="tpe_id" header="S/N" body={serialNumberTemplate} sortable></Column>
+                        <Column field="nom_marchand" header="Point Marchand" sortable></Column>
+                        <Column field="etat" header="Etat" body={etatTemplate} sortable></Column>
                         <Column header="Pièces défectueuses" body={piecesDefTemplate}></Column>
+                        <Column field="last_modified_at" header="Dernière modification" sortable></Column>
+                        <Column field="created_at" header="Date de création" sortable></Column>
                     </DataTable>
                 </div>
             </div>

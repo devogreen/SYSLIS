@@ -8,7 +8,9 @@ const {
     faireDecom, getAllDecoms, getOneDecom, modifyDecom, cancelDecom, receptionDecom, returnDecom,
     getSnDecom, verifyDecom, clotureDecom, regVerifyDecom, extractDecom, downloadTemplateDecom,
     exportOneDecomToExcel, getAllTpeRepare, extractSnReparation, reparerListeTpe,
-    getAllLivraisonReparation, getOneLivraisonReparation,
+    getAllLivraisonReparation, getOneLivraisonReparation, receptionLivraisonReparation, 
+    cloturerLivraisonReparation, miseEnReparationTpe, extractMiseEnReparation, downloadTemplateLiaisonTpePieces,
+    extractLiaisonTpePiecesData, liaisonTpePieces,
 } = require("../controllers/Decom/decomController")
 
 router.post('/faireDecom', uploadAll.fields([
@@ -35,5 +37,15 @@ router.post('/extractSnReparation', uploadExcel.single('file'), extractSnReparat
 router.post('/reparerListeTpe', reparerListeTpe);
 router.get('/getAllLivraisonReparation', getAllLivraisonReparation);
 router.get('/getOneLivraisonReparation/:id', getOneLivraisonReparation);
-
+router.put('/receptionLivraisonReparation/:id', uploadAll.fields([
+    { name: 'files' },
+]), receptionLivraisonReparation);
+router.put('/cloturerLivraisonReparation/:id', cloturerLivraisonReparation);
+router.post('/miseEnReparationTpe', uploadAll.fields([
+    { name: 'files' },
+]), miseEnReparationTpe);
+router.post('/extractMiseEnReparation', uploadExcel.single('file'), extractMiseEnReparation);
+router.post('/downloadTemplateLiaisonTpePieces', downloadTemplateLiaisonTpePieces);
+router.post('/extractLiaisonTpePiecesData', uploadExcel.single('file'), extractLiaisonTpePiecesData);
+router.post('/liaisonTpePieces', liaisonTpePieces);
 module.exports = router

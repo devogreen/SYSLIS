@@ -128,8 +128,8 @@ export default function AllLivraisonReparation() {
         if (livraison.statut == 'en_cours') {
             statut = 'en cours'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-warning-100 text-warning-300'
-        } else if (livraison.statut == 'valide') {
-            statut = 'validée'
+        } else if (livraison.statut == 'livre') {
+            statut = 'Livré'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-300'
         } else if (livraison.statut == 'retourne') {
             statut = 'retournée'
@@ -145,6 +145,17 @@ export default function AllLivraisonReparation() {
             <Link to={linkSee}>
                 <span className={statutClass}>{statut}</span>
             </Link>
+        )
+    }
+    const quantiteRecuTemplate = (livraison) => {
+        const indexReception = livraison.reception_tpe_repare.filter((item) => { return item.type == 'reception' }).length - 1
+        const reception = livraison.reception_tpe_repare[indexReception]
+        const quantite = reception ? reception.quantite : 'N/A'
+
+        return (
+            <>
+                <span className="">{quantite}</span>
+            </>
         )
     }
     const dateLivraisonTemplate = (livraison) => {
@@ -361,7 +372,8 @@ export default function AllLivraisonReparation() {
 
                         <Column field="id" header="ID" sortable></Column>
                         <Column field="statut" header="Statut" body={statutTemplate} sortable></Column>
-                        <Column field="quantite" header="Quantité" sortable></Column>
+                        <Column field="quantite" header="Quantité livrée" sortable></Column>
+                        <Column header="Quantité reçue" body={quantiteRecuTemplate} sortable></Column>
                         <Column field="forms.created_at" header="Date Livraison" body={dateLivraisonTemplate} sortable></Column>
                         <Column field="forms.updated_at" header="Date update" body={dateUpdateTemplate} sortable></Column>
                         <Column header="Date Reception" body={dateReceptionTemplate}></Column>

@@ -447,6 +447,88 @@ const getTpe = async (req, res) => {
         res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
     }
 }
+
+const exportTpeToExcel = async (req, res) => {
+    try {
+        const {
+            serials,
+            userId,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        const listeIds =
+            typeof serials === "string" ? JSON.parse(serials) : serials;
+        if (!Array.isArray(listeIds) || listeIds.length === 0) {
+            console.error("Liste de sn vide ou invalide.");
+            return res.status(400).json({ message: "Liste de sn vide ou invalide." });
+        }
+
+        const tpes = await prisma.parc_tpe.findMany({
+            where: {
+                id: { in: listeIds }
+            },
+            include: {
+                statut_tpe: true,
+            },
+        })
+
+        const workbook = new ExcelJS.Workbook();
+
+        const serialsSheet = workbook.addWorksheet('TPE - Statuts');
+        const serialsHeaders = [
+            "ID",
+            "S/N",
+            "Statut",        
+        ];
+        const serialsHeaderRow = serialsSheet.addRow(serialsHeaders);
+        serialsHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        tpes.forEach((item, index) => {
+            serialsSheet.addRow([
+                item.id,
+                item.serial_number,
+                item.statut_tpe.statut,
+            ])
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=parc_tpe_${new Date().toISOString()}.xlsx`
+        );
+        res.send(buffer);
+
+        console.log(`Exportation des TPE vers Excel par utilisateur ${utilisateur.username} !`)
+
+    } catch (error) {
+        console.error("Erreur lors de l'exportation des TPE vers Excel :", error);
+        res.status(500).json({ message: "Erreur lors de l'exportation des TPE vers Excel", error });
+    }
+}
 module.exports = {
     getParcTpe,
     getAllStatut,
@@ -456,4 +538,5 @@ module.exports = {
     extractSn,
     changeListeStatut,
     getTpe,
+    exportTpeToExcel,
 }

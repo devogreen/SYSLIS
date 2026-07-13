@@ -243,7 +243,6 @@ import ModifyRebutForm from "./pages/Forms/RebutForms/ModifyRebutForm"
 // @ts-ignore
 import ValiderRebutForm from "./pages/Forms/RebutForms/ValiderRebutForm"
 
-
 // @ts-ignore
 import AllTpeRepare from "./pages/ReparationPages/AllTpeRepare"
 // @ts-ignore
@@ -252,6 +251,15 @@ import ReparationTpeForm from "./pages/Forms/ReparationTpeForms/ReparationTpeFor
 import AllLivraisonReparation from "./pages/ReparationPages/AllLivraisonReparation"
 // @ts-ignore
 import LivraisonReparationDetails from "./pages/ReparationPages/LivraisonReparationDetails"
+// @ts-ignore
+import UpdateReparationTpeForm from "./pages/Forms/ReparationTpeForms/UpdateReparationTpeForm"
+// @ts-ignore
+import ReceptionLivraisonReparationForm from "./pages/Forms/ReparationTpeForms/ReceptionLivraisonReparationInputs"
+// @ts-ignore
+import MiseEnReparationForm from "./pages/Forms/ReparationTpeForms/MiseEnReparationForm"
+
+// @ts-ignore
+import LiaisonTpePiecesForm from "./pages/Forms/MaintenanceTpeForms/LiaisonTpePiecesForm"
 
 export default function App() {
   return (
@@ -350,8 +358,14 @@ export default function App() {
               {/* Gestion des TPE à réparer */}
               <Route path="/tpe-a-reparer" element={<AllTpeRepare />} />
               <Route path="/reparation-tpe" element={<ReparationTpeForm />} />
-              <Route path="/livraison-reparation" element={<AllLivraisonReparation />} />
+              <Route path="/toutes-livraisons-reparation" element={<AllLivraisonReparation />} />
               <Route path="/livraison-reparation-details/:id" element={<LivraisonReparationDetails />} />
+              <Route path="/update-reparation-tpe/:id" element={<UpdateReparationTpeForm />} />
+              <Route path="/reception-livraison-reparation/:id" element={<ReceptionLivraisonReparationForm />} />
+              <Route path="/mise-en-reparation" element={<MiseEnReparationForm />} />
+
+              {/* Gestion Maintenance TPE */}
+              <Route path="/liaison-tpe-pieces" element={<LiaisonTpePiecesForm />} />
 
               {/* Gestion Parc TPE */}
               <Route path="/parc-tpe" element={<AllParcTpe />} />

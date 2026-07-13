@@ -12,7 +12,7 @@ import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
 import { MultiSelect } from "primereact/multiselect";
 import Checkbox from "../form/input/Checkbox";
-
+import { ProgressSpinner } from "primereact/progressspinner";
 import Swal from "sweetalert2";
 
 export default function AllParcTpeList() {
@@ -29,6 +29,7 @@ export default function AllParcTpeList() {
     });
 
     const parcData = new GestionTpe()
+    const userId = localStorage.getItem('id');
 
     const savedPagination = JSON.parse(sessionStorage.getItem("paginationStateListeParc"));
 
@@ -55,6 +56,8 @@ export default function AllParcTpeList() {
     const [selectedStatus, setSelectedStatus] = useState(savedFilters?.selectedStatus || []);
 
     const [statuts, setStatuts] = useState([])
+
+    const [loadingExport, setLoadingExport] = useState(false)
 
     const [datesCreation, setDatesCreation] = useState(
         savedFilters?.datesCreation
@@ -236,6 +239,45 @@ export default function AllParcTpeList() {
         )
     }
 
+    const handleExportToExcel = async () => {
+        try {
+            setLoadingExport(true);
+
+            const payload = {
+                serials: filteredTpe.map(tpe => tpe.id),
+                userId,
+            }
+
+            const response = await parcData.exportTpeToExcel(payload);
+
+            const url = window.URL.createObjectURL(
+                new Blob([response.data])
+            );
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `parc_tpe_${new Date().toISOString()}.xlsx`;
+
+            document.body.appendChild(a);
+            a.click();
+
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.log(error);
+
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement",
+                icon: "warning"
+            });
+
+        } finally {
+            setLoadingExport(false);
+        }
+    };
+
     const filteredTpe = parcListe.filter((item) => {
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_id) : true;
         // const matchesDatesDecom = datesDecom ? (datesDecom[0] <= dateDecom && nextDayDecom >= dateDecom) : true;
@@ -318,6 +360,26 @@ export default function AllParcTpeList() {
                         <span className="text-xs text-gray-700 font-semibold dark:text-gray-300">
                             {total} TPE(s)
                         </span>
+                    </div>
+                    <div>
+                        {loadingExport ?
+                            (
+                                <>
+                                    <span className='flex items-center justify-center'>
+                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <button className="flex items-center text-red-600 justify-center rounded-full h-4 w-4 p-4 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
+                                        onClick={handleExportToExcel}>
+                                        <span className="">
+                                            <i className="pi pi-download"></i>
+                                        </span>
+                                    </button>
+                                </>
+                            )
+                        }
                     </div>
                 </div>
                 <div className="card">

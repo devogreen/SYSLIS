@@ -74,4 +74,14 @@ export class GestionTpe {
             throw error.response.data
         }
     }
+    async exportTpeToExcel(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/gestion-tpe/exportTpeToExcel`, payload, {
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Export failed" };
+        }
+    }
 }

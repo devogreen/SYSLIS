@@ -109,20 +109,22 @@ const navItems: NavItem[] = [
     subItems: [
       { name: "Nouveau décomm", path: "/nouveau-decommissionnement", roles: [23], pro: false },
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
-      { name: "TPE à réparer", path: "/tpe-a-reparer", roles: [23, 24, 25, 26], pro: false },
-      { name: "Réparation TPE", path: "/reparation-tpe", roles: [25], pro: false},
-      { name: "Livraison TPE réparés", path: "/livraison-reparation", roles: [23, 24, 25, 26], pro: false},
     ],
   },
   {
-    name: "Gestion des rebuts",
+    name: "Gestion Maintenances",
     icon: <MaintenanceCircle />,
     roles: [30, 31, 32, 33],
     subItems: [
-      { name: "Mettre au rebut", path: "/nouveau-rebut", roles: [30, 32], pro: false },
+      { name: "Mise au rebut", path: "/nouveau-rebut", roles: [30, 32], pro: false },
       { name: "Toutes les mises au rebut", path: "/toutes-les-demandes-rebut", roles: [30, 31, 32, 33], pro: false },
       { name: "Tous les TPE au rebut", path: "/tpe-rebuts", roles: [30, 31, 32, 33], pro: false },
       { name: "Toutes les pièces au rebut", path: "/pieces-rebuts", roles: [30, 31, 32, 33], pro: false },
+      { name: "Mise en réparation", path: "/mise-en-reparation", roles: [35], pro: false},
+      { name: "TPE à réparer", path: "/tpe-a-reparer", roles: [35, 36, 37], pro: false },
+      { name: "Réparation TPE", path: "/reparation-tpe", roles: [35], pro: false},
+      { name: "Livraisons TPE réparés", path: "/toutes-livraisons-reparation", roles: [35, 36, 37], pro: false},
+      { name: "Liaison pièces TPE", path: "/liaison-tpe-pieces", roles: [6], pro: false },
     ],
   },
   {
@@ -151,7 +153,7 @@ const navItems: NavItem[] = [
     name: "Admin",
     roles: [6],
     subItems: [
-      { name: "Liaison pièces TPE", path: "/admin-liaison-pieces-tpe", pro: false },
+      
     ]
   }
 

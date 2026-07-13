@@ -385,7 +385,6 @@ export default function DecomDetails() {
         }
     };
 
-
     const totalRebut = listeDecom.filter((item) => { return item.statut == 'rebut' || item.statut == 'rebus' }).length
     const totalParam = listeDecom.filter((item) => { return item.statut == 'parametrage' }).length
     const totalRepar = listeDecom.filter((item) => { return item.statut == 'a_reparer' }).length

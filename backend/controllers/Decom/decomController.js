@@ -91,7 +91,7 @@ const faireDecom = async (req, res) => {
             const nouveauDecom = await tx.form_decom.create({
                 data: {
                     statut: 'en_cours',
-                    quantite: terminaux.length(),
+                    quantite: Number(quantite),
                     liste_decom: JSON.stringify(details),
                     form_id: decomForm.id,
                 }
@@ -247,7 +247,7 @@ const faireDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${decom.nouveauDecom.id}`;
 
-        let subject = `NOUVEAU DECOMMISSIONNEMENT`;
+        let subject = `SYSLIS - NOUVEAU DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Un nouveau décommissionnement a été soumis.</p>
@@ -268,7 +268,7 @@ const faireDecom = async (req, res) => {
             <p>Green - Pay vous remercie.</p>
         `;
         if (isReg) {
-            subject = `RÉGULARISATION DECOMMISSIONNEMENT`;
+            subject = `SYSLIS - RÉGULARISATION DECOMMISSIONNEMENT`;
             html = `
             <p>Bonjour,</p>
             <p>Une régularisation de décommissionnement a été soumise.</p>
@@ -1830,6 +1830,7 @@ const clotureDecom = async (req, res) => {
         const { userId, commentaire, listeDecom, isReg } = req.body;
 
         const REBUT_STATUT_ID = 5;
+        const A_REPARER_STATUT_ID = 11;
         const statutMap = {
             parametrage: 4,
             rebus: 5,
@@ -2034,6 +2035,11 @@ const clotureDecom = async (req, res) => {
                 (item) => statutMap[item.statut] === REBUT_STATUT_ID
             );
 
+            // Process A_REPARER — idem, uniquement pour les lignes qui "proceed"
+            const aReparerItems = [...proceedCreate, ...proceedUpdate].filter(
+                (item) => statutMap[item.statut] === A_REPARER_STATUT_ID
+            );
+
             for (const item of rebutItems) {
                 const tpeId = idBySerial.get(item.serial_number);
                 if (!tpeId) continue;
@@ -2086,12 +2092,47 @@ const clotureDecom = async (req, res) => {
                 }
             }
 
+            for (const item of aReparerItems) {
+                const tpeId = idBySerial.get(item.serial_number);
+                if (!tpeId) continue;
+
+                const piecesDef = typeof item.pieces_defectueuses === "string" ? JSON.parse(item.pieces_defectueuses) : item.pieces_defectueuses;
+                const def = Array.isArray(piecesDef) ? piecesDef : [];
+                const pieces = [
+                    ...def.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+                ];
+
+                const tpeAreparer = await tx.tpe_a_reparer.create({
+                    data: {
+                        tpe_id: tpeId,
+                        nom_marchand: item.point_marchand,
+                        decom_id: decom.id,
+                        etat: "defectueux",
+                        created_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                if (pieces.length) {
+                    await tx.pieces_a_reparer.createMany({
+                        data: pieces.map((p) => ({
+                            sn_id: tpeAreparer.id,
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+                }
+            }
+
             return {
                 retourDecomForm,
                 retourDecom,
                 tpe_traites: proceedCreate.length + proceedUpdate.length,
                 tpe_historique_seul: historyOnly.length,
                 tpe_rebut: rebutItems.length,
+                tpe_a_reparer: aReparerItems.length,
             };
         }, {
             timeout: 20000,
@@ -2520,15 +2561,36 @@ const exportOneDecomToExcel = async (req, res) => {
 // Fonction pour avoir la liste de tous les TPE avec le statut 'a_reparer' et 'repare' provenant d'une vérification de décommissionnement
 const getAllTpeRepare = async (req, res) => {
     try {
-        const tpe = await prisma.parc_tpe.findMany({
+        const tpe = await prisma.tpe_a_reparer.findMany({
             where: {
-                statut_id: {
-                    in: [10, 11],
-                },
+                is_deleted: false,
             },
-            include: {
-                model_piece: true,
-                statut_tpe: true,
+            select: {
+                id: true,
+                etat: true,
+                nom_marchand: true,
+                decom_id: true,
+                created_by: true,
+                created_at: true,
+                last_modified_at: true,
+                parc_tpe: {
+                    select: {
+                        serial_number: true,
+                        model_id: true,
+                        model_piece: true,
+                    }
+                },
+                pieces_a_reparer: {
+                    select: {
+                        piece_id: true,
+                        etat: true,
+                        items: {
+                            select: {
+                                nom_piece: true,
+                            }
+                        },
+                    },
+                },
             },
             orderBy: {
                 last_modified_at: 'desc',
@@ -2741,9 +2803,20 @@ const extractSnReparation = async (req, res) => {
             if (serial_number) {
                 statut = serial_number.statut_tpe.statut
             }
+
+            const tpeAreparer = await prisma.tpe_a_reparer.findFirst({
+                where: {
+                    tpe_id: serial_number.id,
+                    is_deleted: false,
+                    etat: 'defectueux',
+                },
+                orderBy: {
+                    id: 'desc',
+                },
+            });
             const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
                 where: {
-                    sn_id: serial_number.id,
+                    sn_id: tpeAreparer.id,
                 },
                 select: {
                     piece_id: true,
@@ -2754,6 +2827,7 @@ const extractSnReparation = async (req, res) => {
                 sn,
                 statut,
                 listePiece,
+                marchand: tpeAreparer.nom_marchand,
             }
             serials.push(element)
         }
@@ -2795,54 +2869,45 @@ const reparerListeTpe = async (req, res) => {
         }
 
         const dateAction = new Date()
-        
+
         const STATUT_REPARE_ID = 10
-        const terminaux = [];
-        const piecesUpdate = []
-        for (const terminal of detailsListe) {
+        const terminaux = detailsListe.map((terminal) => {
             const piecesDef = Array.isArray(terminal.listePiece)
                 ? terminal.listePiece
                 : [];
 
-            // const pieces = [
-            //     ...piecesDef.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
-            // ];
+            const pieces = piecesDef.map((item) => ({
+                piece_id: item.piece_id,
+                etat: "repare",
+                updated_by: utilisateur.id_user,
+                updated_at: dateAction,
+            }));
 
-            const pieces = [
-                ...piecesDef.map(pieceId => ({
-                    sn_id: terminal.id,
-                    piece_id: pieceId,
-                    etat: 'repare',
-                    updated_by: utilisateur.id_user,
-                    updated_at: dateAction,
-                }))
-            ]
-
-            terminaux.push({ serial: terminal.sn, pieces });
-        }
+            return { serial: terminal.sn, pieces };
+        });
 
         const serials = terminaux.map((t) => t.serial);
 
         const operation = await prisma.$transaction(async (tx) => {
-
+            // ---- Forms + reparation + livraison --------------------------
             const reparationForm = await tx.forms.create({
                 data: {
                     created_at: dateAction,
                     last_modified_at: dateAction,
                     created_by: utilisateur.id_user,
                     nom_user: utilisateur.fullname,
-                    type: 'reparation_tpe',
+                    type: "reparation_tpe",
                     commentaire,
-                }
-            })
+                },
+            });
 
             const reparation = await tx.reparation_tpe.create({
                 data: {
                     form_id: reparationForm.id,
                     quantite: terminaux.length,
-                    liste_sn: JSON.stringify(detailsListe)
-                }
-            })
+                    liste_sn: JSON.stringify(detailsListe),
+                },
+            });
 
             const livraisonForm = await tx.forms.create({
                 data: {
@@ -2850,178 +2915,217 @@ const reparerListeTpe = async (req, res) => {
                     last_modified_at: dateAction,
                     created_by: utilisateur.id_user,
                     nom_user: utilisateur.fullname,
-                    type: 'livraison_tpe_repare',
+                    type: "livraison_tpe_repare",
                     commentaire,
-                }
-            })
+                },
+            });
 
             const livraison = await tx.livraison_tpe_repare.create({
                 data: {
                     form_id: livraisonForm.id,
                     reparation_id: reparation.id,
-                    statut: 'en_cours',
+                    statut: "en_cours",
                     quantite: terminaux.length,
                     liste_sn: JSON.stringify(detailsListe),
-                }
-            })
+                },
+            });
 
-            // 1. Create only missing ones
+            // ---- parc_tpe: upsert-ish (create missing, then update all) --
             await tx.parc_tpe.createMany({
-                data: serials.map(item => ({
+                data: serials.map((item) => ({
                     serial_number: item,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     last_modified_at: dateAction,
                     statut_id: STATUT_REPARE_ID,
                 })),
-                skipDuplicates: true
+                skipDuplicates: true,
             });
 
-            // 2. Update ALL (existing + newly created)
             await tx.parc_tpe.updateMany({
-                where: {
-                    serial_number: { in: serials }
-                },
+                where: { serial_number: { in: serials } },
                 data: {
                     updated_by: utilisateur.id_user,
                     updated_at: dateAction,
                     last_modified_at: dateAction,
                     statut_id: STATUT_REPARE_ID,
-                }
-            });
-
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
                 },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
             });
 
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true },
+            });
+
+            // ---- history_tpe: one row per TPE ----------------------------
             await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => ({
+                data: allTpes.map((tpe) => ({
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     statut_id: STATUT_REPARE_ID,
                     form_id: reparationForm.id,
-                }))
+                })),
             });
 
+            // ============================================================
+            // FIX #3 (round-trips): fetch every tpe_a_reparer row ONCE
+            // before the loop instead of one findFirst per terminal.
+            // ============================================================
+            const tpeIds = allTpes.map((t) => t.id);
+
+            const aReparerRows = await tx.tpe_a_reparer.findMany({
+                where: {
+                    tpe_id: { in: tpeIds },
+                    is_deleted: false,
+                    etat: "defectueux",
+                },
+            });
+
+            // Map for O(1) lookup by tpe_id inside the loop.
+            const aReparerByTpeId = new Map(
+                aReparerRows.map((r) => [r.tpe_id, r])
+            );
+            // And a quick lookup from serial -> tpe row.
+            const tpeBySerial = new Map(
+                allTpes.map((t) => [t.serial_number, t])
+            );
+
+            // ============================================================
+            // FIX #1 (the actual P2028 cause): guard BEFORE any write, so
+            // we never call `update` with a non-existent id (which throws
+            // P2025 and aborts the whole transaction).
+            // FIX #3 cont.: collect ids + mouvements to flush in bulk.
+            // ============================================================
+            const tpeAreparerIdsToUpdate = [];
+            const mouvements = [];
+
             for (const t of terminaux) {
-                const tpe = allTpes.find((item) => item.serial_number == t.serial);
+                const tpe = tpeBySerial.get(t.serial);
                 if (!tpe) continue;
 
+                const tpeAreparer = aReparerByTpeId.get(tpe.id);
+                if (!tpeAreparer) continue; // nothing to repair for this TPE
+
+                tpeAreparerIdsToUpdate.push(tpeAreparer.id);
+
                 if (t.pieces.length) {
+                    // Kept per-terminal: `where` is scoped to THIS terminal's
+                    // sn_id, so it can't be safely merged across terminals.
                     await tx.pieces_a_reparer.updateMany({
                         where: {
-                            sn_id: tpe.id
+                            sn_id: tpeAreparer.id,
+                            piece_id: { in: t.pieces.map((p) => p.piece_id) },
                         },
-                        data: t.pieces.map((p) => ({
-                            piece_id: p.piece_id,
-                            etat : 'repare',
-                            sn_id: tpe.id,
-                            created_by: utilisateur.id_user,
-                            created_at: dateAction,
-                        })),
+                        data: {
+                            etat: "repare",
+                            updated_by: utilisateur.id_user,
+                            updated_at: dateAction,
+                        },
                     });
 
-                    await tx.mouvement_piece_a_reparer.createMany({
-                        data: t.pieces.map((p) => ({
+                    for (const p of t.pieces) {
+                        mouvements.push({
                             piece_id: p.piece_id,
                             reparation_id: reparation.id,
-                            ancien_etat: 'defectueux',
-                            nouvel_etat: 'repare',
+                            ancien_etat: "defectueux",
+                            nouvel_etat: "repare",
                             created_at: dateAction,
                             created_by: utilisateur.id_user,
-                        }))
-                    })
+                        });
+                    }
                 }
             }
 
-            return {
-                allTpes,
-                livraisonForm,
-                livraison,
+            // Single updateMany for all tpe_a_reparer rows (same data for all).
+            if (tpeAreparerIdsToUpdate.length) {
+                await tx.tpe_a_reparer.updateMany({
+                    where: { id: { in: tpeAreparerIdsToUpdate } },
+                    data: {
+                        reparation_id: reparation.id,
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        etat: "repare",
+                    },
+                });
             }
-        })
+
+            // Single insert for all mouvement rows.
+            if (mouvements.length) {
+                await tx.mouvement_piece_a_reparer.createMany({
+                    data: mouvements,
+                });
+            }
+
+            return { allTpes, livraisonForm, livraison };
+        },
+            {
+                // FIX #2: the default interactive-transaction timeout is 5s,
+                // which a long liste_sn will blow past. Raise both limits.
+                maxWait: 10000, // max time to wait for a pooled connection
+                timeout: 30000, // max time the transaction may run
+            }
+        );
 
         /************ GESTION MAIL  ************/
+        // FIX #4: mail sending is wrapped in its own try/catch. The transaction has
+        // already committed successfully at this point, so a mail failure must NOT
+        // turn into a 500 that makes the caller think the operation failed.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 37 },
+                include: { users: true }
+            })
+            const rolesReception = await prisma.user_roles.findMany({
+                where: { role_id: 36 },
+                include: { users: true }
+            })
+            // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
+            // never used. Re-add it here and include it in the mail loop if needed.
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users)
+            const demandeurs = rolesReception.map(us => us.users)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
 
-        const subject = `SYSLIS - LIVRAISON TPE REPARE`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Un lot de TPE réparés on été livrés par ${utilisateur.fullname}.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la livraison à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
+            const subject = `SYSLIS - LIVRAISON TPE REPARE`;
+            // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
+            const html = `
+                <p>Bonjour,</p>
+                <p>Un lot de TPE réparés on été livrés par ${utilisateur.fullname}.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${terminaux.length}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la livraison à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...superviseurs, ...demandeurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
                 await sendMail({
-                    to: superviseur.email,
+                    to: destinataire.email,
                     subject,
                     html,
                 });
             }
-        }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
+        } catch (mailError) {
+            // Log but do not fail the request — the repair/delivery already succeeded.
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log('TPE réparés avec succès !')
@@ -3091,6 +3195,1143 @@ const getOneLivraisonReparation = async (req, res) => {
     }
 }
 
+const receptionLivraisonReparation = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            listeReparation,
+            listeValidee,
+            quantite,
+            userId,
+            dateReception,
+            isReg,
+        } = req.body
+
+        const livraison = await prisma.livraison_tpe_repare.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+        })
+
+        const livraisonForm = await prisma.forms.findUnique({
+            where: {
+                id: parseInt(livraison.form_id)
+            },
+        })
+
+        if (!livraison) {
+            console.error('Livraison des TPE réparés introuvable !')
+            return res.status(404).json({ message: "Livraison des TPE réparés introuvable !" });
+        }
+        if (livraison.statut == 'valide') {
+            console.error('Livraison des TPE réparés déjà réceptionnée !')
+            return res.status(400).json({ message: "Livraison des TPE réparés déjà réceptionnée !" });
+        }
+        if (livraison.statut != 'en_cours') {
+            console.error('Statut de la livraison des TPE réparés invalide !')
+            return res.status(400).json({ message: "Statut de la livraison des TPE réparés invalide !" });
+        }
+        if (livraisonForm.is_deleted) {
+            console.error('Livraison des TPE réparés déjà supprimée !')
+            return res.status(400).json({ message: "Livraison des TPE réparés déjà supprimée !" });
+        }
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const details = typeof listeReparation === "string" ? JSON.parse(listeReparation) : listeReparation;
+        const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
+
+        const reg = isReg == "false" ? false : true
+        let dateAction = new Date()
+        const dateVer = new Date(dateReception)
+        if (!isNaN(dateVer.valueOf())) {
+            dateAction = new Date(dateReception)
+        }
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const receptionForm = await tx.forms.create({
+                data: {
+                    type: 'reception_tpe_repare',
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    commentaire,
+                }
+            })
+
+            const reception = await tx.reception_tpe_repare.create({
+                data: {
+                    form_id: receptionForm.id,
+                    livraison_id: livraison.id,
+                    type: 'reception',
+                    quantite: Number(quantite),
+                    liste_sn: JSON.stringify(detailsValidee),
+                }
+            })
+
+            const livraisonReparation = await tx.livraison_tpe_repare.update({
+                where: {
+                    id: livraison.id
+                },
+                data: {
+                    statut: 'livre',
+                    liste_sn: JSON.stringify(details),
+                }
+            })
+
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: livraisonForm.id,
+                        type_formulaire: 'livraison',
+                        role: 'receveur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            return {
+                receptionForm,
+                reception,
+                livraisonReparation,
+            }
+        })
+
+        /****************    GESTION DES MAILS     *****************/
+
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 37 },
+                include: { users: true }
+            })
+            const rolesLivraison = await prisma.user_roles.findMany({
+                where: { role_id: 35 },
+                include: { users: true }
+            })
+            // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
+            // never used. Re-add it here and include it in the mail loop if needed.
+
+            const superviseurs = rolesSupervision.map(us => us.users)
+            const livreurs = rolesLivraison.map(us => us.users)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+            const url = GENERAL_URL
+            const link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+
+            const subject = `SYSLIS - RECEPTION TPE REPARE`;
+            // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
+            const html = `
+                <p>Bonjour,</p>
+                <p>La livraison ${id} des TPEs réparés a été réceptionné par ${utilisateur.fullname}.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${detailsValidee.length}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la livraison à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...superviseurs, ...livreurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
+                await sendMail({
+                    to: destinataire.email,
+                    subject,
+                    html,
+                });
+            }
+        } catch (mailError) {
+            // Log but do not fail the request — the repair/delivery already succeeded.
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log(`Livraison de TPE réparés ${id} réceptionnée avec succès par ${utilisateur.username}`)
+        res.status(201).json({
+            message: `Livraison de TPE réparés ${id} réceptionnée avec succès par ${utilisateur.username}`,
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la validation de la demande de mise au rebut :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const cloturerLivraisonReparation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            commentaire,
+            listeValidee,
+            quantite,
+            userId,
+            dateValidation,
+            // isReg,
+        } = req.body;
+
+        const PARAM_STATUT_ID = 4; // statut "parametrage"
+
+        const livraisonId = parseInt(id, 10);
+        if (Number.isNaN(livraisonId)) {
+            console.error("Identifiant de livraison invalide.")
+            return res.status(400).json({ message: "Identifiant de livraison invalide." });
+        }
+
+        // 1. Charger et valider la demande AVANT d'accéder à ses champs
+        const livraison = await prisma.livraison_tpe_repare.findUnique({
+            where: { id: livraisonId },
+        });
+        if (!livraison) {
+            console.error("Livraison de TPE réparés introuvable !")
+            return res.status(404).json({ message: "Livraison de TPE réparés introuvable !" });
+        }
+        if (livraison.statut !== "livre") {
+            console.error("Statut de la livraison de TPE réparés invalide !")
+            return res.status(400).json({ message: "Statut de la livraison de TPE réparés invalide !" });
+        }
+
+        const livraisonForm = await prisma.forms.findUnique({
+            where: { id: parseInt(livraison.form_id, 10) },
+        });
+        if (!livraisonForm) {
+            console.error("Formulaire de livraison de TPE réparés introuvable !")
+            return res.status(404).json({ message: "Formulaire de livraison de TPE réparés introuvable !" });
+        }
+        if (livraisonForm.is_deleted) {
+            console.error("Livraison de TPE réparés déjà supprimée !")
+            return res.status(400).json({ message: "Livraison de TPE réparés déjà supprimée !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId, 10) },
+        });
+        if (!utilisateur) {
+            console.error("Utilisateur introuvable !")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        // Date d'action
+        let dateAction = new Date();
+        const dateVer = new Date(dateValidation);
+        if (!Number.isNaN(dateVer.valueOf())) {
+            dateAction = dateVer;
+        }
+
+        // 2. Parser et valider la liste AVANT la transaction
+        const detailsValidee =
+            typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
+        if (!Array.isArray(detailsValidee) || detailsValidee.length === 0) {
+            return res.status(400).json({ message: "Liste validée vide ou invalide." });
+        }
+
+        const serials = detailsValidee.map((t) => t.sn);
+
+        // 3. Toutes les écritures dans UNE transaction, en séquentiel
+        const operation = await prisma.$transaction(async (tx) => {
+
+            const clotureForm = await tx.forms.create({
+                data: {
+                    commentaire,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    type: 'reception_tpe_repare',
+                }
+            })
+            const cloture = await tx.reception_tpe_repare.create({
+                data: {
+                    livraison_id: livraisonId,
+                    form_id: clotureForm.id,
+                    type: 'cloture',
+                    quantite,
+                    liste_sn: JSON.stringify(listeValidee),
+                }
+            })
+
+            // Créer uniquement les parc_tpe manquants
+            await tx.parc_tpe.createMany({
+                data: serials.map((serial) => ({
+                    serial_number: serial,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: PARAM_STATUT_ID,
+                })),
+                skipDuplicates: true,
+            });
+
+            // Mettre TOUS les TPE (existants + nouveaux) au statut paramétrage
+            await tx.parc_tpe.updateMany({
+                where: { serial_number: { in: serials } },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: PARAM_STATUT_ID,
+                },
+            });
+
+            // Récupérer les ids
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true },
+            });
+            const tpeBySerial = new Map(allTpes.map((tpe) => [tpe.serial_number, tpe]));
+
+            // Historique du changement de statut parc
+            await tx.history_tpe.createMany({
+                data: allTpes.map((tpe) => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: PARAM_STATUT_ID,
+                    form_id: clotureForm.id, // était "decomForm.id" (non défini)
+                })),
+            });
+
+            // CONFIRM: clôturer la demande elle-même (valeur de statut à adapter)
+            await tx.livraison_tpe_repare.update({
+                where: { id: livraisonId },
+                data: {
+                    statut: 'clos', // CONFIRM: la valeur attendue par votre schéma
+                },
+            });
+
+            return { tpe_traites: allTpes.length };
+        });
+
+        console.log(`Livraison des TPE réparés ${livraisonId} clôturée avec succès par ${utilisateur.username}.`)
+        return res.status(200).json({
+            message: `Livraison des TPE réparés ${livraisonId} clôturée avec succès par ${utilisateur.username}.`,
+            ...operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la clôture de la livraison des TPE réparés :", error);
+        return res
+            .status(500)
+            .json({ message: "Erreur interne lors de la clôture de la livraison des TPE réparés." });
+    }
+};
+
+const miseEnReparationTpe = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            commentaire,
+            listeReparation,
+            quantite,
+            userId,
+            dateOperation,
+            // isReg,
+        } = req.body;
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const A_REPARER_STATUT_ID = 11; // statut "à réparer"
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId, 10) },
+        });
+        if (!utilisateur) {
+            console.error("Utilisateur introuvable !")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        // Date d'action
+        let dateAction = new Date();
+        const dateVer = new Date(dateOperation);
+        if (!Number.isNaN(dateVer.valueOf())) {
+            dateAction = dateVer;
+        }
+
+        // 2. Parser et valider la liste AVANT la transaction
+        const detailsListe =
+            typeof listeReparation === "string" ? JSON.parse(listeReparation) : listeReparation;
+        if (!Array.isArray(detailsListe) || detailsListe.length === 0) {
+            return res.status(400).json({ message: "Liste de terminaux vide ou invalide." });
+        }
+
+        // On garde les pièces groupées PAR terminal pour pouvoir relier
+        // chaque pièce à la bonne session / au bon snapshot plus tard.
+        const terminaux = detailsListe.map((terminal) => {
+            const piecesDef = Array.isArray(terminal.pieces_defectueuses)
+                ? terminal.pieces_defectueuses
+                : [];
+
+            const pieces = piecesDef.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" }));
+
+            return {
+                serial: terminal.terminalSN,
+                pieces,
+                pointMarchand: terminal.pointMarchand,
+                modele: Number(terminal.modele),
+                commentaire: terminal.etatTpe,
+            };
+        });
+
+        const serials = terminaux.map((t) => t.serial);
+
+        // 3. Toutes les écritures dans UNE transaction, en séquentiel
+        const operation = await prisma.$transaction(async (tx) => {
+
+            const miseEnReparationForm = await tx.forms.create({
+                data: {
+                    commentaire,
+                    type: "mise_en_reparation",
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                },
+            });
+
+            const miseEnReparation = await tx.mise_en_reparation.create({
+                data: {
+                    form_id: miseEnReparationForm.id,
+                    quantite: detailsListe.length,
+                    liste_sn: JSON.stringify(detailsListe),
+                },
+            });
+
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: miseEnReparationForm.id,
+                        type_formulaire: 'mise_en_reparation_tpe',
+                        role: 'demandeur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            /***********        GESTION DES TPE        ***********/
+
+            // Créer uniquement les parc_tpe manquants
+            await tx.parc_tpe.createMany({
+                data: terminaux.map((t) => ({
+                    serial_number: t.serial,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: A_REPARER_STATUT_ID,
+                    model_id: t.modele,
+                })),
+                skipDuplicates: true,
+            });
+
+            // Mettre TOUS les TPE (existants + nouveaux) au statut a_reparer
+            await tx.parc_tpe.updateMany({
+                where: { serial_number: { in: serials } },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: A_REPARER_STATUT_ID,
+                },
+            });
+
+            // Récupérer les ids
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serials } },
+                select: { id: true, serial_number: true },
+            });
+            const tpeBySerial = new Map(allTpes.map((tpe) => [tpe.serial_number, tpe]));
+
+            // Historique du changement de statut parc
+            await tx.history_tpe.createMany({
+                data: allTpes.map((tpe) => ({
+                    id_tpe: tpe.id,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    statut_id: A_REPARER_STATUT_ID,
+                    form_id: miseEnReparationForm.id,
+                })),
+            });
+
+            for (const t of terminaux) {
+                const tpe = tpeBySerial.get(t.serial);
+                if (!tpe) continue;
+
+                const tpeAreparer = await tx.tpe_a_reparer.create({
+                    data: {
+                        tpe_id: tpe.id,
+                        nom_marchand: t.pointMarchand,
+                        mise_en_reparation_id: miseEnReparation.id,
+                        etat: "defectueux",
+                        commentaire: t.commentaire,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                if (t.pieces.length) {
+                    await tx.pieces_a_reparer.createMany({
+                        data: t.pieces.map((p) => ({
+                            sn_id: tpeAreparer.id,
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+                }
+            }
+
+            return { tpe_traites: allTpes.length };
+        });
+
+        console.log(`Mise en réparation de ${detailsListe.length} TPE(s) effectuée avec succès par ${utilisateur.username}.`)
+        return res.status(200).json({
+            message: `Mise en réparation de ${detailsListe.length} TPE(s) effectuée avec succès par ${utilisateur.username}.`,
+            ...operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la mise en réparation :", error);
+        return res
+            .status(500)
+            .json({ message: "Erreur interne lors de la mise en réparation." });
+    }
+};
+
+// Fonction pour extraire les données excel pour la mise en réparation
+const extractMiseEnReparation = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        const pieces = await prisma.items.findMany({
+            where: {
+                type: 'PIECE',
+                is_deleted: false,
+            }
+        })
+        const piecesMap = new Map(pieces.map(p => [p.nom_piece.toUpperCase(), p.id_piece]));
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const pieceColumns = [];
+
+        Object.entries(headers).forEach(([header, colIndex]) => {
+            const pieceId = piecesMap.get(header);
+
+            if (pieceId) {
+                pieceColumns.push({
+                    colIndex,
+                    pieceId,
+                });
+            }
+        });
+
+        const requiredHeaders = [
+            "S/N",
+            "MODELE",
+        ];
+
+        for (const header of requiredHeaders) {
+            if (!headers[header]) {
+                console.log(`Colonne requise manquante : ${header}`)
+                return res.status(400).json({
+                    message: `Missing required column: ${header}`
+                });
+            }
+        }
+
+        const terminals = [];
+        const uniqueKeys = new Set();
+        let duplicateError = null;
+        let invalidSnRowError = null;
+        let invalidModelRowError = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const pointMarchand = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
+            const terminalSN = String(getCellValue(row.getCell(headers["S/N"])) || "").trim();
+            const model = String(getCellValue(row.getCell(headers["MODELE"])) || "").trim();
+            const etatTpe = String(getCellValue(row.getCell(headers["OBSERVATIONS"])) || "").trim();
+            const listePieceRec = [];
+            const listePieceDef = [];
+            for (const { colIndex, pieceId } of pieceColumns) {
+                const etat = String(
+                    getCellValue(row.getCell(colIndex)) || ""
+                ).trim().toUpperCase();
+
+                if (etat === "NOK" || etat === "nok") {
+                    listePieceDef.push(pieceId)
+                }
+            }
+
+            // Ignore les lignes vides ou inutiles
+            if (!terminalSN) {
+                return;
+            }
+            if (terminalSN && (terminalSN.length != 10 || !isOnlyDigits(terminalSN))) {
+                invalidSnRowError = {
+                    rowNumber,
+                    terminal: { terminalSN }
+                };
+                return;
+            }
+            if (terminalSN && !model) {
+                invalidModelRowError = {
+                    rowNumber,
+                    terminal: { terminalSN }
+                };
+                return;
+            }
+
+            const terminal = {
+                pointMarchand: pointMarchand ? pointMarchand : 'N/A',
+                terminalSN,
+                model,
+                etatTpe,
+                listePieceDef,
+            };
+
+            const key = `${terminal.terminalSN}`;
+            if (uniqueKeys.has(key)) {
+                duplicateError = {
+                    rowNumber,
+                    terminal,
+                };
+                return;
+            }
+            uniqueKeys.add(key);
+            terminals.push(terminal);
+
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon de SN trouvé à la ligne ${duplicateError.rowNumber} pour le marchand avec le SN ${duplicateError.terminal.terminalSN}`,
+            });
+        }
+
+        if (invalidSnRowError) {
+            return res.status(400).json({
+                message: `S/N invalide à la ligne ${invalidSnRowError.rowNumber} pour le TPE ${invalidSnRowError.terminal.terminalSN}`,
+            });
+        }
+
+        if (invalidModelRowError) {
+            return res.status(400).json({
+                message: `Modèle manquant à la ligne ${invalidModelRowError.rowNumber} pour le TPE ${invalidModelRowError.terminal.terminalSN}`,
+            });
+        }
+
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: terminals,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour télécharger le template servant à l'import des mise au rebut ou réparation par excel
+const downloadTemplateLiaisonTpePieces = async (req, res) => {
+    try {
+        const {
+            userId
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+            select: {
+                id_user: true,
+                username: true,
+            },
+        })
+
+        const pieces = await prisma.items.findMany({
+            where: {
+                type: 'PIECE',
+                is_deleted: false,
+            }
+        })
+        const piecesMap = new Map(pieces.map(p => [p.id_piece, p.nom_piece]));
+
+        const workbook = new ExcelJS.Workbook();
+
+        const piecesHeaders = pieces.map((item) => {
+            return item.nom_piece.toUpperCase()
+        })
+
+        const verificationSheet = workbook.addWorksheet('Liste Sn');
+        const verificationHeaders = [
+            "S/N",
+            "Modele",
+            "Statut",
+            ...piecesHeaders,
+        ];
+        const verificationHeaderRow = verificationSheet.addRow(verificationHeaders);
+        verificationHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=template_rebut.xlsx`
+        );
+        res.send(buffer);
+
+        console.log(`Template de mise au rebut téléchargé avec succès par ${utilisateur.username} ID ${utilisateur.id_user} !`);
+
+    } catch (error) {
+        console.error('Erreur downloadTemlateRebut:', error);
+        return res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
+// Fonction pour extraire les données excel pour la liaison pièces TPE
+const extractLiaisonTpePiecesData = async (req, res) => {
+    try {
+        const {
+            userId,
+        } = req.body
+
+        // Le fichier excel est récupéré ici
+        const file = req.file
+        // console.log("Fichier reçu : ", file)
+
+        if (!file) {
+            console.log("Aucun fichier reçu")
+            return res.status(400).json({ message: "Excel file is required" });
+        }
+
+        const pieces = await prisma.items.findMany({
+            where: {
+                type: 'PIECE',
+                is_deleted: false,
+            }
+        })
+        const piecesMap = new Map(pieces.map(p => [p.nom_piece.toUpperCase(), p.id_piece]));
+
+        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.worksheets[0];
+
+        if (!worksheet) {
+            console.log("Aucune feuille trouvée dans le fichier Excel")
+            return res.status(400).json({ message: "Invalid Excel file" });
+        }
+
+        // Récupération des en-têtes 
+        const headers = {};
+        worksheet.getRow(1).eachCell((cell, col) => {
+            headers[String(cell.value).trim().toUpperCase()] = col;
+        });
+
+        const pieceColumns = [];
+
+        Object.entries(headers).forEach(([header, colIndex]) => {
+            const pieceId = piecesMap.get(header);
+
+            if (pieceId) {
+                pieceColumns.push({
+                    colIndex,
+                    pieceId,
+                });
+            }
+        });
+
+        const requiredHeaders = [
+            "S/N",
+        ];
+
+        for (const header of requiredHeaders) {
+            if (!headers[header]) {
+                console.log(`Colonne requise manquante : ${header}`)
+                return res.status(400).json({
+                    message: `Missing required column: ${header}`
+                });
+            }
+        }
+
+        const terminals = [];
+        const uniqueKeys = new Set();
+        let duplicateError = null;
+        let invalidSnRowError = null;
+        let invalidModelRowError = null;
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+
+            const terminalSN = String(getCellValue(row.getCell(headers["S/N"])) || "").trim();
+            const modele = String(getCellValue(row.getCell(headers["MODELE"])) || "").trim();
+            const statut = String(getCellValue(row.getCell(headers["STATUT"])) || "").trim();
+            const listePieceRec = [];
+            const listePieceDef = [];
+            for (const { colIndex, pieceId } of pieceColumns) {
+                const etat = String(
+                    getCellValue(row.getCell(colIndex)) || ""
+                ).trim().toUpperCase();
+
+                if ((!etat ||etat === "1" || etat === "OK") && statut === "rebut") {
+                    listePieceRec.push(pieceId);
+                } else if (etat === "NOK" || etat === "0") {
+                    listePieceDef.push(pieceId)
+                }
+            }
+
+            // Ignore les lignes vides ou inutiles
+            if (!terminalSN) {
+                return;
+            }
+            if (terminalSN && (terminalSN.length != 10 || !isOnlyDigits(terminalSN))) {
+                invalidSnRowError = {
+                    rowNumber,
+                    terminal: { terminalSN }
+                };
+                return;
+            }
+            // if (terminalSN && !) {
+            //     invalidModelRowError = {
+            //         rowNumber,
+            //         terminal: { terminalSN }
+            //     };
+            //     return;
+            // }
+
+            const terminal = {
+                terminalSN,
+                modele,
+                statut,
+                listePieceRec,
+                listePieceDef,
+            };
+
+            const key = `${terminal.terminalSN}`;
+            if (uniqueKeys.has(key)) {
+                duplicateError = {
+                    rowNumber,
+                    terminal,
+                };
+                return;
+            }
+            uniqueKeys.add(key);
+            terminals.push(terminal);
+
+            // console.log("Données extraites ligne", rowNumber, marchand);
+        })
+
+        if (duplicateError) {
+            return res.status(400).json({
+                message: `Doublon de SN trouvé à la ligne ${duplicateError.rowNumber} pour le marchand avec le SN ${duplicateError.terminal.terminalSN}`,
+            });
+        }
+
+        if (invalidSnRowError) {
+            return res.status(400).json({
+                message: `S/N invalide à la ligne ${invalidSnRowError.rowNumber} pour le TPE ${invalidSnRowError.terminal.terminalSN}`,
+            });
+        }
+
+        if (invalidModelRowError) {
+            return res.status(400).json({
+                message: `Modèle manquant à la ligne ${invalidModelRowError.rowNumber} pour le TPE ${invalidModelRowError.terminal.terminalSN}`,
+            });
+        }
+
+        for (terminal of terminals) {
+            const serial_number = await prisma.parc_tpe.findUnique({
+                where: {
+                    serial_number: terminal.terminalSN
+                },
+                include: {
+                    statut_tpe: true
+                }
+            })
+            if (serial_number.statut_tpe.statut != terminal.statut) {
+                console.error(`Statut ${terminal.statut} invalide pour le S/N ${serial_number.serial_number} au statut ${serial_number.statut_tpe.statut}`)
+                return res.status(400).json({
+                    message: `Statut ${terminal.statut} invalide pour le S/N ${serial_number.serial_number} au statut ${serial_number.statut_tpe.statut}`,
+                });
+            }
+        }
+
+        console.log(`Extraction complète par utilisateur ${userId} !`)
+        return res.status(201).json({
+            message: "Extraction complète",
+            data: terminals,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'extraction du fichier Excel :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const liaisonTpePieces = async (req, res) => {
+    try {
+        // NOTE: on suppose ici que `id` (param de route) est l'id du decom concerné.
+        // C'est la seule source possible dans la fonction d'origine (decom.id n'était jamais défini).
+        const { userId, listeSn } = req.body;
+
+        const REBUT_STATUT_ID = 5;
+        const A_REPARER_STATUT_ID = 11;
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId, 10) },
+        });
+        if (!utilisateur) {
+            console.error("Utilisateur non enregistré !");
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        const listeVerified =
+            typeof listeSn === "string" ? JSON.parse(listeSn) : listeSn;
+        if (!Array.isArray(listeVerified) || listeVerified.length === 0) {
+            console.error("Liste de sn vide ou invalide.");
+            return res.status(400).json({ message: "Liste de sn vide ou invalide." });
+        }
+
+        const dateAction = new Date();
+
+        // Parse + garantie tableau (factorisé, utilisé partout)
+        const parseArray = (val) => {
+            const parsed = typeof val === "string" ? JSON.parse(val) : val;
+            return Array.isArray(parsed) ? parsed : [];
+        };
+
+        // Dédoublonnage par SN (dernière occurrence gagne)
+        const uniqueMap = new Map();
+        listeVerified.forEach((item) => uniqueMap.set(item.terminalSN, item));
+        const uniqueItems = [...uniqueMap.values()];
+
+        // Contrôle métier : une pièce ne peut être à la fois fonctionnelle ET défectueuse (rebut)
+        for (const item of uniqueItems) {
+            if (item.statut !== REBUT_STATUT_ID) continue;
+            const fonc = parseArray(item.pieces_recuperees);
+            const def = parseArray(item.pieces_defectueuses);
+            const duplicates = fonc.filter((pieceId) => def.includes(pieceId));
+            if (duplicates.length) {
+                console.error(
+                    `Le terminal ${item.terminalSN} présente des pièces à la fois fonctionnelles et défectueuses.`
+                );
+                return res.status(400).json({
+                    message: `Le terminal ${item.terminalSN} présente des pièces à la fois fonctionnelles et défectueuses.`,
+                });
+            }
+        }
+
+        const serials = uniqueItems.map((item) => item.terminalSN);
+
+        // Les SN existent déjà dans parc_tpe : on ne récupère que leurs ids.
+        // (Lecture hors transaction : les ids ne changent pas, ça garde la transaction courte.)
+        const tpes = await prisma.parc_tpe.findMany({
+            where: { serial_number: { in: serials } },
+            select: { id: true, serial_number: true },
+        });
+        const idBySerial = new Map(tpes.map((t) => [t.serial_number, t.id]));
+
+        // Sécurité : on refuse si un SN annoncé est introuvable au parc,
+        // plutôt que de le sauter silencieusement.
+        const missing = serials.filter((sn) => !idBySerial.has(sn));
+        if (missing.length) {
+            console.error(`Serial number(s) introuvable(s) dans le parc : ${missing.join(", ")}`);
+            return res.status(404).json({
+                message: `Serial number(s) introuvable(s) dans le parc : ${missing.join(", ")}`,
+            });
+        }
+
+        const rebutItems = uniqueItems.filter((i) => i.statut === REBUT_STATUT_ID);
+        const aReparerItems = uniqueItems.filter((i) => i.statut === A_REPARER_STATUT_ID);
+
+        // ---- Transaction (tout en séquentiel, pas de Promise.all) ----
+        const operation = await prisma.$transaction(async (tx) => {
+
+            /***********      REBUT     ************/
+            for (const item of rebutItems) {
+                const tpeId = idBySerial.get(item.terminalSN); // garanti présent (voir check missing)
+
+                const fonc = parseArray(item.pieces_recuperees);
+                const def = parseArray(item.pieces_defectueuses);
+                const pieces = [
+                    ...fonc.map((pieceId) => ({ piece_id: pieceId, etat: "fonctionnel" })),
+                    ...def.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" })),
+                ];
+
+                // create() (et non createMany) car on a besoin des ids générés
+                const session = await tx.sn_rebut.create({
+                    data: {
+                        sn_id: tpeId,
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                const snapshot = await tx.history_snapshot_piece_rebut.create({
+                    data: {
+                        rebut_id: session.id,
+                        created_by: utilisateur.id_user,
+                        created_at: dateAction,
+                    },
+                });
+
+                if (pieces.length) {
+                    await tx.pieces_rebut.createMany({
+                        data: pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            sn_id: tpeId,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+
+                    await tx.history_piece_rebut.createMany({
+                        data: pieces.map((p) => ({
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            snap_id: snapshot.id,
+                        })),
+                    });
+                }
+            }
+
+            /***********      A_REPARER     ************/
+            for (const item of aReparerItems) {
+                const tpeId = idBySerial.get(item.terminalSN); // garanti présent
+
+                const def = parseArray(item.pieces_defectueuses);
+                const pieces = def.map((pieceId) => ({ piece_id: pieceId, etat: "defectueux" }));
+
+                const tpeAreparer = await tx.tpe_a_reparer.create({
+                    data: {
+                        tpe_id: tpeId,
+                        etat: "defectueux",
+                        created_at: dateAction,
+                        created_by: utilisateur.id_user,
+                    },
+                });
+
+                if (pieces.length) {
+                    await tx.pieces_a_reparer.createMany({
+                        data: pieces.map((p) => ({
+                            sn_id: tpeAreparer.id,
+                            piece_id: p.piece_id,
+                            etat: p.etat,
+                            created_by: utilisateur.id_user,
+                            created_at: dateAction,
+                        })),
+                    });
+                }
+            }
+
+            return {
+                tpe_rebut: rebutItems.length,
+                tpe_a_reparer: aReparerItems.length,
+            };
+        }, {
+            timeout: 20000,
+        });
+
+        console.log(`Liaison pièces TPE effectuée avec succès par ${utilisateur.username}`);
+        return res.status(200).json({
+            message: "Liaison pièces TPE effectuée avec succès.",
+            ...operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la liaison des pièces TPE :", error);
+        return res
+            .status(500)
+            .json({ message: "Erreur interne lors de la liaison des pièces TPE." });
+    }
+};
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -3112,4 +4353,11 @@ module.exports = {
     reparerListeTpe,
     getAllLivraisonReparation,
     getOneLivraisonReparation,
+    receptionLivraisonReparation,
+    cloturerLivraisonReparation,
+    miseEnReparationTpe,
+    extractMiseEnReparation,
+    downloadTemplateLiaisonTpePieces,
+    extractLiaisonTpePiecesData,
+    liaisonTpePieces,
 }

@@ -207,5 +207,94 @@ export class Decom {
             throw error.response.data
         }
     }
+
+    async receptionLivraisonReparation(id, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/receptionLivraisonReparation/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async cloturerLivraisonReparation(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/cloturerLivraisonReparation/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async miseEnReparationTpe(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/miseEnReparationTpe`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async extractMiseEnReparation(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/extractMiseEnReparation`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async downloadTemplateLiaisonTpePieces(userId) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/downloadTemplateLiaisonTpePieces`,
+            {userId},
+            {
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Download failed" };
+        }
+    }
+
+    async extractLiaisonTpePiecesData(formData) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/extractLiaisonTpePiecesData`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async liaisonTpePieces(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/liaisonTpePieces`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
     
 }
