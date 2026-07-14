@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import ComponentCard from "../../common/ComponentCard.tsx";
 import Label from "../Label.tsx";
 import Input from "../input/InputField.tsx";
@@ -18,6 +18,9 @@ import { Demandes } from "../../../backend/demandes/Demandes.js";
 import { Dropdown } from "primereact/dropdown";
 
 import FileInput from "../input/FileInput.tsx"
+import { useDropzone } from "react-dropzone"
+
+import { Calendar } from "primereact/calendar";
 
 export default function DemandeInputs() {
 
@@ -145,6 +148,23 @@ export default function DemandeInputs() {
 
   const [selectedFiles, setSelectedFiles] = useState([])
 
+  const [parSn, setParSn] = useState(false)
+
+  const [selectedExcelFile, setSelectedExcelFile] = useState(null)
+
+  const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
+
+  const [listeSn, setListeSn] = useState([])
+
+  const [loadingExtract, setLoadingExtract] = useState(false)
+
+  const [isModalStatutsOpen, setIsModalStatutsOpen] = useState(false)
+
+  const [isReg, setIsReg] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(null)
+
+  const [errorValidation, setErrorValidation] = useState('')
+
   const isOnlyDigits = (str) => /^\d+$/.test(str);
 
   useEffect(() => {
@@ -162,7 +182,7 @@ export default function DemandeInputs() {
         const services_data = await userData.getAllServices()
         setServicesUsers(services_data)
         // setServicesPiece(services_data)
-        
+
         const users_data = await userData.getAllUsers()
         setUserList(users_data)
         const options_users = users_data.map((item) => ({
@@ -170,7 +190,7 @@ export default function DemandeInputs() {
           label: item.fullname,
         }))
         setOptionsUsers(options_users)
-        
+
         const stocks_data_all = await stockData.getAllStocks()
         const stocks_data = stocks_data_all.filter((item) => {
           return item.is_deleted == false
@@ -186,16 +206,16 @@ export default function DemandeInputs() {
             label: `${item.code_stock} - ${nomService}`
           })
         })
-        
+
         setOptionsStocks(options_stocks)
-        
+
         // const models_data = await stockData.getAllModels()
         // setModels(models_data)
-        
+
         const user = await userData.getOneUser(userId)
         console.log(user)
         setNomUser(user.fullname)
-        if(user.user_services.length > 1) {
+        if (user.user_services.length > 1) {
           const options_services = user.user_services.map((item) => ({
             value: item.services.id,
             label: item.services.nom_service.toUpperCase()
@@ -204,7 +224,7 @@ export default function DemandeInputs() {
         } else {
           setServiceUser(user.user_services[0].service_id)
         }
-        
+
       } catch (error) {
         console.log(error)
         setErrorForm('Une erreur est survenue lors de la génération du formulaire.')
@@ -214,6 +234,90 @@ export default function DemandeInputs() {
     }
     fetchData()
   }, [])
+
+  const onDrop = useCallback(async (acceptedFiles) => {
+    const updatedFiles = [...selectedFiles];
+
+    for (const file of acceptedFiles) {
+
+      // Handle ZIP files
+      if (file.type === "application/zip" || file.name.endsWith(".zip")) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+
+          const extractedFiles = await Promise.all(
+            Object.keys(zip.files).map(async (filename) => {
+              const zipEntry = zip.files[filename];
+
+              if (!zipEntry.dir) {
+                const blob = await zipEntry.async("blob");
+
+                return new File([blob], filename, {
+                  type: blob.type,
+                });
+              }
+              return null;
+            })
+          );
+
+          extractedFiles.forEach((extractedFile) => {
+            if (
+              extractedFile &&
+              !updatedFiles.find(
+                (f) =>
+                  f.name === extractedFile.name &&
+                  f.size === extractedFile.size
+              )
+            ) {
+              updatedFiles.push(extractedFile);
+            }
+          });
+
+        } catch (error) {
+          console.error("ZIP extraction error:", error);
+          Swal.fire({
+            title: "Attention",
+            text: "Erreur d'exctraction de fichiers !",
+            icon: "warining"
+          })
+        }
+      } else {
+        // Normal file
+        if (
+          !updatedFiles.find(
+            (f) => f.name === file.name && f.size === file.size
+          )
+        ) {
+          updatedFiles.push(file);
+        }
+      }
+    }
+
+    setSelectedFiles(updatedFiles);
+  }, [selectedFiles]);
+
+  const onDropExcel = useCallback(async (acceptedFiles) => {
+    setSelectedExcelFile(acceptedFiles[0])
+  }, [selectedExcelFile]);
+
+  const { getRootProps: getFilesRootProps,
+    getInputProps: getFilesInputProps,
+  } = useDropzone({
+    onDrop,
+    multiple: true,
+  });
+
+  const {
+    getRootProps: getExcelRootProps,
+    getInputProps: getExcelInputProps,
+  } = useDropzone({
+    onDrop: onDropExcel,
+    multiple: false,
+    accept: {
+      "application/vnd.ms-excel": [".xls"],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+    }
+  });
 
   const handleSelectServiceUser = (value) => {
     console.log("Selected value:", value);
@@ -396,16 +500,16 @@ export default function DemandeInputs() {
   };
 
   const checkValidate = () => {
+    if (!selectedPiece) {
+      setError("Vous devez choisir la pièce !")
+      return false
+    }
     if (!serviceUser) {
       setError("Vous devez choisir le service demandeur")
       return false
     }
     if (!motif) {
       setError("Vous devez précisier le motif !")
-      return false
-    }
-    if (!selectedPiece) {
-      setError("Vous devez choisir la pièce !")
       return false
     }
     if (!selectedServicePiece) {
@@ -439,27 +543,22 @@ export default function DemandeInputs() {
   }
 
   const handleValidate = async () => {
+    if (isReg && !selectedDate) {
+      setErrorValidation("Vous devez choisir une date en cas de régularisation !")
+      return
+    }
     setValidationModalOpen(false)
+    setErrorValidation('')
 
-    const typeDemande = parPiece ? 'Par pièce' : parCarton ? 'Par carton' : parLot ? 'Par lot' : ''
+    const typeDemande = parPiece ? 'Par pièce' : parCarton ? 'Par carton' : parLot ? 'Par lot' : parSn ? 'Par Sn' : ''
     const details = {
       selectedPiece,
       selectedModel,
       selectedServicePiece,
       typeDemande,
       quantite,
+      listeSn: JSON.stringify(listeSn),
     }
-    // const payload = {
-    //   detailsDemande: details,
-    //   userId,
-    //   quantite,
-    //   serviceUser,
-    //   selectedUser,
-    //   nomUser,
-    //   motif,
-    //   commentaire,
-    //   otherFields: fields,
-    // }
 
     const fd = new FormData();
 
@@ -471,7 +570,9 @@ export default function DemandeInputs() {
     fd.append('nomUser', nomUser)
     fd.append('motif', motif)
     fd.append('commentaire', commentaire)
-    fd.append('otherFields', JSON.stringify(fields) )
+    fd.append('otherFields', JSON.stringify(fields))
+    fd.append("dateDemande", selectedDate?.toISOString())
+    fd.append("isReg", isReg)
 
     selectedFiles.forEach((file) => {
       fd.append("files", file);
@@ -496,6 +597,79 @@ export default function DemandeInputs() {
       navigate('/toutes-les-demandes')
     } finally {
       setLoadingValidation(false)
+    }
+  }
+
+  const handleDownloadTemplate = async () => {
+    setLoadingDownloadTemplate(true)
+    try {
+      const response = await demandeData.downloadTemplateDemandeSn(userId);
+
+      const url = window.URL.createObjectURL(response.data);
+
+      const a = document.createElement("a");
+      a.href = url;
+
+      let fileName = "template_demande_sn";
+
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Download error:", error);
+      Swal.fire({
+        title: "Attention",
+        text: "Une erreur s'est produite lors du téléchargement !",
+        icon: "warning"
+      });
+    } finally {
+      setLoadingDownloadTemplate(false)
+    }
+  }
+
+  const handleExtractSn = async () => {
+    try {
+      setError('')
+      setListeSn([])
+
+      if (!selectedExcelFile) {
+        Swal.fire({
+          title: "Attention",
+          text: "Veuillez sélectionner un fichier Excel !",
+          icon: "warning"
+        })
+        return
+      }
+      setLoadingExtract(true)
+
+      const fd = new FormData()
+      fd.append('file', selectedExcelFile)
+      fd.append('userId', userId)
+
+      const response = await demandeData.extractSnFromDemande(fd)
+      const serials = response.data
+      console.log(serials)
+
+      setListeSn(serials)
+      setQuantite(serials.length)
+      Swal.fire({
+        title: "Succès",
+        text: `Données Excel extraites avec succès : ${serials.length} SN trouvés !`,
+        icon: "success"
+      })
+    } catch (error) {
+      console.error("Erreur lors de l'extraction des données Excel:", error);
+      Swal.fire({
+        title: "Attention",
+        text: error.message,
+        icon: "warning"
+      })
+    } finally {
+      setLoadingExtract(false)
     }
   }
 
@@ -578,7 +752,7 @@ export default function DemandeInputs() {
                           </>
                         )}
                       </div>
-                      {optionsServicesUsers && optionsServicesUsers.length > 0  ? (
+                      {optionsServicesUsers && optionsServicesUsers.length > 0 ? (
                         <>
                           <div>
                             <Label>Service Demandeur <span className="text-red-700">*</span></Label>
@@ -593,15 +767,6 @@ export default function DemandeInputs() {
                       ) : (
                         <></>
                       )}
-                      {/* <div>
-                        <Label>Demandeur <span className="text-red-700">*</span></Label>
-                        <Select
-                          options={optionsUsers}
-                          placeholder="Choisir une option"
-                          onChange={handleSelectUser}
-                          className="dark:bg-dark-900"
-                        />
-                      </div> */}
                       <div>
                         <Label>Motif <span className="text-red-700">*</span></Label>
                         <Input
@@ -624,36 +789,41 @@ export default function DemandeInputs() {
                       </div>
                       <div>
                         <Label>Importer des fichiers</Label>
-                        <FileInput className="curstom-class"
-                          onChange={handleFileChange}
-                          multiple
-                        />
-                        {selectedFiles.length > 0 ? (
-                          <div className="mt-3">
-                            {selectedFiles.map((selectedFile, index) => (
-                              <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
-                                <span>
-                                  <i className="pi pi-file-check"></i>
-                                </span>
-                                <span className=" text-gray-500" style={{ fontSize: '9px' }}>
-                                  {selectedFile.name}
-                                </span>
-                                <button onClick={() => handleDeleteFile(index)}>
-                                  <span className="text-error-600"><i className="pi pi-times"></i></span>
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <></>
-                        )}
+                        <div
+                          {...getFilesRootProps()}
+                          className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer"
+                        >
+                          <input {...getFilesInputProps()} />
+                          <p className="text-xs">Faites glisser les fichiers ici, ou cliquer pour les sélectionner.</p>
+                        </div>
+                        <div className="max-h-38 overflow-y-auto">
+                          {selectedFiles.length > 0 ? (
+                            <div className="mt-3">
+                              {selectedFiles.map((selectedFile, index) => (
+                                <div key={index} className="bg-gray-100 px-1 flex justify-between items-center rounded-sm my-1">
+                                  <span>
+                                    <i className="pi pi-file-check"></i>
+                                  </span>
+                                  <span className=" text-center" style={{ fontSize: '9px' }}>
+                                    {selectedFile.name}
+                                  </span>
+                                  <button onClick={() => handleDeleteFile(index)}>
+                                    <span className="text-error-600"><i className="pi pi-times"></i></span>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <></>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-5">
                       <div className="text-center">
                         <span className="text-sm font-semibold">Informations sur stock</span>
                       </div>
-                      <div>
+                      <div className="space-y-6">
                         <span>Faire une demande  : </span>
                         <div>
                           <div>
@@ -672,9 +842,9 @@ export default function DemandeInputs() {
                                     setParPiece(false)
                                     setParPieceCarton(false)
                                     setSelectedType(true)
+                                    setParSn(false)
                                   }
                                 }}
-                                readOnly
                                 label="Par Lot"
                               />
                             </div>
@@ -693,9 +863,9 @@ export default function DemandeInputs() {
                                     setParPiece(false)
                                     setParPieceCarton(false)
                                     setSelectedType(true)
+                                    setParSn(false)
                                   }
                                 }}
-                                readOnly
                                 label="Par carton"
                               />
                             </div>
@@ -714,32 +884,39 @@ export default function DemandeInputs() {
                                     setParPiece(true)
                                     setParPieceCarton(false)
                                     setSelectedType(true)
+                                    setParSn(false)
                                   }
                                 }}
-                                readOnly
                                 label="Par pièce"
+                              />
+                            </div>
+                            <div className="flex items-center gap-3 my-2">
+                              {/* Demande par SN */}
+                              <Checkbox
+                                checked={parSn}
+                                onChange={() => {
+                                  if (parSn) {
+                                    setParSn(false)
+                                    setSelectedType(false)
+                                  } else {
+                                    setParLot(false)
+                                    setParCarton(false)
+                                    setParCartonLot(false)
+                                    setParPiece(false)
+                                    setParPieceCarton(false)
+                                    setSelectedType(true)
+                                    setParSn(true)
+                                  }
+                                }}
+                                label="Par SN"
                               />
                             </div>
                           </div>
                         </div>
                         <div>
-                          {selectedType ? (
+                          {selectedType && !parSn ? (
                             <>
                               <div className="space-y-3 mt-3">
-                                {/* <div>
-                                  <Label>Quantité Initiale</Label>
-                                  <Input
-                                    type="number"
-                                    id="input"
-                                    value={stockInitial}
-                                    onChange={(e) => {
-                                      const value = Number(e.target.value)
-                                      if (value >= 0) {
-                                        setStockInitial(value)
-                                      }
-                                    }}
-                                  />
-                                </div> */}
                                 <div>
                                   <Label>Quantité demandée</Label>
                                   <Input
@@ -747,12 +924,105 @@ export default function DemandeInputs() {
                                     id="input"
                                     value={quantite}
                                     onChange={(e) => {
-                                      if(isOnlyDigits(e.target.value) || e.target.value === '') {
+                                      if (isOnlyDigits(e.target.value) || e.target.value === '') {
                                         const value = e.target.value
                                         setQuantite(value)
                                       }
                                     }}
                                   />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <></>
+                          )}
+                        </div>
+                        <div>
+                          {selectedType && parSn ? (
+                            <>
+                              <div className="space-y-5">
+                                <div>
+                                  {loadingDownloadTemplate ? (
+                                    <>
+                                      <div>
+                                        <ProgressSpinner style={{ width: '25px', height: '25px' }} strokeWidth="8" animationDuration=".5s" />
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <button className="space-x-1.5 text-cyan-500" onClick={handleDownloadTemplate}>
+                                        <span className="text-sm font-medium">
+                                          Télécharger template
+                                        </span>
+                                        <span className="">
+                                          <i className="pi pi-download"></i>
+                                        </span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  <div>
+                                    <Label>Fichier Excel</Label>
+                                    <div className="flex space-x-1.5">
+                                      <div
+                                        {...getExcelRootProps()}
+                                        className="border-2 border-dashed p-2 rounded-lg text-center cursor-pointer w-full"
+                                      >
+                                        <input {...getExcelInputProps()} />
+                                        <p className="text-xs font-light">Faites glisser le fichier ici, ou cliquer pour le sélectionner.</p>
+                                      </div>
+                                      {selectedExcelFile ? (
+                                        <>
+                                          {loadingExtract ? (
+                                            <>
+                                              <div>
+                                                <ProgressSpinner style={{ width: '10px', height: '10px' }} strokeWidth="8" animationDuration=".5s" />
+                                              </div>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <button
+                                                onClick={handleExtractSn}
+                                                className="border rounded-lg text-center p-1.5 hover:text-cyan-600 hover:border-cyan-500"
+                                              >
+                                                <span>
+                                                  <i className="pi pi-external-link"></i>
+                                                </span>
+                                              </button>
+                                            </>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <></>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    {listeSn.length > 0 ? (
+                                      <>
+                                        <div className="">
+                                          <div className="w-full flex items-center">
+                                            <button className="w-1/5 flex items-center justify-center bg-blue-400 p-1 rounded text-xs"
+                                              onClick={() => {
+                                                setIsModalStatutsOpen(true)
+                                              }}
+                                            >
+                                              Voir statuts
+                                            </button>
+                                          </div>
+                                          <div>
+                                            <span className="font-semibold text-xs text-green-700">
+                                              {listeSn.length} S/N.
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </>
@@ -877,13 +1147,51 @@ export default function DemandeInputs() {
           <div className="ms-5 text-center">
             <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
           </div>
-          <div className="space-y-1 ms-5">
+          <div className="space-y-5 ms-5">
             <div>
-              <span>Demande : {parPiece ? 'par pièce' : parCarton ? 'par carton' : parLot ? 'par lot' : '?'}</span>
+              <span>Demande : {parPiece ? 'par pièce' : parCarton ? 'par carton' : parLot ? 'par lot' : parSn ? 'par Sn' : '?'}</span>
             </div>
             <div>
               <span>Quantité demandée : {quantite}</span>
             </div>
+            <div>
+              <div className="flex items-center gap-3 my-2">
+                <Checkbox
+                  checked={isReg}
+                  onChange={(e) => {
+                    if (isReg) {
+                      setIsReg(false)
+                    } else {
+                      setIsReg(true)
+                    }
+                  }}
+                  label="Régularisation"
+                />
+              </div>
+            </div>
+            {isReg ? (
+              <>
+                <div>
+                  <Label>Date <span className="text-red-700">*</span></Label>
+                  <Calendar
+                    value={selectedDate}
+                    locale="fr"
+                    onChange={(e) => setSelectedDate(e.value)}
+                    dateFormat="dd/mm/yy"
+                    placeholder="dd/mm/yyyy"
+                    maxDate={new Date()}
+                    className="w-full"
+                  />
+                </div>
+              </>
+            ) : (
+              <></>
+            )}
+          </div>
+          <div>
+            <span className="text-error-600 font-medium flex items-center justify-center text-sm p-1 mt-4">
+              {errorValidation}
+            </span>
           </div>
           <div className='w-full mt-6 flex justify-center items-center'>
             <button
@@ -891,6 +1199,42 @@ export default function DemandeInputs() {
               className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
               Valider
             </button>
+          </div>
+        </div>
+      </Modal>
+      <Modal isOpen={isModalStatutsOpen} onClose={() => setIsModalStatutsOpen(false)} className="p-4 max-w-md">
+        <div className="space-y-6 pb-2">
+          <div className="w-full text-center">
+            <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Statuts</span>
+          </div>
+          <div>
+            <div className="space-y-2 flex flex-col justify-center items-center w-full">
+              <div className="text-md font-semibold text-center">
+                <span>S/N extraits</span>
+              </div>
+              <div className="h-80 overflow-y-auto w-full">
+                <table className="border w-full">
+                  <tbody>
+                    <tr className="border-2 border-black">
+                      <th>Marchand</th>
+                      <th>Serial Number</th>
+                      <th>Statut</th>
+                    </tr>
+                    {listeSn.map((item) => {
+                      return (
+                        <>
+                          <tr className="border border-black">
+                            <th className="text-sm font-normal">{item.marchand}</th>
+                            <th className="text-sm font-normal">{item.sn}</th>
+                            <th className="text-sm font-normal">{item.statut}</th>
+                          </tr>
+                        </>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </Modal>

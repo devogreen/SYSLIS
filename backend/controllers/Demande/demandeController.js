@@ -10,7 +10,7 @@ const { get } = require("http");
 const { urlToHttpOptions } = require("url");
 const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
-
+const ExcelJS = require("exceljs");
 
 // Fonction de format de date pour les fiches PDF. La date va apparaître avec l'heure.
 const formatDate = (isoDate) => {
@@ -37,376 +37,6 @@ if (test_env) {
   GENERAL_URL = localUrl
 }
 
-// Faire une demande
-// DEMANDE CHARGEURS POUR TPE SANS RI SUPPORT -> DT -> ORNELLA
-// DEMANDE CHARGEUR ORNELLA -> DT
-// DEMANDE PIECE DETACHEES ORNELLA -> DT
-// DEMANDE TPE ORNELLA -> DT
-
-
-// const faireDemande = async (req, res) => {
-//   try {
-//     const {
-//       nomDemandeur,
-//       commentaire,
-//       selectedStock,
-//       quantite_demande,
-//       nomenclature,
-//       detailsDemande,
-//       detailsDemandeur,
-//       userId,
-//       itemId,
-//       idDemandeur,
-//       motif,
-//       serviceDemandeur,
-//       champsAutre,
-//     } = req.body;
-
-//     const details = typeof detailsDemande === "string"
-//       ? JSON.parse(detailsDemande)
-//       : detailsDemande;
-
-//     const autres = typeof champsAutre === "string"
-//       ? JSON.parse(champsAutre)
-//       : champsAutre
-
-//     const piece = await prisma.items.findUnique({
-//       where: {
-//         id_piece: parseInt(itemId)
-//       }
-//     })
-
-//     if (!piece) {
-//       console.log("Erreur serveur 404: pièce introuvable ! ")
-//       return res.status(404).json({ message: "Pièce introuvable !" })
-//     }
-
-//     const stock = await prisma.stocks.findUnique({
-//       where: {
-//         id: parseInt(selectedStock)
-//       }
-//     })
-
-//     if (!stock) {
-//       console.log("Erreur serveur 404: stock introuvable ! ")
-//       return res.status(404).json({ message: "Stock introuvable !" })
-//     }
-
-//     let utilisateur = null;
-//     utilisateur = await prisma.users.findUnique({
-//       where: {
-//         id_user: parseInt(userId)
-//       }
-//     });
-
-//     if (!utilisateur) {
-//       console.log("Erreur serveur 404: utilisateur introuvable ! ")
-//       return res.status(404).json({ message: "Utilisateur non trouvé" });
-//     }
-
-//     const nouvelleDemande = await prisma.demandes.create({
-//       data: {
-//         nom_demandeur: nomDemandeur,
-//         date_demande: new Date(),
-//         commentaire,
-//         qte_total_demande: quantite_demande,
-//         nomenclature,
-//         details_demande: JSON.stringify(detailsDemande),
-//         details_demandeur: JSON.stringify(detailsDemandeur),
-//         statut_demande: 'en_cours',
-//         user_id: parseInt(userId),
-//         stock_id: parseInt(selectedStock),
-//         item_id: parseInt(itemId),
-//         type_demande: parseInt(details.typeMouvement),
-//         id_demandeur: parseInt(idDemandeur),
-//         motif_demande: motif,
-//         service_demandeur: parseInt(serviceDemandeur),
-//         champs_autre: JSON.stringify(autres)
-//       }
-//     });
-
-
-//     /************************** GESTION DES MAILS ********************************/
-//     const service = await prisma.services.findUnique({
-//       where: {
-//         id: parseInt(serviceDemandeur)
-//       }
-//     })
-
-//     const nomService = service.nom_service.toUpperCase()
-
-//     const userService = await prisma.user_services.findMany({
-//       where: {
-//         service_id: parseInt(serviceDemandeur)
-//       },
-//       include: {
-//         users: true
-//       }
-//     })
-
-//     const userRole = await prisma.user_roles.findMany({
-//       where: {
-//         role_id: 4,
-//       },
-//       include: {
-//         users: true
-//       }
-//     })
-//     const mouvement = await prisma.type_mouvement_stock.findUnique({
-//       where: {
-//         id: details.typeMouvement
-//       }
-//     })
-
-//     const service_users = userService.map(us => us.users)
-//     const validateurs = userRole.map(us => us.users)
-
-//     let nomPiece = piece.nom_piece.toUpperCase()
-
-//     let quantiteDemande = quantite_demande;
-
-//     let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-//     const url = GENERAL_URL
-//     let demandeLink = `${url}/demande-details/${nouvelleDemande.id}`;
-
-//     const sendMail = require("../../utils/emailSender");
-
-//     if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
-//       const subject = `NOUVELLE DEMANDE POUR ${motif}`;
-//       let html = `
-//         <p>Bonjour,</p>
-//         <p>Une nouvelle demande a été enregistrée.</p>
-//         <ul>
-//           <li><strong>Demande de :</strong> ${nomPiece}</li>
-//           <li><strong>${mouvement.titre}</strong></li>
-//           <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
-//         </ul>
-//         <ul>
-//           <li><strong>Service demandeur:</strong> ${nomService}</li>
-//           <li><strong>Nom demandeur:</strong> ${nomDemandeur}</li>
-//         </ul>
-//         <br>
-//         <p>Commentaire : ${commentaire_mail}<p>
-//         <br>
-//         <p>Retrouvez la demande à ce lien : 
-//           <span>
-//           <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-//             Cliquez ici !
-//           </a>
-//           </span>
-//         </p>
-//         <br><br>
-//         <p>Green - Pay vous remercie.</p>
-//         `;
-//       for (const service_user of service_users) {
-//         await sendMail({
-//           to: service_user.email,
-//           subject,
-//           html,
-//         });
-//       }
-//       for (const validateur of validateurs) {
-//         await sendMail({
-//           to: validateur.email,
-//           subject,
-//           html,
-//         });
-//       }
-//     }
-
-//     console.log("Succès ! ")
-//     res.status(201).json({
-//       message: "Demande enregistrée avec succès",
-//       demandes: nouvelleDemande
-//     });
-
-//   } catch (error) {
-//     console.log("Erreur serveur: ",error)
-//     console.error("Erreur lors de la demande :", error);
-//     res.status(500).json({ message: "Erreur interne", error });
-//   }
-// };
-
-// const faireDemande = async (req, res) => {
-//   try {
-//     const {
-//       detailsDemande,
-//       userId,
-//       quantite,
-//       serviceUser,
-//       selectedUser,
-//       nomUser,
-//       motif,
-//       commentaire,
-//       otherFields,
-//     } = req.body;
-
-//     const details = typeof detailsDemande === "string"
-//       ? JSON.parse(detailsDemande)
-//       : detailsDemande;
-
-//     const autres = typeof otherFields === "string"
-//       ? JSON.parse(otherFields)
-//       : otherFields
-
-//     const piece = await prisma.items.findUnique({
-//       where: {
-//         id_piece: parseInt(details.selectedPiece)
-//       }
-//     })
-
-//     if (!piece) {
-//       console.log("Erreur serveur 404: pièce introuvable ! ")
-//       return res.status(404).json({ message: "Pièce introuvable !" })
-//     }
-
-//     // const stock = await prisma.stocks.findUnique({
-//     //   where: {
-//     //     id: parseInt(selectedStock)
-//     //   }
-//     // })
-
-//     // if (!stock) {
-//     //   console.log("Erreur serveur 404: stock introuvable ! ")
-//     //   return res.status(404).json({ message: "Stock introuvable !" })
-//     // }
-
-//     let utilisateur = null;
-//     utilisateur = await prisma.users.findUnique({
-//       where: {
-//         id_user: parseInt(userId)
-//       }
-//     });
-
-//     if (!utilisateur) {
-//       console.log("Erreur serveur 404: utilisateur introuvable ! ")
-//       return res.status(404).json({ message: "Utilisateur non trouvé" });
-//     }
-
-//     const nouvelleDemande = await prisma.demandes.create({
-//       data: {
-//         nom_demandeur: nomUser,
-//         date_demande: new Date(),
-//         commentaire,
-//         qte_total_demande: parseInt(quantite),
-//         details_demande: JSON.stringify(detailsDemande),
-//         // details_demandeur: JSON.stringify(detailsDemandeur),
-//         statut_demande: 'en_cours',
-//         user_id: parseInt(userId),
-//         // stock_id: parseInt(selectedStock),
-//         item_id: parseInt(details.selectedPiece),
-//         // type_demande: parseInt(details.typeMouvement),
-//         id_demandeur: parseInt(selectedUser),
-//         motif_demande: motif,
-//         service_demandeur: parseInt(serviceUser),
-//         champs_autre: JSON.stringify(autres)
-//       }
-//     });
-
-
-//     /************************** GESTION DES MAILS ********************************/
-//     const service = await prisma.services.findUnique({
-//       where: {
-//         id: parseInt(serviceUser)
-//       }
-//     })
-
-//     const nomService = service.nom_service.toUpperCase()
-
-//     const userService = await prisma.user_services.findMany({
-//       where: {
-//         service_id: parseInt(serviceUser)
-//       },
-//       include: {
-//         users: true
-//       }
-//     })
-
-//     const userRole = await prisma.user_roles.findMany({
-//       where: {
-//         role_id: 4,
-//       },
-//       include: {
-//         users: true
-//       }
-//     })
-//     // const mouvement = await prisma.type_mouvement_stock.findUnique({
-//     //   where: {
-//     //     id: details.typeMouvement
-//     //   }
-//     // })
-
-//     const service_users = userService.map(us => us.users)
-//     const validateurs = userRole.map(us => us.users)
-
-//     let nomPiece = piece.nom_piece.toUpperCase()
-
-//     let quantiteDemande = quantite;
-
-//     let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-//     const url = GENERAL_URL
-//     let demandeLink = `${url}/demande-details/${nouvelleDemande.id}`;
-
-//     const sendMail = require("../../utils/emailSender");
-
-//     if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
-//       const subject = `MOUVEMENT DE STOCK DE ${nomPiece}`;
-//       let html = `
-//         <p>Bonjour,</p>
-//         <p>Une nouvelle demande a été enregistrée.</p>
-//         <ul>
-//           <li><strong>Demande de :</strong> ${nomPiece}</li>
-//           <li><strong>${details.typeDemande}</strong></li>
-//           <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
-//         </ul>
-//         <ul>
-//           <li><strong>Service demandeur:</strong> ${nomService}</li>
-//           <li><strong>Nom demandeur:</strong> ${nomUser}</li>
-//         </ul>
-//         <br>
-//         <p>Commentaire : ${commentaire_mail}<p>
-//         <br>
-//         <p>Retrouvez la demande à ce lien : 
-//           <span>
-//           <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-//             Cliquez ici !
-//           </a>
-//           </span>
-//         </p>
-//         <br><br>
-//         <p>Green - Pay vous remercie.</p>
-//         `;
-//       for (const service_user of service_users) {
-//         await sendMail({
-//           to: service_user.email,
-//           subject,
-//           html,
-//         });
-//       }
-//       for (const validateur of validateurs) {
-//         await sendMail({
-//           to: validateur.email,
-//           subject,
-//           html,
-//         });
-//       }
-//     }
-
-//     console.log("Succès ! ")
-//     res.status(201).json({
-//       message: "Demande enregistrée avec succès",
-//       demandes: nouvelleDemande
-//     });
-
-//   } catch (error) {
-//     console.log("Erreur serveur: ", error)
-//     console.error("Erreur lors de la demande :", error);
-//     res.status(500).json({ message: "Erreur interne", error });
-//   }
-// };
-
 const faireDemande = async (req, res) => {
   try {
     const {
@@ -419,6 +49,8 @@ const faireDemande = async (req, res) => {
       motif,
       commentaire,
       otherFields,
+      isReg,
+      dateDemande,
     } = req.body;
 
     const details = typeof detailsDemande === "string"
@@ -442,8 +74,7 @@ const faireDemande = async (req, res) => {
       return res.status(404).json({ message: "Pièce introuvable !" })
     }
 
-    let utilisateur = null;
-    utilisateur = await prisma.users.findUnique({
+    const utilisateur = await prisma.users.findUnique({
       where: {
         id_user: parseInt(userId)
       }
@@ -465,7 +96,12 @@ const faireDemande = async (req, res) => {
       }))
       : [];
 
-    const dateAction = new Date()
+    const reg = isReg == "true" ? true : false
+    let dateAction = new Date()
+    const dateVer = new Date(dateDemande)
+    if (!isNaN(dateVer.valueOf())) {
+      dateAction = new Date(dateDemande)
+    }
 
     const nouvelleDemande = await prisma.$transaction(async (tx) => {
 
@@ -477,6 +113,7 @@ const faireDemande = async (req, res) => {
           last_modified_at: dateAction,
           nom_user: utilisateur.fullname,
           commentaire,
+          is_reg: reg,
         }
       })
       const demande = await tx.demandes.create({
@@ -496,6 +133,7 @@ const faireDemande = async (req, res) => {
           form_id: demandeForm.id,
         }
       });
+
       if (files_content.length > 0) {
         await tx.fichiers.createMany({
           data: files_content.map(fichier => ({
@@ -522,53 +160,49 @@ const faireDemande = async (req, res) => {
 
     /************************** GESTION DES MAILS ********************************/
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(serviceUser)
-      }
-    })
+    try {
+      const service = await prisma.services.findUnique({
+        where: {
+          id: parseInt(serviceUser)
+        }
+      })
 
-    const nomService = service.nom_service.toUpperCase()
+      const nomService = service.nom_service.toUpperCase()
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(serviceUser)
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: {
+          service_id: parseInt(serviceUser)
+        },
+        include: {
+          users: true
+        }
+      })
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 4,
-      },
-      include: {
-        users: true
-      }
-    })
-    // const mouvement = await prisma.type_mouvement_stock.findUnique({
-    //   where: {
-    //     id: details.typeMouvement
-    //   }
-    // })
+      const userRole = await prisma.user_roles.findMany({
+        where: {
+          role_id: 4,
+        },
+        include: {
+          users: true
+        }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const validateurs = userRole.map(us => us.users)
+      const service_users = userService.map(us => us.users)
+      const validateurs = userRole.map(us => us.users)
 
-    let nomPiece = piece.nom_piece.toUpperCase()
+      let nomPiece = piece.nom_piece.toUpperCase()
 
-    let quantiteDemande = quantite;
+      let quantiteDemande = quantite;
 
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${nouvelleDemande.demande.id}`;
+      const url = GENERAL_URL
+      let demandeLink = `${url}/demande-details/${nouvelleDemande.demande.id}`;
 
-    const sendMail = require("../../utils/emailSender");
+      const sendMail = require("../../utils/emailSender");
 
-    const subject = `MOUVEMENT DE STOCK DE ${nomPiece}`;
-    let html = `
+      const subject = `SYSLIS - MOUVEMENT DE STOCK DE ${nomPiece}`;
+      let html = `
       <p>Bonjour,</p>
       <p>Une nouvelle demande a été enregistrée.</p>
       <ul>
@@ -593,29 +227,24 @@ const faireDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
+
+      const destinataires = [...validateurs, ...services_users];
+      for (const destinataire of destinataires) {
+        if (!destinataire?.email) continue;
         await sendMail({
-          to: service_user.email,
+          to: destinataire.email,
           subject,
           html,
         });
       }
+    } catch (mailError) {
+      // Log but do not fail the request — the repair/delivery already succeeded.
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
-    if ((validateurs && validateurs.length > 0)) {
-      for (const validateur of validateurs) {
-        await sendMail({
-          to: validateur.email,
-          subject,
-          html,
-        });
-      }
-    }
-
-    console.log("Succès ! ")
+    console.log(`Demande enregistrée avec succès par ${utilisateur.username}`)
     res.status(201).json({
-      message: "Demande enregistrée avec succès",
+      message: `Demande enregistrée avec succès par ${utilisateur.username}`,
       data: nouvelleDemande
     });
 
@@ -5074,6 +4703,203 @@ const regReceptionDemande = async (req, res) => {
   }
 }
 
+// Fonction pour télécharger le fichier template pour les demandes de stock par SN
+const downloadTemplateDemandeSn = async (req, res) => {
+  try {
+    const {
+      userId
+    } = req.body
+
+    const utilisateur = await prisma.users.findUnique({
+      where: {
+        id_user: parseInt(userId),
+      },
+      select: {
+        id_user: true,
+        username: true,
+      },
+    })
+
+    const workbook = new ExcelJS.Workbook();
+
+    const serialNumberSheet = workbook.addWorksheet('Liste rebut');
+    const serialNumberHeaders = [
+      "Point Marchand",
+      "S/N",
+    ];
+    const serialNumberHeaderRow = serialNumberSheet.addRow(serialNumberHeaders);
+    serialNumberHeaderRow.eachCell((cell) => {
+      cell.font = { bold: true };
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=template_demande_sn.xlsx`
+    );
+    res.send(buffer);
+
+    console.log(`Template de demande par SN téléchargé avec succès par ${utilisateur.username} ID ${utilisateur.id_user} !`);
+
+  } catch (error) {
+    console.error('Erreur downloadTemplateDemandeSn:', error);
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
+}
+
+function getCellValue(cell) {
+  if (!cell || cell.value == null) return "";
+
+  // Gestion du rich text
+  if (typeof cell.value === "object" && cell.value.richText) {
+    return cell.value.richText.map(t => t.text).join("").trim();
+  }
+
+  // Gestion des formules Excel
+  if (typeof cell.value === "object" && cell.value.formula) {
+    return cell.value.result ?? "";
+  }
+
+  return String(cell.value).trim();
+}
+const isOnlyDigits = (str) => /^\d+$/.test(str);
+
+const extractSnFromDemande = async (req, res) => {
+  try {
+    const {
+      userId,
+    } = req.body
+
+    // Le fichier excel est récupéré ici
+    const file = req.file
+    // console.log("Fichier reçu : ", file)
+
+    if (!file) {
+      console.log("Aucun fichier reçu")
+      return res.status(400).json({ message: "Excel file is required" });
+    }
+
+    // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(req.file.path);
+    const worksheet = workbook.worksheets[0];
+
+    if (!worksheet) {
+      console.log("Aucune feuille trouvée dans le fichier Excel")
+      return res.status(400).json({ message: "Invalid Excel file" });
+    }
+
+    // Récupération des en-têtes 
+    const headers = {};
+    worksheet.getRow(1).eachCell((cell, col) => {
+      headers[String(cell.value).trim().toUpperCase()] = col;
+    });
+
+    const requireHeader = "S/N"
+
+    if (!headers[requireHeader]) {
+      console.log(`Colonne requise manquante : ${requireHeader}`)
+      return res.status(400).json({
+        message: `Missing required column: ${requireHeader}`
+      });
+    }
+
+    const serials = [];
+    const snSet = new Set()
+    let duplicateError = null;
+    let formatError = null;
+    let statutError = null;
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+
+      const sn = String(getCellValue(row.getCell(headers["S/N"])) || "").trim();
+      const marchand = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
+      if (!sn) return;
+
+      if (snSet.has(sn)) {
+        duplicateError = {
+          rowNumber,
+          sn,
+        };
+        return;
+      }
+      if (sn && (sn.length != 10 || !isOnlyDigits(sn))) {
+        formatError = {
+          rowNumber,
+          sn,
+        };
+        return;
+      }
+
+      const terminal = {
+        sn,
+        marchand,
+      }
+
+      snSet.add(terminal)
+      // console.log("Données extraites ligne", rowNumber, marchand);
+    })
+
+    if (formatError) {
+      return res.status(400).json({
+        message: `SN invalide à la ligne ${formatError.rowNumber} pour le SN ${formatError.sn}`,
+      });
+    }
+    if (duplicateError) {
+      return res.status(400).json({
+        message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le SN ${duplicateError.sn}`,
+      });
+    }
+
+    let statut = 'non enregistré'
+    const listeSn = [...snSet]
+    for (let terminal of listeSn) {
+      const serial_number = await prisma.parc_tpe.findUnique({
+        where: {
+          serial_number: terminal.sn
+        },
+        include: {
+          statut_tpe: true
+        }
+      })
+
+      if (serial_number) {
+        statut = serial_number.statut_tpe.statut
+      }
+
+      const element = {
+        sn: terminal.sn,
+        statut,
+        marchand: terminal.marchand,
+      }
+      serials.push(element)
+    }
+    // const serialList = [...serials]
+    // console.log(serials)
+    console.log(`Extraction complète par utilisateur ${userId} !`)
+    return res.status(201).json({
+      message: "Extraction complète",
+      data: serials,
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'extraction du fichier Excel :", error);
+    return res.status(500).json({ message: "Erreur interne", error });
+  }
+}
+
 module.exports = {
   faireDemande,
   getAllDemandes,
@@ -5094,4 +4920,6 @@ module.exports = {
   regLivraisonDemande,
   regReceptionDemande,
   livraisonPiece,
+  downloadTemplateDemandeSn,
+  extractSnFromDemande,
 }

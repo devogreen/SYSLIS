@@ -1664,7 +1664,6 @@ export default function RebutInputs() {
                     </div>
                 </div>
             </Modal>
-
         </>
     )
 }

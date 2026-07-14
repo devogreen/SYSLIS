@@ -81,7 +81,8 @@ export class Demandes {
       const response = await axios.put(`${urlBase}/api/demandes/updateDemande/${id}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
-        }}
+        }
+      }
       )
       return response.data;
     } catch (error) {
@@ -203,5 +204,35 @@ export class Demandes {
       throw error.response.data;
     }
   }
+
+  async downloadTemplateDemandeSn(userId) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/downloadTemplateDemandeSn`,
+        { userId },
+        {
+          responseType: "blob",
+        });
+      return response;
+    } catch (error) {
+      throw error.response?.data || { message: "Download failed" };
+    }
+  }
+
+  async extractSnFromDemande(formData) {
+    try {
+      const response = await axios.post(`${urlBase}/api/demandes/extractSnFromDemande`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+      return {
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      throw error.response.data;
+    }
+  }
+
 }
 

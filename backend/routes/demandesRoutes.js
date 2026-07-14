@@ -2,13 +2,14 @@ const express = require("express")
 const router = express.Router();
 const upload = require("../middlewares/uploads");
 const uploadAll = require("../middlewares/uploadAll")
+const uploadExcel = require("../middlewares/uploadExcel");
 // const multer = require("multer")
 // const upload = multer({ storage: multer.memoryStorage() });
 const { faireDemande, getAllDemandes, getOneDemande, livraisonDemande, returnDemande,
     cancelDemande, updateDemande, generateDemandePDF, receivePiece, validateDemande,
     getAllDemandeFiles, downloadFile, getDemandesEnAttente, getDemandesValideesNonLivrees,
     regularisationDemande, regValidateDemande, regLivraisonDemande, regReceptionDemande,
-    livraisonPiece,
+    livraisonPiece, downloadTemplateDemandeSn, extractSnFromDemande,
 } = require("../controllers/Demande/demandeController")
 
 router.post('/faireDemande', uploadAll.fields([
@@ -44,5 +45,7 @@ router.post('/regReceptionDemande', uploadAll.fields([
     { name: 'signature'},
 ]), regReceptionDemande);
 router.post('/livraisonPiece', livraisonPiece);
+router.post('/downloadTemplateDemandeSn', downloadTemplateDemandeSn);
+router.post('/extractSnFromDemande', uploadExcel.single('file'), extractSnFromDemande);
 
 module.exports = router

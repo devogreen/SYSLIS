@@ -2699,7 +2699,6 @@ const normalize = (value) => {
     return String(value).trim();
 };
 
-
 const extractSnReparation = async (req, res) => {
     try {
         const {
