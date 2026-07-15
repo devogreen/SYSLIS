@@ -219,9 +219,9 @@ export class DemandeQr {
         }
     }
 
-    async downloadTemplateQr() {
+    async downloadTemplateQr(userId) {
         try {
-            const response = await axios.get(`${urlBase}/api/demandeQr/downloadTemplateQr`, {
+            const response = await axios.post(`${urlBase}/api/demandeQr/downloadTemplateQr`, { userId }, {
                 responseType: "blob",
             })
             return response;

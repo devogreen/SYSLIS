@@ -115,7 +115,7 @@ export default function DemandeQrInputs() {
     const [loadingDownloadTemplate, setLoadingDownloadTemplate] = useState(false)
 
     const [selectedTypes, setSelectedTypes] = useState([])
-    
+
 
     useEffect(() => {
         const fetchData = async () => {
@@ -127,7 +127,7 @@ export default function DemandeQrInputs() {
                 const uniqueMerchants = Array.from(
                     new Map(merchantList.map(item => [item.SERIAL_NUMBER, item])).values()
                 );
-                console.log(uniqueMerchants)
+                // console.log(uniqueMerchants)
 
                 const actifMerchants = uniqueMerchants.filter((item) => item.ETAT_ACTUEL == "Actif")
                 // console.log(('unique', uniqueMerchants.length))
@@ -147,7 +147,7 @@ export default function DemandeQrInputs() {
                 }, {})
                 const countPm = Object.values(countByPointMarchand)
                 setPointsMarchands(countPm)
-                // console.log(countPm)
+                console.log('Point marchand : ', countPm)
                 const optionsPm = countPm.map((item) => ({
                     label: item.POINT_MARCHAND,
                     value: item.POINT_MARCHAND
@@ -174,7 +174,7 @@ export default function DemandeQrInputs() {
                     return acc
                 }, {})
                 // 4️⃣ Convert object to desired array structure
-                console.log(groupedChaine)
+                console.log('chaine : ', groupedChaine)
                 const listeChaine = Object.entries(groupedChaine).map(
                     ([GROUPE, points]) => ({
                         GROUPE,
@@ -186,7 +186,7 @@ export default function DemandeQrInputs() {
                         )
                     })
                 )
-                setChaineGroup(listeChaine)
+                // setChaineGroup(listeChaine)
                 // console.log(listeChaine)
                 const optionsC = listeChaine.map((item) => ({
                     label: item.GROUPE,
@@ -198,6 +198,7 @@ export default function DemandeQrInputs() {
                 const qrTypes = allPaiementType.filter((item) => {
                     return item.qr_code == true && item.nom != "Autre"
                 })
+                console.log('Type qr : ', qrTypes)
                 setListeQr(qrTypes)
                 const optionsQr = qrTypes.map((item) => ({
                     label: item.nom,
@@ -357,28 +358,56 @@ export default function DemandeQrInputs() {
 
             const response = await demandeData.extractMarchandsQr(fd)
             const marchands = response.data
-            const listeLivraisonData = marchands.map((item, index) => {
-                const typeQr = listeQr.find((qr) => qr.nom == item.typeQr)
-                const format = listeFormats.find((format) => format.format == item.format)
-                return ({
-                    typeQrId: typeQr ? typeQr.id : 4,
-                    typeQr: item.typeQr,
-                    formatId: format ? format.id : null,
-                    format: item.format,
-                    chaine: item.chaine,
-                    pointMarchand: item.marchand,
-                    quantiteTerminal: item.nbreTpe,
-                    quantiteQr: item.total,
-                    nbreCopie: item.nbreCopie,
+            let marchandsError = []
+            const listeLivraisonData = marchands.map((terminal) => {
+                const marchand = pointsMarchands.find((m) => { return m.POINT_MARCHAND === terminal.marchand })
+                if (!marchand) {
+                    marchandsError.push(terminal)
+                    return null;
+                } else {
+                    const typeQr = listeQr.find((qr) => qr.abrv == terminal.typeQr)
+                    const format = listeFormats.find((format) => format.format == terminal.format)
+                    return ({
+                        typeQrId: typeQr ? typeQr.id : 4,
+                        typeQr: terminal.typeQr,
+                        formatId: format ? format.id : null,
+                        format: terminal.format,
+                        chaine: marchand.GROUPE,
+                        pointMarchand: terminal.marchand,
+                        quantiteTerminal: marchand.count,
+                        quantiteQr: terminal.nbreCopie * marchand.count,
+                        nbreCopie: terminal.nbreCopie,
+                    })
+                }
+            }).filter(Boolean)
+            if (listeLivraisonData.length > 0) {
+                if (marchandsError.length > 0) {
+                    console.log('Erreur de noms')
+                    const listeError = marchandsError.map((item) => { return item.rowNumber })
+                    Swal.fire({
+                        title: "Succès",
+                        text: `Données Excel extraites avec succès ! Les lignes ${listeError.join(', ')} contiennent des marchands qui n'existent pas dans le Back Office ! Ils seront ignorés de la liste `,
+                        icon: "success"
+                    })
+                    setMarchandsExcel(listeLivraisonData)
+                    console.log(listeLivraisonData)
+                } else {
+                    Swal.fire({
+                        title: "Succès",
+                        text: "Données Excel extraites avec succès !",
+                        icon: "success"
+                    })
+                    setMarchandsExcel(listeLivraisonData)
+                    console.log(listeLivraisonData)
+                }
+            } else {
+                Swal.fire({
+                    title: "Attention",
+                    text: `Les points marchands de la liste sont invalides`,
+                    icon: "warning"
                 })
-            })
-            console.log(listeLivraisonData)
-            setMarchandsExcel(listeLivraisonData)
-            Swal.fire({
-                title: "Succès",
-                text: "Données Excel extraites avec succès !",
-                icon: "success"
-            })
+                return
+            }
         } catch (error) {
             console.error("Erreur lors de l'extraction des données Excel:", error);
             Swal.fire({
@@ -394,7 +423,7 @@ export default function DemandeQrInputs() {
     const handleDownloadTemplate = async () => {
         setLoadingDownloadTemplate(true)
         try {
-            const response = await demandeData.downloadTemplateQr();
+            const response = await demandeData.downloadTemplateQr(userId);
 
             const url = window.URL.createObjectURL(response.data);
 
@@ -867,7 +896,7 @@ export default function DemandeQrInputs() {
                                                                         setParExcel(true)
                                                                     }
                                                                 }}
-                                                                label="Upload Excel" />
+                                                                label="Import Excel" />
                                                         </div>
                                                         <div className="flex items-center gap-3 my-2">
                                                             <Checkbox
