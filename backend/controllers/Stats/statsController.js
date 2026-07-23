@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../../prisma/client');
 
 
 
@@ -1207,6 +1206,259 @@ const getTpeLivresParType = async (req, res) => {
   }
 };
 
+// =====================================================================
+//  CHARGER WITHDRAWALS — dashboard controllers
+//  Deux sources de sortie : livraison (vente) + mouvement_stock (stock).
+//  La livraison est elle-même scindée en 2 : chargeur / chargeur décom.
+// =====================================================================
+
+// ---------------------------------------------------------------------
+//  1. Identification du "chargeur"
+// ---------------------------------------------------------------------
+//  ⚠️ Terme FR : 'chargeur' (et non 'charger'). 'charger' n'est PAS
+//  contenu dans 'CHARGEUR' -> l'ancien filtre ne renvoyait rien.
+//  Collation MySQL insensible à la casse : 'CHARGEUR' matche 'chargeur'.
+//  Plus robuste si tu as un id_piece stable -> filtre par piece_id.
+const CHARGER_TERM = 'chargeur';
+
+// Détection de la variante "décom" à partir du libellé de type.
+const isDecom = (nomType) => (nomType || '').toUpperCase().includes('DECOM');
+
+// Une `livraison` concerne un chargeur si :
+//   - son type de livraison contient "chargeur"
+//     ('LIVRAISON CHARGEUR' ET 'LIVRAISON CHARGEUR (DECOM RI OK)'), OU
+//   - elle est rattachée à un stock dont la pièce est un chargeur.
+const chargerLivraisonWhere = {
+    deleted: false,
+    OR: [
+        { type_livraison_commerciale: { nom_type_livraison: { contains: CHARGER_TERM } } },
+        { stocks: { items: { nom_piece: { contains: CHARGER_TERM } } } },
+    ],
+};
+
+// Un `mouvement_stock` est une sortie de chargeur si :
+//   - type = 'sortie', ET
+//   - la pièce est un chargeur (items.nom_piece, PAS model_piece).
+const chargerMouvementWhere = {
+    type: 'sortie',
+    items: { nom_piece: { contains: CHARGER_TERM } },
+};
+
+// ---------------------------------------------------------------------
+//  2. Helpers de bucketing temporel
+// ---------------------------------------------------------------------
+const getISOWeek = (dd) => {
+    const d = new Date(Date.UTC(dd.getFullYear(), dd.getMonth(), dd.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
+const getPeriodKey = (value, granularity) => {
+    const d = new Date(value);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    if (granularity === 'day') return `${y}-${m}-${day}`;
+    if (granularity === 'week') return getISOWeek(d);
+    return `${y}-${m}`;
+};
+
+const buildDateFilter = (from, to) => {
+    const f = {};
+    if (from) f.gte = new Date(from);
+    if (to) f.lte = new Date(to);
+    return Object.keys(f).length ? f : null;
+};
+
+// ---------------------------------------------------------------------
+//  3. Liste des sorties via LIVRAISON (vente)
+// ---------------------------------------------------------------------
+const getChargerLivraisonWithdrawals = async (req, res) => {
+    try {
+        const { from, to, statut, serviceId } = req.query;
+        const dateFilter = buildDateFilter(from, to);
+
+        const livraisons = await prisma.livraison.findMany({
+            where: {
+                ...chargerLivraisonWhere,
+                ...(statut ? { statut_livraison: statut } : {}),
+                ...(serviceId ? { service_id: Number(serviceId) } : {}),
+                ...(dateFilter ? { date_livraison: dateFilter } : {}),
+            },
+            include: {
+                type_livraison_commerciale: true,
+                stocks: { include: { items: true } },
+                model_piece: true,
+                services: true,
+            },
+            orderBy: { date_livraison: 'desc' },
+        });
+
+        res.status(200).json(livraisons);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des livraisons de chargeurs :", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de chargeurs", error });
+    }
+};
+
+// ---------------------------------------------------------------------
+//  4. Liste des sorties via MOUVEMENT_STOCK (stock)
+//     Filtres : serviceOrigine, serviceDestination
+// ---------------------------------------------------------------------
+const getChargerStockWithdrawals = async (req, res) => {
+    try {
+        const { from, to, serviceOrigine, serviceDestination, excludeLinkedMouvements = 'true' } = req.query;
+        const dateFilter = buildDateFilter(from, to);
+
+        const mouvements = await prisma.mouvement_stock.findMany({
+            where: {
+                ...chargerMouvementWhere,
+                ...(excludeLinkedMouvements === 'true' ? { formulaire_id: null } : {}),
+                ...(serviceOrigine ? { service_origine: Number(serviceOrigine) } : {}),
+                ...(serviceDestination ? { service_destination: Number(serviceDestination) } : {}),
+                ...(dateFilter ? { created_at: dateFilter } : {}),
+            },
+            include: {
+                items: true,
+                model_piece: true,
+                stocks: true,
+                type_mouvement_stock: true,
+                services_mouvement_stock_service_origineToservices: true,
+                services_mouvement_stock_service_destinationToservices: true,
+            },
+            orderBy: { created_at: 'desc' },
+        });
+
+        res.status(200).json(mouvements);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des sorties de stock de chargeurs :", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des sorties de stock de chargeurs", error });
+    }
+};
+
+// ---------------------------------------------------------------------
+//  5. Options de services pour les filtres du mouvement de stock
+//     -> alimente les 2 dropdowns (origine / destination) du dashboard,
+//        en ne listant que les services réellement présents.
+//     ⚠️ 'nom_service' : adapte au libellé de ton modèle `services`.
+// ---------------------------------------------------------------------
+const getChargerMovementServiceOptions = async (req, res) => {
+    try {
+        const movements = await prisma.mouvement_stock.findMany({
+            where: { ...chargerMouvementWhere, formulaire_id: null },
+            select: {
+                services_mouvement_stock_service_origineToservices: { select: { id: true, nom_service: true } },
+                services_mouvement_stock_service_destinationToservices: { select: { id: true, nom_service: true } },
+            },
+        });
+
+        const origines = new Map();
+        const destinations = new Map();
+        for (const m of movements) {
+            const o = m.services_mouvement_stock_service_origineToservices;
+            const d = m.services_mouvement_stock_service_destinationToservices;
+            if (o) origines.set(o.id, o.nom_service);
+            if (d) destinations.set(d.id, d.nom_service);
+        }
+
+        res.status(200).json({
+            origines: [...origines].map(([id, nom]) => ({ id, nom })),
+            destinations: [...destinations].map(([id, nom]) => ({ id, nom })),
+        });
+    } catch (error) {
+        console.error("Erreur lors de la récupération des services de mouvement :", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des services", error });
+    }
+};
+
+// ---------------------------------------------------------------------
+//  6. Série temporelle combinée  -> FONCTION DU DASHBOARD
+//     Query params : from, to, granularity ('day'|'week'|'month'),
+//       statut, serviceId (livraison),
+//       serviceOrigine, serviceDestination (stock),
+//       excludeLinkedMouvements ('true' défaut).
+//     Retour : [{ period, livraison_chargeur, livraison_decom, stock, total }]
+// ---------------------------------------------------------------------
+const getChargerWithdrawalsTimeSeries = async (req, res) => {
+    try {
+        const {
+            from, to, granularity = 'month', statut, serviceId,
+            serviceOrigine, serviceDestination, excludeLinkedMouvements = 'true',
+        } = req.query;
+
+        const dateFilter = buildDateFilter(from, to);
+
+        // --- Source 1 : livraisons (avec le nom de type pour la répartition) ---
+        const livraisons = await prisma.livraison.findMany({
+            where: {
+                ...chargerLivraisonWhere,
+                ...(statut ? { statut_livraison: statut } : {}),
+                ...(serviceId ? { service_id: Number(serviceId) } : {}),
+                ...(dateFilter ? { date_livraison: dateFilter } : {}),
+            },
+            select: {
+                date_livraison: true,
+                qte_totale_livraison: true,
+                type_livraison_commerciale: { select: { nom_type_livraison: true } },
+            },
+        });
+
+        // --- Source 2 : mouvements de stock (sorties, hors livraisons liées) ---
+        const mouvements = await prisma.mouvement_stock.findMany({
+            where: {
+                ...chargerMouvementWhere,
+                ...(excludeLinkedMouvements === 'true' ? { formulaire_id: null } : {}),
+                ...(serviceOrigine ? { service_origine: Number(serviceOrigine) } : {}),
+                ...(serviceDestination ? { service_destination: Number(serviceDestination) } : {}),
+                ...(dateFilter ? { created_at: dateFilter } : {}),
+            },
+            select: { created_at: true, quantite: true },
+        });
+
+        // --- Agrégation par période ---
+        const buckets = new Map();
+        const ensure = (key) => {
+            if (!buckets.has(key)) {
+                buckets.set(key, { period: key, livraison_chargeur: 0, livraison_decom: 0, stock: 0, total: 0 });
+            }
+            return buckets.get(key);
+        };
+
+        for (const l of livraisons) {
+            const qty = l.qte_totale_livraison ?? 0;
+            const b = ensure(getPeriodKey(l.date_livraison, granularity));
+            if (isDecom(l.type_livraison_commerciale?.nom_type_livraison)) b.livraison_decom += qty;
+            else b.livraison_chargeur += qty;
+            b.total += qty;
+        }
+
+        for (const m of mouvements) {
+            const qty = m.quantite ?? 0;
+            const b = ensure(getPeriodKey(m.created_at, granularity));
+            b.stock += qty;
+            b.total += qty;
+        }
+
+        const series = [...buckets.values()].sort((a, b) => a.period.localeCompare(b.period));
+        res.status(200).json(series);
+    } catch (error) {
+        console.error("Erreur lors de la récupération des sorties de chargeurs :", error);
+        res.status(500).json({ message: "Erreur lors de la récupération des sorties de chargeurs", error });
+    }
+};
+
+// ---------------------------------------------------------------------
+//  module.exports = {
+//      ...,
+//      getChargerLivraisonWithdrawals,
+//      getChargerStockWithdrawals,
+//      getChargerMovementServiceOptions,
+//      getChargerWithdrawalsTimeSeries,
+//  };
+// ---------------------------------------------------------------------
 
 module.exports = {
     nbdeliverycharger,
@@ -1219,5 +1471,9 @@ module.exports = {
     getGeneralStats,
     getLivraisonsParTypeLivre,
     getTpeLivresParType,
+    getChargerLivraisonWithdrawals,
+    getChargerStockWithdrawals,
+    getChargerMovementServiceOptions,
+    getChargerWithdrawalsTimeSeries,
 }
 

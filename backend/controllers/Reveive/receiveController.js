@@ -1,6 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../../prisma/client');
 const cloudinary = require("../../config/clouddinaryConifg");
 
 // baseUrl est l'addresse du site de livraison

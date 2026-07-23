@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
       { name: " Remplacement TPE", path: "/sous-dashboard-remplacement", roles: [1], pro: false },
       { name: " QRcode", path: "/sous-dashboard-qrcode", pro: false },
       { name: " Mouvement Stock", path: "/sous-dashboard-mvt-stock", pro: false },
+      { name: "Sorties Chargeurs", path: "/sous-dashboard-chargeurs", roles: [1], pro: false },
       // { name: " Dashboard Stock", path: "/sous-dashboard-stock", pro: false },
       // { name: "Données Générales", path:"/donnees-generales", pro: false},
       // { name: "Statistiques livraisons", path: "/statistiques-livraisons", pro: false },
