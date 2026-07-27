@@ -48,7 +48,7 @@ router.put('/regularisationReceptionDemandeQr/:idDemande/:idLivraison', uploadAl
 router.post('/extractMarchandsQr', uploadExcel.single("file"), extractMarchandsQr);
 router.get('/getAllMarchandsQr', getAllMarchandsQr);
 router.get('/getCumulQrCodes', getCumulQrCodes);
-router.get('/downloadTemplateQr', downloadTemplateQr);
+router.post('/downloadTemplateQr', downloadTemplateQr);
 router.get('/exportTotalDemandesQrToExcel', exportTotalDemandesQrToExcel);
 router.get('/exportOneDemandeQrToExcel/:idDemande', exportOneDemandeQrToExcel);
 router.get('/getAllDataDemandeQr', getAllDataDemandeQr);

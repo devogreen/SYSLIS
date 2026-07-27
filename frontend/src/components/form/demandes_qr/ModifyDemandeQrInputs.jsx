@@ -353,28 +353,56 @@ export default function ModifyDemandeQrInputs() {
 
             const response = await demandeData.extractMarchandsQr(fd)
             const marchands = response.data
-            const listeLivraisonData = marchands.map((item, index) => {
-                const typeQr = listeQr.find((qr) => qr.nom == item.typeQr)
-                const format = listeFormats.find((format) => format.format == item.format)
-                return ({
-                    typeQrId: typeQr ? typeQr.id : 4,
-                    typeQr: item.typeQr,
-                    formatId: format ? format.id : null,
-                    format: item.format,
-                    chaine: item.chaine,
-                    pointMarchand: item.marchand,
-                    quantiteTerminal: item.nbreTpe,
-                    quantiteQr: item.total,
-                    nbreCopie: item.nbreCopie,
+            let marchandsError = []
+            const listeLivraisonData = marchands.map((terminal) => {
+                const marchand = pointsMarchands.find((m) => { return m.POINT_MARCHAND === terminal.marchand })
+                if (!marchand) {
+                    marchandsError.push(terminal)
+                    return null;
+                } else {
+                    const typeQr = listeQr.find((qr) => qr.abrv == terminal.typeQr)
+                    const format = listeFormats.find((format) => format.format == terminal.format)
+                    return ({
+                        typeQrId: typeQr ? typeQr.id : 4,
+                        typeQr: terminal.typeQr,
+                        formatId: format ? format.id : null,
+                        format: terminal.format,
+                        chaine: marchand.GROUPE,
+                        pointMarchand: terminal.marchand,
+                        quantiteTerminal: marchand.count,
+                        quantiteQr: terminal.nbreCopie * marchand.count,
+                        nbreCopie: terminal.nbreCopie,
+                    })
+                }
+            }).filter(Boolean)
+            if (listeLivraisonData.length > 0) {
+                if (marchandsError.length > 0) {
+                    console.log('Erreur de noms')
+                    const listeError = marchandsError.map((item) => { return item.rowNumber })
+                    Swal.fire({
+                        title: "Succès",
+                        text: `Données Excel extraites avec succès ! Les lignes ${listeError.join(', ')} contiennent des marchands qui n'existent pas dans le Back Office ! Ils seront ignorés de la liste `,
+                        icon: "success"
+                    })
+                    setMarchandsExcel(listeLivraisonData)
+                    console.log(listeLivraisonData)
+                } else {
+                    Swal.fire({
+                        title: "Succès",
+                        text: "Données Excel extraites avec succès !",
+                        icon: "success"
+                    })
+                    setMarchandsExcel(listeLivraisonData)
+                    console.log(listeLivraisonData)
+                }
+            } else {
+                Swal.fire({
+                    title: "Attention",
+                    text: `Les points marchands de la liste sont invalides`,
+                    icon: "warning"
                 })
-            })
-            console.log(listeLivraisonData)
-            setMarchandsExcel(listeLivraisonData)
-            Swal.fire({
-                title: "Succès",
-                text: "Données Excel extraites avec succès !",
-                icon: "success"
-            })
+                return
+            }
         } catch (error) {
             console.error("Erreur lors de l'extraction des données Excel:", error);
             Swal.fire({
@@ -390,7 +418,7 @@ export default function ModifyDemandeQrInputs() {
     const handleDownloadTemplate = async () => {
         setLoadingDownloadTemplate(true)
         try {
-            const response = await demandeData.downloadTemplateQr();
+            const response = await demandeData.downloadTemplateQr(userId);
 
             const url = window.URL.createObjectURL(response.data);
 

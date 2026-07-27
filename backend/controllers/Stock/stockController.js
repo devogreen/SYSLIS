@@ -1,9 +1,7 @@
 const TEST_ENV = require("../../utils/consts")
 const puppeteer = require("puppeteer");
 const fs = require("fs");
-const path = require("path");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require('../../prisma/client');
 const cloudinary = require("../../config/clouddinaryConifg");
 const multer = require("multer")
 const upload = multer({ storage: multer.memoryStorage() });

@@ -130,6 +130,11 @@ export default function DemandeQrDetails() {
 
     const [loadingUpload, setLoadingUpload] = useState(false)
 
+    const [nomDemandeur, setNomDemandeur] = useState('')
+    const [nomUpdate, setNomUpdate] = useState('')
+
+    const [dateUpdate, setDateUpdate] = useState('')
+
     const formatDate = (date) => {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
@@ -181,6 +186,12 @@ export default function DemandeQrDetails() {
 
                 const dateDemande = formatDate(formDemande.last_modified_at)
                 setDateDemande(dateDemande)
+
+                setNomDemandeur(formDemande.users_forms_created_byTousers.fullname)
+
+                const dateUpdate = formDemande.updated_at ? formatDate(formDemande.updated_at) : null
+                setDateUpdate(dateUpdate)
+                setNomUpdate(formDemande.users_forms_updated_byTousers?.fullname)
 
                 const quantiteQr = demande.quantite_qr
                 setTotalQr(quantiteQr)
@@ -813,6 +824,23 @@ export default function DemandeQrDetails() {
                                         <div>
                                             <span className="text-sm">{`Demande du ${dateDemande}`}</span>
                                         </div>
+                                        <div className="flex flex-col text-xs">
+                                            <span className="underline font-light">Demandeur</span>
+                                            <span>{nomDemandeur}</span>
+                                        </div>
+                                        {dateUpdate ? (
+                                            <>
+                                                <div>
+                                                    <span className="text-sm">{`Dernière modification ${dateUpdate}`}</span>
+                                                </div>
+                                                <div className="flex flex-col text-xs">
+                                                    <span className="underline font-light">Modifié par</span>
+                                                    <span>{nomUpdate}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
                                         <div className=''>
                                             <span className={statutClass}>
                                                 {statutDemande}

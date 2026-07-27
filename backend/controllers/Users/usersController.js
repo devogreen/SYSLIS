@@ -1,5 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
-const { PrismaClient } = require("@prisma/client");
+const prisma = require('../../prisma/client');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
@@ -7,8 +7,6 @@ const { envoyerEmail } = require("../../config/emailConfig")
 const cloudinary = require("../../config/clouddinaryConifg");
 require("crypto")
 const sendMail = require("../../utils/emailSender")
-
-const prisma = new PrismaClient();
 
 /// baseUrl est l'addresse du site de livraison
 const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";

@@ -3,8 +3,7 @@ const TEST_ENV = require("../../utils/consts")
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require('../../prisma/client');
 const cloudinary = require("../../config/clouddinaryConifg");
 const { get } = require("http");
 const { urlToHttpOptions } = require("url");
@@ -486,50 +485,60 @@ const faireDemandeQr = async (req, res) => {
 
         /*****************          GESTION MAIL             *****************/
 
-        const roleGenerateur = await prisma.user_roles.findMany({
-            where: {
-                role_id: 16,
-            },
-            include: {
-                users: true
-            }
-        })
+        try {
+            const totalTypes = details.reduce((acc, item) => {
+                acc[item.typeQr] = (acc[item.typeQr] || 0) + 1
+                return acc;
+            }, {});
 
-        const roleImpression = await prisma.user_roles.findMany({
-            where: {
-                role_id: 17,
-            },
-            include: {
-                users: true
-            }
-        })
+            const strTypes = Object.entries(totalTypes)
+                .map(([type, total]) => `${total} marchand(s) ${type}`)
+                .join(", ");
 
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
+            const roleGenerateur = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 16,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        const generateurs = roleGenerateur.map(us => us.users)
-        const imprimeurs = roleImpression.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const roleImpression = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 17,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 22,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
+            const generateurs = roleGenerateur.map(us => us.users)
+            const imprimeurs = roleImpression.map(us => us.users)
+            const superviseurs = roleSupervision.map(us => us.users)
 
-        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `NOUVELLE DEMANDE DE QR CODE(S)`;
+            let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+            const url = GENERAL_URL
+            let link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
+
+            const subject = `SYSLIS - NOUVELLE DEMANDE DE QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>Une nouvelle demande de QR code(s) a été enregistrée.</p>
+                <p>Une nouvelle demande de QR code(s) a été enregistrée par ${utilisateur.fullname}.</p>
                 <ul>
                 <li><strong>Nombre de marchands :</strong> ${quantite_marchand}</li>
                 <li><strong>Nombre de QR Code :</strong> ${quantite_qr}</li>
+                <li><strong>Cette liste comprend :</strong> ${strTypes}</li>
                 </ul>
                 <br>
                 <p>Commentaire : ${commentaire_mail}<p>
@@ -544,27 +553,19 @@ const faireDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const generateur of generateurs) {
+
+            const destinataires = [...superviseurs, ...imprimeurs, ...generateurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
                 await sendMail({
-                    to: generateur.email,
+                    to: destinataire.email,
                     subject,
                     html,
                 });
             }
-            for (const imprimeur of imprimeurs) {
-                await sendMail({
-                    to: imprimeur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Demande enregistrée avec succès ! ")
@@ -649,7 +650,12 @@ const getOneDemandeQr = async (req, res) => {
             where: {
                 id: parseInt(id)
             }, include: {
-                forms: true,
+                forms: {
+                    include: {
+                        users_forms_created_byTousers: true,
+                        users_forms_updated_byTousers: true,
+                    },
+                },
                 generation_qr: {
                     include: {
                         forms: true
@@ -809,10 +815,10 @@ const uploadDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `QR CODE(S) GÉNÉNÉRÉ(S)`;
+            const subject = `SYSLIS - QR CODE(S) GÉNÉNÉRÉ(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été générés.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été générés par ${utilisateur.fullname}.</p>
                 <ul>
                 <li><strong>Nombre de marchands :</strong> ${demande.quantite_marchand}</li>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
@@ -1015,10 +1021,10 @@ const impressionDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((livreurs && livreurs.length > 0) || (generateurs && generateurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `IMPRESSION QR CODE(S)`;
+            const subject = `SYSLIS - IMPRESSION QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été imprimés.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été imprimés par ${utilisateur.fullname}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -1173,10 +1179,10 @@ const livraisonDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((recepteurs && recepteurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `LIVRAISON QR CODE(S)`;
+            const subject = `SYSLIS - LIVRAISON QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été livrés.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été livrés par ${utilisateur.fullname}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -1354,10 +1360,10 @@ const receptionDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `RECEPTION QR CODE(S)`;
+            const subject = `SYSLIS - RECEPTION QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été réceptionnés.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été réceptionnés par ${utilisateur.fullname}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -2150,13 +2156,10 @@ const extractMarchandsQr = async (req, res) => {
         });
 
         const requiredHeaders = [
-            "TYPE",
-            "FORMAT",
-            "CHAINE",
             "POINT MARCHAND",
-            "NBRE TPE",
+            "FORMAT",
+            "TYPE",
             "NBRE COPIE",
-            "TOTAL",
         ];
 
         for (const header of requiredHeaders) {
@@ -2168,43 +2171,77 @@ const extractMarchandsQr = async (req, res) => {
             }
         }
 
+        const formats = await prisma.format_qr.findMany({
+            select: {
+                format: true,
+            },
+            orderBy: {
+                format: 'asc',
+            },
+        })
+        const formatsQr = formats.map((item) => { return item.format })
+
+        const types = await prisma.type_paiement.findMany({
+            where: {
+                qr_code: true,
+            },
+            select: {
+                abrv: true,
+            },
+            orderBy: {
+                nom: 'asc',
+            },
+        })
+        const typesQr = types.map((item) => { return item.abrv })
+
         const marchands = [];
         const uniqueKeys = new Set();
         let duplicateError = null;
+        let marchandError = null;
+        let typeQrError = null;
+        let formatQrError = null;
+
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
 
             const typeQr = String(getCellValue(row.getCell(headers["TYPE"])) || "").trim();
             const format = String(getCellValue(row.getCell(headers["FORMAT"])) || "").trim();
-            const chaine = String(getCellValue(row.getCell(headers["CHAINE"])) || "").trim();
             const marchandName = String(getCellValue(row.getCell(headers["POINT MARCHAND"])) || "").trim();
-
-            const nbreTpe = Number(getCellValue(row.getCell(headers["NBRE TPE"])) || 0);
             const nbreCopie = Number(getCellValue(row.getCell(headers["NBRE COPIE"])) || 0);
-            const total = Number(getCellValue(row.getCell(headers["TOTAL"])) || 0);
 
             // Ignore les lignes vides ou inutiles
             if (
                 !typeQr ||
                 !format ||
-                !chaine ||
                 !marchandName ||
-                nbreTpe === 0 ||
-                nbreCopie === 0 ||
-                total === 0
+                nbreCopie === 0
             ) {
                 return;
             }
 
             const marchand = {
+                marchand: marchandName,
                 typeQr,
                 format,
-                chaine,
-                marchand: marchandName,
-                nbreTpe,
                 nbreCopie,
-                total,
+                rowNumber,
             };
+
+            if (!formatsQr.includes(format)) {
+                formatQrError = {
+                    rowNumber,
+                    marchand,
+                }
+                return;
+            }
+
+            if (!typesQr.includes(typeQr)) {
+                typeQrError = {
+                    rowNumber,
+                    marchand,
+                }
+                return;
+            }
 
             const key = `${marchand.typeQr}-${marchand.format}-${marchand.marchand}`;
             if (uniqueKeys.has(key)) {
@@ -2222,7 +2259,19 @@ const extractMarchandsQr = async (req, res) => {
 
         if (duplicateError) {
             return res.status(400).json({
-                message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le type ${duplicateError.marchand.typeQr} et le format ${duplicateError.marchand.format}`,
+                message: `Doublon trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le type ${duplicateError.marchand.typeQr} et le format ${duplicateError.marchand.format}.`,
+            });
+        }
+
+        if (formatQrError) {
+            return res.status(400).json({
+                message: `Format de QR code inconnu à la ligne ${formatQrError.rowNumber} pour le marchand ${formatQrError.marchand.marchand} avec le format « ${formatQrError.marchand.format} ». Les formats existants sont : ${formatsQr.join(', ')}.`,
+            });
+        }
+
+        if (typeQrError) {
+            return res.status(400).json({
+                message: `Type de QR code inconnu à la ligne ${typeQrError.rowNumber} pour le marchand ${typeQrError.marchand.marchand} avec le type « ${typeQrError.marchand.typeQr} ». Les types existants sont : ${typesQr.join(', ')}.`,
             });
         }
 
@@ -2394,14 +2443,58 @@ const getCumulQrCodes = async (req, res) => {
 // Fonction pour télécharger le template de demande de QR Codes au format Excel.
 const downloadTemplateQr = async (req, res) => {
     try {
-        const templateFile = 'template_demandeQr.xlsx';
-        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
-        res.download(filePath);
+        const {
+            userId
+        } = req.body
 
-        console.log('Template de demande de QR Codes téléchargé avec succès !');
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+            select: {
+                id_user: true,
+                username: true,
+            },
+        })
+
+        const workbook = new ExcelJS.Workbook();
+
+        const demandeQrSheet = workbook.addWorksheet('Demande QR');
+        const demandeQrHeaders = [
+            "Point Marchand",
+            "Format",
+            "Type",
+            "Nbre Copie",
+        ];
+        const demandeQrHeaderRow = demandeQrSheet.addRow(demandeQrHeaders);
+        demandeQrHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=demandeQr_template.xlsx`
+        );
+        res.send(buffer);
+
+        console.log(`Template de demande Qr téléchargé avec succès par ${utilisateur.username} ID ${utilisateur.id_user} !`);
+
     } catch (error) {
         console.error('Erreur downloadTemplateQr:', error);
-        res.status(500).json({ message: 'Erreur serveur' });
+        return res.status(500).json({ message: 'Erreur serveur' });
     }
 }
 

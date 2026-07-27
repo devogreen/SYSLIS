@@ -261,6 +261,9 @@ import MiseEnReparationForm from "./pages/Forms/ReparationTpeForms/MiseEnReparat
 // @ts-ignore
 import LiaisonTpePiecesForm from "./pages/Forms/MaintenanceTpeForms/LiaisonTpePiecesForm"
 
+// @ts-ignore
+import DashboardChargeurs from "./pages/Dashboards/DashboardChargeurs"
+
 export default function App() {
   return (
     <>
@@ -277,6 +280,7 @@ export default function App() {
               <Route path="/sous-dashboard-remplacement" element={<SousDashboardRemplacement />} />
               <Route path="/sous-dashboard-qrcode" element={<SousDashboardQRcode />} />
               <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardStocks />} />
+              <Route path="/sous-dashboard-chargeurs" element={<DashboardChargeurs />} />
               {/* Others Page */}
               <Route path="/profile" element={<UserProfiles />} />
               <Route path="/calendar" element={<Calendar />} />
