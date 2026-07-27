@@ -186,7 +186,7 @@ export default function DemandeQrInputs() {
                         )
                     })
                 )
-                // setChaineGroup(listeChaine)
+                setChaineGroup(listeChaine)
                 // console.log(listeChaine)
                 const optionsC = listeChaine.map((item) => ({
                     label: item.GROUPE,
