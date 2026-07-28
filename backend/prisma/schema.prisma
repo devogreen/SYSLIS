@@ -682,20 +682,21 @@ model types_formulaires {
 }
 
 model demande_qr {
-  id                Int               @id @default(autoincrement())
+  id                Int                 @id @default(autoincrement())
   form_id           Int
   statut            demande_qr_statut
   quantite_qr       Int?
   quantite_marchand Int
-  liste_demande     String?           @db.LongText
-  is_reg            Boolean           @default(false)
-  forms             forms             @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "demande_qr_ibfk_3")
+  liste_demande     String?             @db.LongText
+  is_reg            Boolean             @default(false)
+  forms             forms               @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "demande_qr_ibfk_3")
   generation_qr     generation_qr[]
   impression_qr     impression_qr[]
   livraison_qr      livraison_qr[]
   marchands_qr      marchands_qr[]
   qr_codes          qr_codes[]
   reception_qr      reception_qr[]
+  retour_demande_qr retour_demande_qr[]
 
   @@index([form_id], map: "form_id")
 }
@@ -956,6 +957,7 @@ model forms {
   reception_tpe_repare          reception_tpe_repare[]
   reparation_tpe                reparation_tpe[]
   mise_en_reparation            mise_en_reparation[]
+  retour_demande_qr             retour_demande_qr[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -1264,6 +1266,18 @@ model mise_en_reparation {
   @@index([form_id], map: "form_id")
 }
 
+model retour_demande_qr {
+  id         Int                    @id @default(autoincrement())
+  form_id    Int
+  demande_id Int
+  type       type_retour_demande_qr
+  demande_qr demande_qr             @relation(fields: [demande_id], references: [id], map: "retour_demande_qr_ibfk_1")
+  forms      forms                  @relation(fields: [form_id], references: [id], onUpdate: Restrict, map: "retour_demande_qr_ibfk_2")
+
+  @@index([demande_id], map: "demande_id")
+  @@index([form_id], map: "form_id")
+}
+
 enum livraison_statut_livraison {
   en_cours
   livre
@@ -1329,7 +1343,7 @@ enum remplacements_statut {
   en_attente
   refuse
   annule
-}
+} 
 
 enum type_paiement_type {
   mobile
@@ -1342,6 +1356,8 @@ enum demande_qr_statut {
   imprimee
   livree
   recue
+  suspendue
+  annulee
 }
 
 enum form_decom_statut {
@@ -1409,6 +1425,7 @@ enum forms_type {
   reception_tpe_repare
   reparation_tpe
   mise_en_reparation
+  retour_demande_qr
 }
 
 enum forms_decom_statut {
@@ -1481,4 +1498,10 @@ enum type_reception_tpe_repare {
 enum etat_piece_a_reparer {
   defectueux
   repare
+}
+
+enum type_retour_demande_qr {
+  annulation
+  suspension
+  retour_generation
 }

@@ -67,6 +67,7 @@ export default function AllDemandesQrList() {
         { label: 'Imprimée', value: 'imprimee' },
         { label: 'Livrée', value: 'livree' },
         { label: 'Reçue', value: 'recue' },
+        { label: 'Annulee', value: 'annulee' },
     ];
     const [startDate, setStartDate] = useState(savedFilters?.startDate ? new Date(savedFilters.startDate) : null);
     const [endDate, setEndDate] = useState(savedFilters?.endDate ? new Date(savedFilters.endDate) : null);
@@ -128,11 +129,11 @@ export default function AllDemandesQrList() {
             setLoading(true);
             try {
                 const AllDemandesQrData = await demandeData.getAllDemandesQr()
-                console.log(AllDemandesQrData)
+                // console.log(AllDemandesQrData)
                 const demandesQrData = AllDemandesQrData.filter((item) => {
                     return item.forms.is_deleted == false
                 })
-                setDemandes(demandesQrData)
+                setDemandes(AllDemandesQrData)
 
                 // const data = await demandeData.getDataImpressionQr()
                 // console.log(data)
@@ -193,6 +194,9 @@ export default function AllDemandesQrList() {
         } else if (demande.statut == 'recue') {
             statut = 'reçue';
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500'
+        } else if (demande.statut == 'annulee' || demande.forms.is_deleted) {
+            statut = 'annulee';
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white'
         }
         return (
             <div>
@@ -328,7 +332,7 @@ export default function AllDemandesQrList() {
         dayReceptionPlus?.setDate(dayReceptionPlus.getDate() + 1);
         const nextDayReception = dayReceptionPlus ? new Date(dayReceptionPlus) : null;
         
-        
+        const matchesIsDeleted = selectedStatus.includes('annulee') ? item.statut == 'annulee' || item.forms.is_deleted : true;
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesDatesDemande = datesDemande ? (datesDemande[0] <= dateDemande && nextDayDemande >= dateDemande) : true;
         const matchesDatesLivraison = datesLivraison ? (datesLivraison[0] <= dateLivraison && nextDayLivraison >= dateLivraison) : true;
@@ -338,7 +342,7 @@ export default function AllDemandesQrList() {
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesReg && matchesDatesDemande && matchesDatesLivraison && matchesDatesReception && matchesNotReg && matchesGlobalFilter;
+        return matchesIsDeleted && matchesStatus && matchesReg && matchesDatesDemande && matchesDatesLivraison && matchesDatesReception && matchesNotReg && matchesGlobalFilter;
     });
 
     const totalQr = filteredDemandes.reduce((sum, item) => sum + Number(item.quantite_qr || 0), 0);
@@ -423,7 +427,7 @@ export default function AllDemandesQrList() {
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
                 <div className="p-6 space-y-7">
                     <div className="flex items-center">
-                        <div className="relative w-full">
+                        <div className="relative w-full ">
                             <Input
                                 className="pl-10"
                                 value={globalFilter}

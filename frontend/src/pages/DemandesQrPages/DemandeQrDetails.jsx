@@ -135,9 +135,29 @@ export default function DemandeQrDetails() {
 
     const [dateUpdate, setDateUpdate] = useState('')
 
-    const formatDate = (date) => {
-        const d = new Date(date);
-        return d.toLocaleDateString('fr-FR'); // or use any locale you want
+    const [isModalSuspensionOpen, setIsModalSuspensionOpen] = useState(false)
+
+    const [messageCancel, setMessageCancel] = useState('')
+    const [messageSuspension, setMessageSuspension] = useState('')
+
+    const [errorCancel, setErrorCancel] = useState('')
+
+    const [commentaireAnnulation, setCommentaireAnnulation] = useState('')
+
+    const [isAnnule, setIsAnnule] = useState(false)
+    const [annulateur, setAnnulateur] = useState('')
+    const [dateAnnulation, setDateAnnulation] = useState('')
+
+    const formatDate = (isoDate) => {
+        const date = new Date(isoDate);
+        return date.toLocaleString("fr-FR", {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+        });
     };
 
     const getPdfPageCount = async (file) => {
@@ -158,17 +178,17 @@ export default function DemandeQrDetails() {
 
                 const formDemande = demande.forms
                 // console.log(formDemande)$
-                if (formDemande.is_deleted) {
-                    Swal.fire({
-                        title: "Demande supprimée",
-                        text: "Cette demande a été supprimée.",
-                        icon: "warning",
-                        confirmButtonColor: "#3085d6",
-                        confirmButtonText: "OK"
-                    });
-                    navigate('/toutes-les-demandes-qr')
-                    return;
-                }
+                // if (formDemande.is_deleted) {
+                //     Swal.fire({
+                //         title: "Demande supprimée",
+                //         text: "Cette demande a été supprimée.",
+                //         icon: "warning",
+                //         confirmButtonColor: "#3085d6",
+                //         confirmButtonText: "OK"
+                //     });
+                //     navigate('/toutes-les-demandes-qr')
+                //     return;
+                // }
 
                 const listeDemande = JSON.parse(demande.liste_demande)
                 setListeDemande(listeDemande)
@@ -219,6 +239,9 @@ export default function DemandeQrDetails() {
 
                 const indexReception = demande.reception_qr.length - 1
                 const reception = demande.reception_qr[indexReception]
+
+                const indexAnnulation = demande.retour_demande_qr.filter((item) => { return item.type == 'annulation' }).length - 1
+                const annulation = demande.retour_demande_qr[indexAnnulation]
 
                 const regularisation = demande.is_reg
                 if (regularisation) {
@@ -288,6 +311,15 @@ export default function DemandeQrDetails() {
                         setStatutDemande('reçue')
                         setIsRecue(true)
                         setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
+                    } else if (statut == 'annulee' || formDemande.is_deleted) {
+                        setStatutDemande('annulee')
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white')
+                        setIsAnnule(true)
+                        const formAnnulation = annulation.forms
+                        const dateAnnulation = formAnnulation.created_at ? formatDate(formAnnulation.created_at) : null
+                        setDateAnnulation(dateAnnulation)
+                        console.log(formAnnulation)
+                        setAnnulateur(formAnnulation.nom_user)
                     }
                     if (generation && (statut == 'generee' || statut == 'imprimee' || statut == 'livree' || statut == 'recue')) {
                         if (rolesId.includes(20)) {
@@ -301,6 +333,7 @@ export default function DemandeQrDetails() {
                 setCommentaireImprimeur(impression?.forms.commentaire)
                 setCommentaireLivreur(livraison?.forms.commentaire)
                 setCommentaireReceveur(reception?.forms.commentaire)
+                setCommentaireAnnulation(annulation?.forms.commentaire)
 
                 const allFiles = await demandeData.getAllFormFiles(formDemande.id)
                 const regFiles = allFiles.filter((item) => {
@@ -648,10 +681,16 @@ export default function DemandeQrDetails() {
     }
 
     const handleCancelDemande = async () => {
+        if (!messageCancel) {
+            setErrorCancel("Vous devez laisser un commentaire pour l'annulation !")
+            return;
+        }
+        setErrorCancel('')
         setIsModalCancelOpen(false)
         try {
             const payload = {
                 userId,
+                messageCancel,
             }
             setLoadingCancel(true)
             await demandeData.cancelDemandeQr(idDemande, payload)
@@ -841,6 +880,19 @@ export default function DemandeQrDetails() {
                                         ) : (
                                             <></>
                                         )}
+                                        {isAnnule ? (
+                                            <>
+                                                <div>
+                                                    <span className="text-sm">{`Annulée le ${dateAnnulation}`}</span>
+                                                </div>
+                                                <div className="flex flex-col text-xs">
+                                                    <span className="underline font-light">Annulée par</span>
+                                                    <span>{annulateur}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
                                         <div className=''>
                                             <span className={statutClass}>
                                                 {statutDemande}
@@ -1001,6 +1053,13 @@ export default function DemandeQrDetails() {
                                                                             }}>
                                                                             <span className='mr-4'><i className="pi pi-upload"></i></span>
                                                                             <span className='text-sm text-gray-700 font-medium'>Upload QR Codes</span>
+                                                                        </button>
+                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                            onClick={() => {
+                                                                                setIsModalSuspensionOpen(true)
+                                                                            }}>
+                                                                            <span className='mr-4'><i className="pi pi-stop-circle"></i></span>
+                                                                            <span className='text-sm text-gray-700 font-medium'>Suspendre Demande</span>
                                                                         </button>
                                                                     </>
                                                                 )}
@@ -1299,6 +1358,19 @@ export default function DemandeQrDetails() {
                                                         <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                     </div>
                                                     <p className='text-sm text-blue-500 text-left'>{commentaireReceveur}</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                        {commentaireAnnulation ? (
+                                            <>
+                                                <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                    <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                        <span className='text-sm mr-2'>Commentaire Annulation</span>
+                                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                    </div>
+                                                    <p className='text-sm text-blue-500 text-left'>{commentaireAnnulation}</p>
                                                 </div>
                                             </>
                                         ) : (
@@ -1655,13 +1727,25 @@ export default function DemandeQrDetails() {
                     <div className="w-full text-center">
                         <span className="p-3 rounded bg-black text-white font-medium">Annuler</span>
                     </div>
-                    <div className="text-center text-sm font-medium">
+                    <div className="text-center text-sm font-medium flex flex-col">
                         <span>Êtes-vous sûr de vouloir annuler cette demande ?</span>
+                        <span>Cette action est définitive.</span>
+                    </div>
+                    <div>
+                        <div className='w-full mt-3'>
+                            <Label>Commentaire <span className="text-red-700">*</span></Label>
+                            <TextArea
+                                value={messageCancel}
+                                onChange={(value) => setMessageCancel(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
                     </div>
                     <div>
                         <div className="flex justify-between">
                             <div className="w-full flex justify-center items-center">
-                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                <button className="w-1/2 flex items-center justify-center bg-red-400 p-2 rounded-2xl"
                                     onClick={() => setIsModalCancelOpen(false)}
                                 >
                                     Non
@@ -1675,6 +1759,11 @@ export default function DemandeQrDetails() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <div className="text-center">
+                        <span className="text-error-600 font-medium text-sm">
+                            {errorCancel}
+                        </span>
                     </div>
                 </div>
             </Modal>

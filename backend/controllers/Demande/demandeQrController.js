@@ -676,6 +676,11 @@ const getOneDemandeQr = async (req, res) => {
                         forms: true
                     },
                 },
+                retour_demande_qr: {
+                    include: {
+                        forms: true
+                    },
+                },
             },
         })
         console.log('Succès !')
@@ -1654,107 +1659,142 @@ const cancelDemandeQr = async (req, res) => {
         } = req.params
         const {
             userId,
+            messageCancel,
         } = req.body
 
-        const canceledDemande = await prisma.$transaction(async (tx) => {
-            const demande = await tx.demande_qr.findUnique({
-                where: {
-                    id: parseInt(id)
-                }
-            })
-            if (!demande) {
-                console.error('Demande introuvable !')
-                return res.status(404).json({ message: "Demande introuvable !" });
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+
+        if (!utilisateur) {
+            console.error("Erreur : Utilisateur introuvable")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const demande = await prisma.demande_qr.findUnique({
+            where: {
+                id: parseInt(id)
             }
-            await tx.forms.update({
-                where: {
-                    id: demande.form_id
-                },
+        })
+        if (!demande) {
+            console.error('Demande introuvable !')
+            return res.status(404).json({ message: "Demande introuvable !" });
+        }
+
+        const dateAction = new Date()
+
+        const canceledDemande = await prisma.$transaction(async (tx) => {
+
+            const retourForm = await tx.forms.create({
                 data: {
-                    updated_by: parseInt(userId),
-                    updated_at: new Date(),
-                    last_modified_at: new Date(),
-                    is_deleted: true
-                }
-            });
-            await tx.fichiers.updateMany({
-                where: {
-                    form_id: demande.form_id,
-                },
-                data: {
-                    is_deleted: true,
+                    type: 'retour_demande_qr',
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    commentaire: messageCancel,
                 }
             })
+
+            const retour = await tx.retour_demande_qr.create({
+                data: {
+                    form_id: retourForm.id,
+                    demande_id: demande.id,
+                    type: 'annulation',
+                },
+            })
+
+            // await tx.forms.update({
+            //     where: {
+            //         id: demande.form_id
+            //     },
+            //     data: {
+            //         updated_by: parseInt(userId),
+            //         updated_at: dateAction,
+            //         last_modified_at: dateAction,
+            //     }
+            // });
+
+            await tx.demande_qr.update({
+                where: {
+                    id: demande.id,
+                },
+                data: {
+                    statut: 'annulee',
+                }
+            })
+            // await tx.fichiers.updateMany({
+            //     where: {
+            //         form_id: demande.form_id,
+            //     },
+            //     data: {
+            //         is_deleted: true,
+            //     }
+            // })
             return {
-                demande
+                retourForm, retour,
             }
         })
 
         /*****************          GESTION MAIL             *****************/
 
-        const roleGenerateur = await prisma.user_roles.findMany({
-            where: {
-                role_id: 16,
-            },
-            include: {
-                users: true
-            }
-        })
+        try {
+            const roleGenerateur = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 16,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        const roleImpression = await prisma.user_roles.findMany({
-            where: {
-                role_id: 17,
-            },
-            include: {
-                users: true
-            }
-        })
+            const roleImpression = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 17,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 22,
+                },
+                include: {
+                    users: true
+                }
+            })
 
-        const generateurs = roleGenerateur.map(us => us.users)
-        const imprimeurs = roleImpression.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const generateurs = roleGenerateur.map(us => us.users)
+            const imprimeurs = roleImpression.map(us => us.users)
+            const superviseurs = roleSupervision.map(us => us.users)
 
-        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `ANNULATION DEMANDE DE QR CODE(S)`;
+            const subject = `SYSLIS - ANNULATION DEMANDE DE QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
-                <p>la demande de QR code(s) ${canceledDemande.demande.id} a été annulée.</p>
-                <p><strong>Plus d'actions ne seront menées sur cette demande</strong</p>
+                <p>la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
+                <p>Commentaire : <strong>${messageCancel}</strong</p>
                 <br>
                 <br>
                 <br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const generateur of generateurs) {
+
+            const destinataires = [...generateurs, ...imprimeurs, ...superviseurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
                 await sendMail({
-                    to: generateur.email,
+                    to: destinataire.email,
                     subject,
                     html,
                 });
             }
-            for (const imprimeur of imprimeurs) {
-                await sendMail({
-                    to: imprimeur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Demande annulée avec succès ! ")
