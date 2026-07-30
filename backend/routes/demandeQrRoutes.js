@@ -10,6 +10,7 @@ const {
     regularisationDemandeQrV2, getAllFormFiles, modifyDemandeQr, cancelDemandeQr, regularisationLivraisonDemandeQr,
     regularisationReceptionDemandeQr, extractMarchandsQr, getAllMarchandsQr, getCumulQrCodes, downloadTemplateQr,
     exportTotalDemandesQrToExcel, exportOneDemandeQrToExcel, getAllDataDemandeQr, getDataImpressionQr,
+    suspendreDemandeQr, annulationSuspensionQr,
 } = require("../controllers/Demande/demandeQrController")
 
 router.get('/getAllTypePaiement', getAllTypePaiement);
@@ -53,4 +54,6 @@ router.get('/exportTotalDemandesQrToExcel', exportTotalDemandesQrToExcel);
 router.get('/exportOneDemandeQrToExcel/:idDemande', exportOneDemandeQrToExcel);
 router.get('/getAllDataDemandeQr', getAllDataDemandeQr);
 router.get('/getDataImpressionQr', getDataImpressionQr);
+router.put('/suspendreDemandeQr/:id', suspendreDemandeQr);
+router.put('/annulationSuspensionQr/:id', annulationSuspensionQr);
 module.exports = router

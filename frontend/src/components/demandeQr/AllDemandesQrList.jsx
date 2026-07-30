@@ -68,6 +68,7 @@ export default function AllDemandesQrList() {
         { label: 'Livrée', value: 'livree' },
         { label: 'Reçue', value: 'recue' },
         { label: 'Annulee', value: 'annulee' },
+        { label: 'Suspendue', value: 'suspendue' },
     ];
     const [startDate, setStartDate] = useState(savedFilters?.startDate ? new Date(savedFilters.startDate) : null);
     const [endDate, setEndDate] = useState(savedFilters?.endDate ? new Date(savedFilters.endDate) : null);
@@ -159,6 +160,7 @@ export default function AllDemandesQrList() {
         const d = new Date(date);
         return d.toLocaleDateString('fr-FR'); // or use any locale you want
     };
+
     const handleGeneratePdf = async (id) => {
         setPrintingId(id);
         try {
@@ -175,11 +177,16 @@ export default function AllDemandesQrList() {
         } finally {
             setPrintingId(null);
         }
-    }
+    };
+
     const statutTemplate = (demande) => {
+        const linkSee = `/demande-qr-details/${demande.id}`
         let statutClass = ''
         let statut = ''
-        if (demande.statut == 'soumise') {
+        if (demande.statut == 'annulee' || demande.forms.is_deleted) {
+            statut = 'annulee';
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white'
+        } else if (demande.statut == 'soumise') {
             statut = 'soumise';
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-50 text-blue-300'
         } else if (demande.statut == 'generee') {
@@ -194,14 +201,14 @@ export default function AllDemandesQrList() {
         } else if (demande.statut == 'recue') {
             statut = 'reçue';
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500'
-        } else if (demande.statut == 'annulee' || demande.forms.is_deleted) {
-            statut = 'annulee';
-            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white'
+        } else if (demande.statut == 'suspendue') {
+            statut = 'suspendue';
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-red-100 text-red-500'
         }
         return (
-            <div>
+            <Link to={linkSee}>
                 <span className={statutClass}>{statut}</span>
-            </div>
+            </Link>
         )
     }
     const quantiteQrTemplate = (demande) => {
@@ -265,34 +272,43 @@ export default function AllDemandesQrList() {
             </div>
         )
     }
+    const COULEURS = {
+        OM: 'bg-orange-400',
+        'Orange Money': 'bg-orange-400',
+        MTN: 'bg-yellow-400',
+        'MTN Money': 'bg-yellow-400',
+        MOOV: 'bg-blue-400',
+        'MOOV Money': 'bg-blue-400',
+    }
     const actionTemplate = (demande) => {
         const linkSee = `/demande-qr-details/${demande.id}`
+        const listeDemande = JSON.parse(demande.liste_demande)
+        const operateurs = listeDemande.map((item) => item.typeQr)
+
+        const typesConnus = Object.keys(COULEURS)
+        const hasAutre = operateurs.some((op) => !typesConnus.includes(op))
 
         return (
             <>
-                <div>
-                    <span>
-                        <Link to={linkSee}>
-                            <button className="mx-1">
-                                <i className="pi pi-eye" style={{ fontSize: '13px' }}></i>
-                            </button>
-                        </Link>
-                    </span>
-                    {/* {demande.statut == 'recue' ? (
-                        <>
-                            <span>
-                                {printingId === demande.id ? (
-                                    <span className='mx-1'>
-                                        <ProgressSpinner style={{ width: '15px', height: '15px' }} strokeWidth="8" animationDuration=".5s" />
-                                    </span>
-                                ) : (
-                                    <button onClick={() => handleGeneratePdf(demande.id)}><span className="mx-1 text-gray-500 text-theme-sm dark:text-gray-400"><i className="pi pi-print"></i></span></button>
-                                )}
-                            </span>
-                        </>
-                    ) : (
-                        <></>
-                    )} */}
+                <div className="flex space-x-3">
+                    <div>
+                        <span>
+                            <Link to={linkSee}>
+                                <button className="mx-1">
+                                    <i className="pi pi-eye" style={{ fontSize: '13px' }}></i>
+                                </button>
+                            </Link>
+                        </span>
+                    </div>
+                    <div className="flex space-x-1.5">
+                        {typesConnus.map(
+                            (type) =>
+                                operateurs.includes(type) && (
+                                    <div key={type} className={`h-6 w-3 ${COULEURS[type]}`}></div>
+                                )
+                        )}
+                        {hasAutre && <div className="h-6 w-3 bg-gray-400"></div>}
+                    </div>
                 </div>
             </>
         )
@@ -331,8 +347,8 @@ export default function AllDemandesQrList() {
         const dayReceptionPlus = datesReception ? new Date(datesReception[1]) : null;
         dayReceptionPlus?.setDate(dayReceptionPlus.getDate() + 1);
         const nextDayReception = dayReceptionPlus ? new Date(dayReceptionPlus) : null;
-        
-        const matchesIsDeleted = selectedStatus.includes('annulee') ? item.statut == 'annulee' || item.forms.is_deleted : true;
+
+        const matchesIsDeleted = selectedStatus.includes('annulee') ? item.statut == 'annulee' || form.is_deleted : true;
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesDatesDemande = datesDemande ? (datesDemande[0] <= dateDemande && nextDayDemande >= dateDemande) : true;
         const matchesDatesLivraison = datesLivraison ? (datesLivraison[0] <= dateLivraison && nextDayLivraison >= dateLivraison) : true;

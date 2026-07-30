@@ -2950,6 +2950,260 @@ const getDataImpressionQr = async (req, res) => {
     }
 }
 
+// Fonction pour suspendre une demande de QR code
+const suspendreDemandeQr = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            userId,
+            messageSuspension,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+
+        if (!utilisateur) {
+            console.error("Erreur : Utilisateur introuvable")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const demande = await prisma.demande_qr.findUnique({
+            where: {
+                id: parseInt(id)
+            }
+        })
+        if (!demande) {
+            console.error('Demande introuvable !')
+            return res.status(404).json({ message: "Demande introuvable !" });
+        }
+
+        const dateAction = new Date()
+
+        const operation = await prisma.$transaction(async (tx) => {
+
+            const retourForm = await tx.forms.create({
+                data: {
+                    type: 'retour_demande_qr',
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    commentaire: messageSuspension,
+                }
+            })
+
+            const retour = await tx.retour_demande_qr.create({
+                data: {
+                    form_id: retourForm.id,
+                    demande_id: demande.id,
+                    type: 'suspension',
+                },
+            })
+
+            await tx.demande_qr.update({
+                where: {
+                    id: demande.id,
+                },
+                data: {
+                    statut: 'suspendue',
+                }
+            })
+
+            return {
+                retourForm, retour,
+            }
+        })
+
+        /*****************          GESTION MAIL             *****************/
+
+        try {
+            const roleDemandeur = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 15,
+                },
+                include: {
+                    users: true
+                }
+            })
+
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 22,
+                },
+                include: {
+                    users: true
+                }
+            })
+
+            const demandeurs = roleDemandeur.map(us => us.users)
+            const superviseurs = roleSupervision.map(us => us.users)
+
+            const subject = `SYSLIS - SUSPENSION DEMANDE DE QR CODE(S)`;
+            let html = `
+                <p>Bonjour,</p>
+                <p>La demande de QR code(s) ${demande.id} a été suspendue par ${utilisateur.fullname}.</p>
+                <p>Commentaire : <strong>${messageSuspension}</strong></p>
+                <br>
+                <br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...demandeurs, ...superviseurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
+                await sendMail({
+                    to: destinataire.email,
+                    subject,
+                    html,
+                });
+            }
+
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log("Demande suspendue avec succès ! ")
+        res.status(201).json({
+            message: "Demande suspendue avec succès",
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la suspension de la demande de QR Codes :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour annuler la suspension d'une demande de QR code
+const annulationSuspensionQr = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            userId,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+
+        if (!utilisateur) {
+            console.error("Erreur : Utilisateur introuvable")
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const demande = await prisma.demande_qr.findUnique({
+            where: {
+                id: parseInt(id)
+            }
+        })
+        if (!demande) {
+            console.error('Demande introuvable !')
+            return res.status(404).json({ message: "Demande introuvable !" });
+        }
+
+        const dateAction = new Date()
+
+        const operation = await prisma.$transaction(async (tx) => {
+
+            const retourForm = await tx.forms.create({
+                data: {
+                    type: 'retour_demande_qr',
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                }
+            })
+
+            const retour = await tx.retour_demande_qr.create({
+                data: {
+                    form_id: retourForm.id,
+                    demande_id: demande.id,
+                    type: 'annulation_suspension',
+                },
+            })
+
+            await tx.demande_qr.update({
+                where: {
+                    id: demande.id,
+                },
+                data: {
+                    statut: 'soumise',
+                }
+            })
+
+            return {
+                retourForm, retour,
+            }
+        })
+
+        /*****************          GESTION MAIL             *****************/
+
+        try {
+            const roleDemandeur = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 15,
+                },
+                include: {
+                    users: true
+                }
+            })
+
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: {
+                    role_id: 22,
+                },
+                include: {
+                    users: true
+                }
+            })
+
+            const demandeurs = roleDemandeur.map(us => us.users)
+            const superviseurs = roleSupervision.map(us => us.users)
+
+            const subject = `SYSLIS - ANNULATION SUSPENSION DEMANDE DE QR CODE(S)`;
+            let html = `
+                <p>Bonjour,</p>
+                <p>La suspension de la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
+                <p><strong>La demande reprend son statut initial.</strong></p>
+                <br>
+                <br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...demandeurs, ...superviseurs];
+            for (const destinataire of destinataires) {
+                if (!destinataire?.email) continue;
+                await sendMail({
+                    to: destinataire.email,
+                    subject,
+                    html,
+                });
+            }
+
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log("Suspension annulée avec succès ! ")
+        res.status(201).json({
+            message: "Suspension annulée avec succès",
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'annulation de la suspension de la demande de QR Codes :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 module.exports = {
     getAllTypePaiement,
     faireDemandeQr,
@@ -2975,4 +3229,6 @@ module.exports = {
     exportOneDemandeQrToExcel,
     getAllDataDemandeQr,
     getDataImpressionQr,
+    suspendreDemandeQr,
+    annulationSuspensionQr,
 }

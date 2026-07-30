@@ -1343,7 +1343,7 @@ enum remplacements_statut {
   en_attente
   refuse
   annule
-} 
+}
 
 enum type_paiement_type {
   mobile
@@ -1504,4 +1504,5 @@ enum type_retour_demande_qr {
   annulation
   suspension
   retour_generation
+  annulation_suspension
 }

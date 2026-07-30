@@ -148,6 +148,19 @@ export default function DemandeQrDetails() {
     const [annulateur, setAnnulateur] = useState('')
     const [dateAnnulation, setDateAnnulation] = useState('')
 
+    const [errorSuspension, setErrorSuspension] = useState('')
+
+    const [isSuspendue, setIsSuspendue] = useState(false)
+    const [commentaireSuspension, setCommentaireSuspension] = useState('')
+    const [nomSuspension, setNomSuspension] = useState('')
+    const [dateSuspension, setDateSuspension] = useState('')
+
+    const [loadingActions, setLoadingActions] = useState(false)
+
+    const [isSuspendeur, setIsSuspendeur] = useState(false)
+
+    const [isModalAnnulationSuspensionOpen, setIsModalAnnulationSuspensionOpen] = useState(false)
+
     const formatDate = (isoDate) => {
         const date = new Date(isoDate);
         return date.toLocaleString("fr-FR", {
@@ -243,6 +256,9 @@ export default function DemandeQrDetails() {
                 const indexAnnulation = demande.retour_demande_qr.filter((item) => { return item.type == 'annulation' }).length - 1
                 const annulation = demande.retour_demande_qr[indexAnnulation]
 
+                const indexSuspension = demande.retour_demande_qr.filter((item) => { return item.type == 'suspension' }).length - 1
+                const suspension = demande.retour_demande_qr[indexSuspension]
+
                 const regularisation = demande.is_reg
                 if (regularisation) {
                     setDateDemandeReg(formDemande.last_modified_at)
@@ -274,7 +290,15 @@ export default function DemandeQrDetails() {
                         setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
                     }
                 } else {
-                    if (statut == 'soumise') {
+                    if (statut == 'annulee' || formDemande.is_deleted) {
+                        setStatutDemande('annulee')
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white')
+                        setIsAnnule(true)
+                        const formAnnulation = annulation.forms
+                        const dateAnnulation = formAnnulation.created_at ? formatDate(formAnnulation.created_at) : null
+                        setDateAnnulation(dateAnnulation)
+                        setAnnulateur(formAnnulation.nom_user)
+                    } else if (statut == 'soumise') {
                         setStatutDemande('soumise')
                         setStatutClass(classStatut)
                         setIsSoumise(true)
@@ -308,18 +332,24 @@ export default function DemandeQrDetails() {
                             setIsReceveur(true)
                         }
                     } else if (statut == 'recue' && reception) {
+                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
                         setStatutDemande('reçue')
                         setIsRecue(true)
-                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-500')
-                    } else if (statut == 'annulee' || formDemande.is_deleted) {
-                        setStatutDemande('annulee')
-                        setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-dark text-white')
-                        setIsAnnule(true)
-                        const formAnnulation = annulation.forms
-                        const dateAnnulation = formAnnulation.created_at ? formatDate(formAnnulation.created_at) : null
-                        setDateAnnulation(dateAnnulation)
-                        console.log(formAnnulation)
-                        setAnnulateur(formAnnulation.nom_user)
+                    } else if (statut == 'suspendue') {
+                        setStatutDemande('suspendue')
+                        setStatutClass("text-center text-xs font-semibold rounded-xl p-0.5 bg-red-100 text-red-500")
+                        setIsSuspendue(true)
+                        if (rolesId.includes(15)) {
+                            setIsDemandeur(true)
+                        }
+                        const formSuspension = suspension.forms
+                        const dateSuspension = formSuspension.created_at ? formatDate(formSuspension.created_at) : null
+                        setDateSuspension(dateSuspension)
+                        setNomSuspension(formSuspension.nom_user)
+
+                        setCommentaireSuspension(suspension?.forms.commentaire)
+                        const isSus = parseInt(userId) === formSuspension.created_by ? true : false
+                        setIsSuspendeur(isSus)
                     }
                     if (generation && (statut == 'generee' || statut == 'imprimee' || statut == 'livree' || statut == 'recue')) {
                         if (rolesId.includes(20)) {
@@ -506,7 +536,7 @@ export default function DemandeQrDetails() {
         setIsModalGenerationOpen(false)
         try {
             setErrorGenerate('')
-            setLoadingGenerate(true)
+            setLoadingActions(true)
             const id = Number(idDemande)
             const fd = new FormData()
             selectedFiles.forEach((file) => {
@@ -531,7 +561,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingGenerate(false)
+            setLoadingActions(false)
         }
     }
 
@@ -570,7 +600,7 @@ export default function DemandeQrDetails() {
     const handleImpressionQr = async () => {
         setIsModalImpressionOpen(false)
         try {
-            setLoadingImpression(true)
+            setLoadingActions(true)
             const payload = {
                 userId,
                 commentaire: commentaireImpression,
@@ -592,7 +622,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingImpression(false)
+            setLoadingActions(false)
         }
     }
 
@@ -611,7 +641,7 @@ export default function DemandeQrDetails() {
         }
         setIsModalLivraisonOpen(false)
         try {
-            setLoadingLivraison(true)
+            setLoadingActions(true)
             const sign = signatureLivraison.toDataURL('image/png')
             const fd = new FormData();
             if (sign) {
@@ -638,7 +668,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingLivraison(false)
+            setLoadingActions(false)
         }
     }
 
@@ -649,7 +679,7 @@ export default function DemandeQrDetails() {
         }
         setIsModalReceptionOpen(false)
         try {
-            setLoadingReception(true)
+            setLoadingActions(true)
             const sign = signatureReception.toDataURL('image/png')
             const fd = new FormData();
             if (sign) {
@@ -676,7 +706,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingReception(false)
+            setLoadingActions(false)
         }
     }
 
@@ -692,7 +722,7 @@ export default function DemandeQrDetails() {
                 userId,
                 messageCancel,
             }
-            setLoadingCancel(true)
+            setLoadingActions(true)
             await demandeData.cancelDemandeQr(idDemande, payload)
             Swal.fire({
                 title: "Succès",
@@ -709,7 +739,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingCancel(false)
+            setLoadingActions(false)
         }
     }
 
@@ -724,7 +754,7 @@ export default function DemandeQrDetails() {
         }
         setIsModalRegLivraisonOpen(false)
         try {
-            setLoadingLivraison(true)
+            setLoadingActions(true)
             const sign = signatureLivraison.toDataURL('image/png')
             const fd = new FormData();
             if (sign) {
@@ -752,7 +782,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingLivraison(false)
+            setLoadingActions(false)
         }
     }
 
@@ -767,7 +797,7 @@ export default function DemandeQrDetails() {
         }
         setIsModalRegReceptionOpen(false)
         try {
-            setLoadingReception(true)
+            setLoadingActions(true)
             const sign = signatureReception.toDataURL('image/png')
             const fd = new FormData();
             if (sign) {
@@ -795,7 +825,7 @@ export default function DemandeQrDetails() {
             })
             navigate('/toutes-les-demandes-qr')
         } finally {
-            setLoadingReception(false)
+            setLoadingActions(false)
         }
     }
 
@@ -832,6 +862,66 @@ export default function DemandeQrDetails() {
             setLoadingExtract(false);
         }
     };
+
+    const handleSuspendreDemande = async () => {
+        if (!messageSuspension) {
+            setErrorSuspension("Vous devez laisser un commentaire pour la suspension !")
+            return;
+        }
+        setErrorSuspension('')
+        setIsModalSuspensionOpen(false)
+        try {
+            const payload = {
+                userId,
+                messageSuspension,
+            }
+            setLoadingActions(true)
+            await demandeData.suspendreDemandeQr(idDemande, payload)
+            Swal.fire({
+                title: "Succès",
+                text: "Demande suspendue avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur d'annulation : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de la suspension !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingActions(false)
+        }
+    }
+
+    const handleAnnulationSuspension = async () => {
+        setIsModalAnnulationSuspensionOpen(false)
+        try {
+            const payload = {
+                userId,
+            }
+            setLoadingActions(true)
+            await demandeData.annulationSuspensionQr(idDemande, payload)
+            Swal.fire({
+                title: "Succès",
+                text: "Suspension annulée avec succès !",
+                icon: "success"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } catch (error) {
+            console.log("Erreur d'annulation : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur est survenue lors de l'annulation de la suspension !",
+                icon: "warning"
+            })
+            navigate('/toutes-les-demandes-qr')
+        } finally {
+            setLoadingActions(false)
+        }
+    }
 
     return (
         <>
@@ -875,6 +965,19 @@ export default function DemandeQrDetails() {
                                                 <div className="flex flex-col text-xs">
                                                     <span className="underline font-light">Modifié par</span>
                                                     <span>{nomUpdate}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                        {isSuspendue ? (
+                                            <>
+                                                <div>
+                                                    <span className="text-sm text-red-600">{`Suspendue le ${dateSuspension}`}</span>
+                                                </div>
+                                                <div className="flex flex-col text-xs">
+                                                    <span className="underline font-light text-red-700">Suspendue par</span>
+                                                    <span className="">{nomSuspension}</span>
                                                 </div>
                                             </>
                                         ) : (
@@ -1001,19 +1104,19 @@ export default function DemandeQrDetails() {
                                             ) : (
                                                 <div className="grid grid-cols-2">
                                                     <div className='col-start-2 space-y-0.5'>
-                                                        {isDemandeur ? (
+                                                        {loadingActions ? (
                                                             <>
-                                                                <div>
-                                                                    {loadingCancel ? (
-                                                                        <>
-                                                                            <div className='text-center'>
-                                                                                <span className=''>
-                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                                </span>
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
+                                                                <div className='text-center'>
+                                                                    <span className=''>
+                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                    </span>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {isDemandeur ? (
+                                                                    <>
+                                                                        <div>
                                                                             <div className="space-y-0.5">
                                                                                 <Link to={`/modifier-demande-qr/${idDemande}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'>
                                                                                     <span className='mr-4'><i className="pi pi-pen-to-square"></i></span>
@@ -1028,24 +1131,12 @@ export default function DemandeQrDetails() {
                                                                                     <span className='text-sm text-gray-700 font-medium'>Annuler la demande</span>
                                                                                 </button>
                                                                             </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
-                                                        {isGenerateur ? (
-                                                            <>
-                                                                {loadingGenerate ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
                                                                         </div>
                                                                     </>
                                                                 ) : (
+                                                                    <></>
+                                                                )}
+                                                                {isGenerateur ? (
                                                                     <>
                                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                                             onClick={() => {
@@ -1062,48 +1153,36 @@ export default function DemandeQrDetails() {
                                                                             <span className='text-sm text-gray-700 font-medium'>Suspendre Demande</span>
                                                                         </button>
                                                                     </>
+                                                                ) : (
+                                                                    <></>
                                                                 )}
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
-                                                        {isUploaded ? (
-                                                            <>
-                                                                {loadingDownload ? (
+                                                                {isUploaded ? (
                                                                     <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
-                                                                        </div>
+                                                                        {loadingDownload ? (
+                                                                            <>
+                                                                                <div className='text-center'>
+                                                                                    <span className=''>
+                                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                                    </span>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                    onClick={handleDownloadFiles}>
+                                                                                    <span className='mr-4'><i className="pi pi-download"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Télécharger QR Codes</span>
+                                                                                </button>
+                                                                            </>
+                                                                        )}
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                            onClick={handleDownloadFiles}>
-                                                                            <span className='mr-4'><i className="pi pi-download"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Télécharger QR Codes</span>
-                                                                        </button>
                                                                     </>
                                                                 )}
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                            </>
-                                                        )}
-                                                        {isImprimeur ? (
-                                                            <>
-                                                                <div>
-                                                                    {loadingImpression ? (
-                                                                        <>
-                                                                            <div className='text-center'>
-                                                                                <span className=''>
-                                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                                </span>
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
+                                                                {isImprimeur ? (
+                                                                    <>
+                                                                        <div>
                                                                             <div className="space-y-0.5">
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                                                     onClick={() => {
@@ -1120,24 +1199,12 @@ export default function DemandeQrDetails() {
                                                                                     <span className='text-sm text-gray-700 font-medium'>Retourner QR Codes</span>
                                                                                 </button>
                                                                             </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
-                                                        {isLivreur ? (
-                                                            <>
-                                                                {loadingLivraison ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
                                                                         </div>
                                                                     </>
                                                                 ) : (
+                                                                    <></>
+                                                                )}
+                                                                {isLivreur ? (
                                                                     <>
                                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                                             onClick={() => {
@@ -1147,22 +1214,10 @@ export default function DemandeQrDetails() {
                                                                             <span className='text-sm text-gray-700 font-medium'>Livraison QR Codes</span>
                                                                         </button>
                                                                     </>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <></>
-                                                        )}
-                                                        {isReceveur ? (
-                                                            <>
-                                                                {loadingReception ? (
-                                                                    <>
-                                                                        <div className='text-center'>
-                                                                            <span className=''>
-                                                                                <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </span>
-                                                                        </div>
-                                                                    </>
                                                                 ) : (
+                                                                    <></>
+                                                                )}
+                                                                {isReceveur ? (
                                                                     <>
                                                                         <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                                             onClick={() => {
@@ -1172,10 +1227,29 @@ export default function DemandeQrDetails() {
                                                                             <span className='text-sm text-gray-700 font-medium'>Réception QR Codes</span>
                                                                         </button>
                                                                     </>
+                                                                ) : (
+                                                                    <></>
+                                                                )}
+                                                                {isSuspendue ? (
+                                                                    <>
+                                                                        {isSuspendeur ? (
+                                                                            <>
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                                                    onClick={() => {
+                                                                                        setIsModalAnnulationSuspensionOpen(true)
+                                                                                    }}>
+                                                                                    <span className='mr-4'><i className="pi pi-lock-open"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Annuler Suspension</span>
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <></>
                                                                 )}
                                                             </>
-                                                        ) : (
-                                                            <></>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1371,6 +1445,19 @@ export default function DemandeQrDetails() {
                                                         <span className='text-sm'><i className="pi pi-comment"></i></span>
                                                     </div>
                                                     <p className='text-sm text-blue-500 text-left'>{commentaireAnnulation}</p>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <></>
+                                        )}
+                                        {commentaireSuspension ? (
+                                            <>
+                                                <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
+                                                    <div className='mb-6 pb-2 w-full border-b text-left'>
+                                                        <span className='text-sm mr-2'>Commentaire Suspension</span>
+                                                        <span className='text-sm'><i className="pi pi-comment"></i></span>
+                                                    </div>
+                                                    <p className='text-sm text-blue-500 text-left'>{commentaireSuspension}</p>
                                                 </div>
                                             </>
                                         ) : (
@@ -1879,6 +1966,76 @@ export default function DemandeQrDetails() {
                     <div className="text-center">
                         <span className="text-error-500 text-xs">
                             {errorSignReception}
+                        </span>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalSuspensionOpen} onClose={() => setIsModalSuspensionOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-7">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-black text-white font-medium">Suspendre</span>
+                    </div>
+                    <div className="text-center text-sm font-medium flex flex-col">
+                        <span>Êtes-vous sûr de vouloir suspendre cette demande ?</span>
+                    </div>
+                    <div>
+                        <div className='w-full mt-3'>
+                            <Label>Commentaire <span className="text-red-700">*</span></Label>
+                            <TextArea
+                                value={messageSuspension}
+                                onChange={(value) => setMessageSuspension(value)}
+                                rows={4}
+                                placeholder="Ajoutez un commentaire"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between">
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-red-400 p-2 rounded-2xl"
+                                    onClick={() => setIsModalSuspensionOpen(false)}
+                                >
+                                    Non
+                                </button>
+                            </div>
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={handleSuspendreDemande}
+                                >
+                                    Oui
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <span className="text-error-600 font-medium text-sm">
+                            {errorSuspension}
+                        </span>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalAnnulationSuspensionOpen} onClose={() => setIsModalAnnulationSuspensionOpen(false)} className="p-4 max-w-md">
+                <div className="space-y-7">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-black text-white font-medium">Annuler Suspension</span>
+                    </div>
+                    <div className="text-center text-sm font-medium flex flex-col">
+                        <span>Annuler la suspension de cette demande ?</span>
+                    </div>
+                    <div>
+                        <div className="flex justify-center">
+                            <div className="w-full flex justify-center items-center">
+                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                    onClick={handleAnnulationSuspension}
+                                >
+                                    Confirmer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-center">
+                        <span className="text-error-600 font-medium text-sm">
+                            {errorSuspension}
                         </span>
                     </div>
                 </div>

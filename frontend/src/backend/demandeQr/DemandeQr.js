@@ -270,4 +270,22 @@ export class DemandeQr {
         }
     }
 
+    async suspendreDemandeQr(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/suspendreDemandeQr/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async annulationSuspensionQr(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/demandeQr/annulationSuspensionQr/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
 }
