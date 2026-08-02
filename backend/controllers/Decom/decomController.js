@@ -2701,75 +2701,66 @@ const normalize = (value) => {
 
 const extractSnReparation = async (req, res) => {
     try {
-        const {
-            userId,
-        } = req.body
+        const { userId } = req.body;
 
         // Le fichier excel est récupéré ici
-        const file = req.file
-        // console.log("Fichier reçu : ", file)
+        const file = req.file;
 
         if (!file) {
-            console.log("Aucun fichier reçu")
+            console.log("Aucun fichier reçu");
             return res.status(400).json({ message: "Excel file is required" });
         }
 
-        // JAVASCRIPT utilise ExcelJS pour lire comme il faut les fichiers excel
+        // Lecture du fichier excel avec ExcelJS
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(req.file.path);
         const worksheet = workbook.worksheets[0];
 
         if (!worksheet) {
-            console.log("Aucune feuille trouvée dans le fichier Excel")
+            console.log("Aucune feuille trouvée dans le fichier Excel");
             return res.status(400).json({ message: "Invalid Excel file" });
         }
 
-        // Récupération des en-têtes 
+        // Récupération des en-têtes
         const headers = {};
         worksheet.getRow(1).eachCell((cell, col) => {
             headers[String(cell.value).trim().toUpperCase()] = col;
         });
 
-        const requireHeader = "SERIAL NUMBER"
+        const requireHeader = "SERIAL NUMBER";
 
         if (!headers[requireHeader]) {
-            console.log(`Colonne requise manquante : ${requireHeader}`)
+            console.log(`Colonne requise manquante : ${requireHeader}`);
             return res.status(400).json({
-                message: `Missing required column: ${requireHeader}`
+                message: `Missing required column: ${requireHeader}`,
             });
         }
 
-        const serials = [];
-        const snSet = new Set()
+        // ── Extraction + validation format/doublon (première erreur rencontrée) ──
+        const snSet = new Set();
         let duplicateError = null;
         let formatError = null;
-        let statutError = null;
         const isOnlyDigits = (str) => /^\d+$/.test(str);
 
         worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
+            // On s'arrête au premier problème détecté
+            if (formatError || duplicateError) return;
 
             const sn = normalize(row.getCell(headers[requireHeader]).value);
             if (!sn) return;
 
-            if (snSet.has(sn)) {
-                duplicateError = {
-                    rowNumber,
-                    sn,
-                };
+            if (sn.length !== 10 || !isOnlyDigits(sn)) {
+                formatError = { rowNumber, sn };
                 return;
             }
-            if (sn.length != 10 || !isOnlyDigits(sn)) {
-                formatError = {
-                    rowNumber,
-                    sn,
-                };
+            if (snSet.has(sn)) {
+                duplicateError = { rowNumber, sn };
                 return;
             }
 
-            snSet.add(sn)
-            // console.log("Données extraites ligne", rowNumber, marchand);
-        })
+            snSet.add(sn);
+        });
 
         if (formatError) {
             return res.status(400).json({
@@ -2782,58 +2773,101 @@ const extractSnReparation = async (req, res) => {
             });
         }
 
-        let statut = 'non enregistré'
-        const listeSn = [...snSet]
-        for (let sn of listeSn) {
-            const serial_number = await prisma.parc_tpe.findUnique({
-                where: {
-                    serial_number: sn
-                },
-                include: {
-                    statut_tpe: true
-                }
-            })
-            if (serial_number.statut_tpe.statut != 'a_reparer') {
-                console.error(`Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`)
-                return res.status(400).json({
-                    message: `Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`,
+        const listeSn = [...snSet];
+        if (listeSn.length === 0) {
+            return res.status(400).json({ message: "Aucun SN valide trouvé dans le fichier" });
+        }
+
+        // ── 1 seule requête : tous les TPE du parc correspondant aux SN ──
+        const parcTpes = await prisma.parc_tpe.findMany({
+            where: { serial_number: { in: listeSn } },
+            include: { statut_tpe: true },
+        });
+        const parcBySn = new Map(parcTpes.map((t) => [t.serial_number, t]));
+
+        // Validation : existence dans le parc + statut 'a_reparer'
+        // (on parcourt listeSn pour renvoyer la première erreur, comme avant)
+        for (const sn of listeSn) {
+            const tpe = parcBySn.get(sn);
+            if (!tpe) {
+                console.error(`S/N introuvable dans le parc : ${sn}`);
+                return res.status(404).json({
+                    message: `S/N introuvable dans le parc : ${sn}`,
                 });
             }
-            if (serial_number) {
-                statut = serial_number.statut_tpe.statut
+            if (!tpe.statut_tpe) {
+                console.error(`Statut manquant pour le S/N ${sn}`);
+                return res.status(400).json({
+                    message: `Statut manquant pour le S/N ${sn}`,
+                });
             }
-
-            const tpeAreparer = await prisma.tpe_a_reparer.findFirst({
-                where: {
-                    tpe_id: serial_number.id,
-                    is_deleted: false,
-                    etat: 'defectueux',
-                },
-                orderBy: {
-                    id: 'desc',
-                },
-            });
-            const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
-                where: {
-                    sn_id: tpeAreparer.id,
-                },
-                select: {
-                    piece_id: true,
-                },
-            })
-            const listePiece = new Array(...pieces_a_reparer)
-            const element = {
-                sn,
-                statut,
-                listePiece,
-                marchand: tpeAreparer.nom_marchand,
+            if (tpe.statut_tpe.statut !== 'a_reparer') {
+                console.error(`Statut invalide pour le S/N ${sn} avec le statut ${tpe.statut_tpe.statut}`);
+                return res.status(400).json({
+                    message: `Statut invalide pour le S/N ${sn} avec le statut ${tpe.statut_tpe.statut}`,
+                });
             }
-            serials.push(element)
         }
-        // const serialList = [...serials]
-        // console.log(serials)
-        console.log(`Extraction complète par utilisateur ${userId} !`)
-        return res.status(201).json({
+
+        // ── 1 seule requête : les lignes tpe_a_reparer défectueuses pour ces TPE ──
+        // orderBy id desc + on ne garde que la plus récente par tpe_id (équivalent findFirst)
+        const tpeIds = parcTpes.map((t) => t.id);
+        const tpeAreparerRows = await prisma.tpe_a_reparer.findMany({
+            where: {
+                tpe_id: { in: tpeIds },
+                is_deleted: false,
+                etat: 'defectueux',
+            },
+            orderBy: { id: 'desc' },
+        });
+
+        const latestByTpeId = new Map();
+        for (const row of tpeAreparerRows) {
+            // Comme trié par id desc, la première rencontrée est la plus récente
+            if (!latestByTpeId.has(row.tpe_id)) {
+                latestByTpeId.set(row.tpe_id, row);
+            }
+        }
+
+        // Garde-fou : chaque TPE 'a_reparer' doit avoir sa ligne tpe_a_reparer
+        for (const sn of listeSn) {
+            const tpe = parcBySn.get(sn);
+            if (!latestByTpeId.has(tpe.id)) {
+                console.error(`Aucune ligne tpe_a_reparer défectueuse pour le S/N ${sn}`);
+                return res.status(400).json({
+                    message: `Aucune ligne à réparer trouvée pour le S/N ${sn}`,
+                });
+            }
+        }
+
+        // ── 1 seule requête : toutes les pièces à réparer pour ces lignes ──
+        const areparerIds = [...latestByTpeId.values()].map((r) => r.id);
+        const piecesRows = await prisma.pieces_a_reparer.findMany({
+            where: { sn_id: { in: areparerIds } },
+            select: { sn_id: true, piece_id: true },
+        });
+
+        // Regroupement des pièces par sn_id (id de la ligne tpe_a_reparer)
+        const piecesBySnId = new Map();
+        for (const p of piecesRows) {
+            if (!piecesBySnId.has(p.sn_id)) piecesBySnId.set(p.sn_id, []);
+            piecesBySnId.get(p.sn_id).push({ piece_id: p.piece_id });
+        }
+
+        // ── Assemblage du résultat, dans l'ordre des SN du fichier ──
+        const serials = listeSn.map((sn) => {
+            const tpe = parcBySn.get(sn);
+            const tpeAreparer = latestByTpeId.get(tpe.id);
+            return {
+                sn,
+                statut: tpe.statut_tpe.statut,
+                listePiece: piecesBySnId.get(tpeAreparer.id) || [],
+                marchand: tpeAreparer.nom_marchand,
+            };
+        });
+
+        console.log(`Extraction complète par utilisateur ${userId} !`);
+        return res.status(200).json({
             message: "Extraction complète",
             data: serials,
         });
@@ -2841,7 +2875,7 @@ const extractSnReparation = async (req, res) => {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
         return res.status(500).json({ message: "Erreur interne", error });
     }
-}
+};
 
 const reparerListeTpe = async (req, res) => {
     try {

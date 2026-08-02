@@ -90,6 +90,9 @@ export default function AllDemandesQrList() {
 
     const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
 
+    const [optionsType, setOptionsType] = useState([])
+    const [selectedTypes, setSelectedTypes] = useState(savedFilters.selectedTypes || [])
+
     const [datesDemande, setDatesDemande] = useState(
         savedFilters?.datesDemande
             ? savedFilters.datesDemande.map((d) => new Date(d))
