@@ -29,6 +29,7 @@ export default function NotificationDropdown() {
     setNotifying(false);
   };
 
+  // @ts-ignore
   // Fonction pour récupérer les demandes en attente
   const fetchDemandesEnAttente = async () => {
     try {
@@ -54,6 +55,7 @@ export default function NotificationDropdown() {
     }
   };
 
+  // @ts-ignore
   // Fonction pour récupérer les demandes validées et non livrées
   const fetchDemandesValidees = async () => {
     try {
@@ -75,20 +77,20 @@ export default function NotificationDropdown() {
     }
   };
 
-  useEffect(() => {
-    // Fetch immediately on mount
-    fetchDemandesEnAttente();
-    fetchDemandesValidees();
+  // useEffect(() => {
+  //   // Fetch immediately on mount
+  //   fetchDemandesEnAttente();
+  //   fetchDemandesValidees();
 
-    // Poll every 30 seconds
-    const interval = setInterval(() => {
-      fetchDemandesEnAttente();
-      fetchDemandesValidees();
-    }, 30000);
+  //   // Poll every 30 seconds
+  //   const interval = setInterval(() => {
+  //     fetchDemandesEnAttente();
+  //     fetchDemandesValidees();
+  //   }, 30000);
 
-    // Cleanup on unmount
-    return () => clearInterval(interval);
-  }, []);
+  //   // Cleanup on unmount
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <div className="relative">
