@@ -183,7 +183,7 @@ export default function AllRemplacementsList() {
     const titleTemplate = (deliveryForms) => {
         let linkSee = `/remplacement-details/${deliveryForms.id}`;
         let titleClass = 'font-bold text-sm'
-        const model = deliveryForms.model_piece_remplacements_new_model_idTomodel_piece.nom_model
+        const model = deliveryForms.model_piece_remplacements_old_model_idTomodel_piece.nom_model
         let title = `Remplacement TPE ${model}`;
 
         return (

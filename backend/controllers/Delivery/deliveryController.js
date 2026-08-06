@@ -2591,7 +2591,7 @@ const getAllRemplacements = async (req, res) => {
       include: {
         forms: true,
         model_piece_remplacements_new_model_idTomodel_piece: true,
-        model_piece_remplacements_new_model_idTomodel_piece: true,
+        model_piece_remplacements_old_model_idTomodel_piece: true,
         validation_remplacement: {
           include: {
             forms: true,
