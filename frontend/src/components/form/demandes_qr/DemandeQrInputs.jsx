@@ -116,6 +116,15 @@ export default function DemandeQrInputs() {
 
     const [selectedTypes, setSelectedTypes] = useState([])
 
+    const [selectedAutre, setSelectedAutre] = useState(false)
+
+    const [typeAutre, setTypeAutre] = useState('')
+    const [nomAutre, setNomAutre] = useState('')
+    const [quantiteAutre, setQuantiteAutre] = useState(0)
+
+    const [isModalParAutre, setIsModalParAutre] = useState(false)
+
+    const isOnlyDigits = (str) => /^\d+$/.test(str);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -131,7 +140,7 @@ export default function DemandeQrInputs() {
 
                 const actifMerchants = uniqueMerchants.filter((item) => item.ETAT_ACTUEL == "Actif")
                 // console.log(('unique', uniqueMerchants.length))
-
+                // console.log(actifMerchants)
                 // Fonction pour avoir une liste des marchands individuellement et leur chaîne ainsi que le nombre de leur TPE
                 const countByPointMarchand = actifMerchants.reduce((acc, { GROUPE, POINT_MARCHAND }) => {
                     const key = `${GROUPE}__${POINT_MARCHAND}`
@@ -569,7 +578,7 @@ export default function DemandeQrInputs() {
         //     setErrorAjout('Vous devez sélectionner le type du QR Code !')
         //     return false
         // }
-        if (selectedTypes.length == 0) {
+        if (selectedTypes.length == 0 && !selectedAutre) {
             setErrorAjout('Vous devez sélectionner au moins un type de QR Code !')
             return false
         }
@@ -645,6 +654,37 @@ export default function DemandeQrInputs() {
         }
         setIsModalParExcelOpen(true)
     }
+    
+    const handleCheckAjoutAutre = () => {
+
+        if (!checkValidate()) {
+            return
+        }
+
+        if (!typeAutre.trim()) {
+            setErrorAjout("Vous devez préciser le type Autre du QR CODE !")
+            return
+        }
+
+        if (!nomAutre.trim()) {
+            setErrorAjout("Vous devez préciser le nom du marchand !")
+            return
+        }
+
+        if (quantiteAutre == 0) {
+            setErrorAjout("Quantité QR CODE invalide !")
+            return
+        }
+
+        const isDuplicate = listeLivraison.some(item => {
+            return item.pointMarchand == nomAutre && typeAutre == item.typeQr && item.formatId == selectedFormat
+        });
+        if (isDuplicate) {
+            setErrorAjout("Vous avez déjà ajouté ce type de QR avec ce format pour ce marchand !");
+            return;
+        }
+        setIsModalParAutre(true)
+    }
 
     const handleAjoutParMarchand = (value) => {
         setErrorAjout('')
@@ -709,6 +749,29 @@ export default function DemandeQrInputs() {
         setListeLivraison((prev) => [...prev, ...marchandsExcel]);
         setSelectedExcelFile(null)
         setMarchandsExcel([])
+    }
+
+    const handleAjoutAutre = () => {
+        setErrorAjout('')
+        setIsModalParAutre(false)
+        const newElement = {
+            typeQrId: 4,
+            typeQr: typeAutre,
+            formatId: Number(selectedFormat),
+            format,
+            chaine: '',
+            pointMarchand: nomAutre,
+            quantiteTerminal: 0,
+            quantiteQr: quantiteAutre,
+            nbreCopie: '',
+            is_selected: true,
+        }
+
+        setListeLivraison((prev) => [...prev, newElement]);
+        setQuantiteTotale((prev) => prev + 1);
+        setTotalQr((prev) => prev + quantiteAutre);
+
+        setNomAutre('')
     }
 
     const handleDelete = (indexToRemove) => {
@@ -988,26 +1051,49 @@ export default function DemandeQrInputs() {
                                                 )}
                                                 {parManuel ? (
                                                     <>
-                                                        <div>
-                                                            <Label>Type QR Code <span className="text-red-700">*</span></Label>
-                                                            {/* <Select
-                                                                options={optionsQr}
-                                                                placeholder="Choisir une option"
-                                                                className="dark:bg-dark-900"
-                                                                onChange={handleSelectType}
-                                                            /> */}
-                                                            {listeQr.map((item) => {
-                                                                return (
-                                                                    <>
-                                                                        <div key={item.id} className="flex items-center gap-3 my-2">
-                                                                            <Checkbox
-                                                                                checked={selectedTypes.some((type) => type.id === item.id)}
-                                                                                onChange={() => handleSelectType({ id: item.id, nom: item.nom })}
-                                                                                label={item.nom} />
-                                                                        </div>
-                                                                    </>
-                                                                )
-                                                            })}
+                                                        <div className="space-y-5">
+                                                            <div>
+                                                                <Label>Type QR Code <span className="text-red-700">*</span></Label>
+                                                                {/* <Select
+                                                                    options={optionsQr}
+                                                                    placeholder="Choisir une option"
+                                                                    className="dark:bg-dark-900"
+                                                                    onChange={handleSelectType}
+                                                                /> */}
+                                                                {listeQr.map((item) => {
+                                                                    return (
+                                                                        <>
+                                                                            <div key={item.id} className="flex items-center gap-3 my-2">
+                                                                                <Checkbox
+                                                                                    checked={selectedTypes.some((type) => type.id === item.id)}
+                                                                                    onChange={() => {
+                                                                                        handleSelectType({ id: item.id, nom: item.nom })
+                                                                                        setSelectedAutre(false)
+                                                                                    }}
+                                                                                    label={item.nom} />
+                                                                            </div>
+                                                                        </>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-3 my-2">
+                                                                    <Checkbox
+                                                                        checked={selectedAutre}
+                                                                        className="text-blue-500"
+                                                                        onChange={(e) => {
+                                                                            if (selectedAutre) {
+                                                                                setSelectedAutre(false)
+                                                                            } else {
+                                                                                setSelectedAutre(true)
+                                                                                setParChaine(false)
+                                                                                setParMarchand(false)
+                                                                                setSelectedTypes([])
+                                                                            }
+                                                                        }}
+                                                                        label="Autre" />
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                         <div>
                                                             <Label>Format <span className="text-red-700">*</span></Label>
@@ -1018,34 +1104,88 @@ export default function DemandeQrInputs() {
                                                                 onChange={handleSelectFormat}
                                                             />
                                                         </div>
-                                                        <div className="flex flex-col">
-                                                            <div className="flex items-center gap-3 my-2">
-                                                                <Checkbox
-                                                                    checked={parChaine}
-                                                                    onChange={(e) => {
-                                                                        if (parChaine) {
-                                                                            setParChaine(false)
-                                                                        } else {
-                                                                            setParChaine(true)
-                                                                            setParMarchand(false)
-                                                                        }
-                                                                    }}
-                                                                    label="Par Chaîne" />
-                                                            </div>
-                                                            <div className="flex items-center gap-3 my-2">
-                                                                <Checkbox
-                                                                    checked={parMarchand}
-                                                                    onChange={(e) => {
-                                                                        if (parMarchand) {
-                                                                            setParMarchand(false)
-                                                                        } else {
-                                                                            setParMarchand(true)
-                                                                            setParChaine(false)
-                                                                        }
-                                                                    }}
-                                                                    label="Par Marchand" />
-                                                            </div>
-                                                        </div>
+                                                        {selectedAutre ? (
+                                                            <>
+                                                                <div className="space-y-5">
+                                                                    <div>
+                                                                        <Label>Nom du type QR Code <span className="text-red-700">*</span></Label>
+                                                                        <Input
+                                                                            type="text"
+                                                                            className="dark:bg-dark-900"
+                                                                            placeholder="Type Autre: 'Exemple: Visuel, Logo, etc...'"
+                                                                            value={typeAutre}
+                                                                            onChange={(e) => setTypeAutre(e.target.value)}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <Label>Nom Marchand <span className="text-red-700">*</span></Label>
+                                                                        <Input
+                                                                            type="text"
+                                                                            className="dark:bg-dark-900"
+                                                                            placeholder="Entrez un nom"
+                                                                            value={nomAutre}
+                                                                            onChange={(e) => setNomAutre(e.target.value)}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <Label>Quantité <span className="text-red-700">*</span></Label>
+                                                                        <Input
+                                                                            type="text"
+                                                                            className="dark:bg-dark-900"
+                                                                            placeholder="0"
+                                                                            value={quantiteAutre}
+                                                                            onChange={(e) => {
+                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
+                                                                                    const value = e.target.value
+                                                                                    setQuantiteAutre(value)
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="w-full flex justify-center items-center">
+                                                                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                                                                onClick={handleCheckAjoutAutre}
+                                                                            >
+                                                                                Ajouter
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex flex-col">
+                                                                    <div className="flex items-center gap-3 my-2">
+                                                                        <Checkbox
+                                                                            checked={parChaine}
+                                                                            onChange={(e) => {
+                                                                                if (parChaine) {
+                                                                                    setParChaine(false)
+                                                                                } else {
+                                                                                    setParChaine(true)
+                                                                                    setParMarchand(false)
+                                                                                }
+                                                                            }}
+                                                                            label="Par Chaîne" />
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 my-2">
+                                                                        <Checkbox
+                                                                            checked={parMarchand}
+                                                                            onChange={(e) => {
+                                                                                if (parMarchand) {
+                                                                                    setParMarchand(false)
+                                                                                } else {
+                                                                                    setParMarchand(true)
+                                                                                    setParChaine(false)
+                                                                                }
+                                                                            }}
+                                                                            label="Par Marchand" />
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        )
+                                                        }
                                                         <div>
                                                             {parChaine ? (
                                                                 <>
@@ -1556,6 +1696,43 @@ export default function DemandeQrInputs() {
                         <span className="text-error-500 text-xs">
                             {errorSign}
                         </span>
+                    </div>
+                </div>
+            </Modal>
+            <Modal isOpen={isModalParAutre} onClose={() => setIsModalParAutre(false)} className="p-4 max-w-md">
+                <div className="space-y-5">
+                    <div className="w-full text-center">
+                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Confirmation</span>
+                    </div>
+                    <div className="">
+                        <div className="text-xs text-center space-y-1">
+                            <div>
+                                <span>Type(s) QR CODE: </span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-sm">{typeAutre}</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span>Format: </span>
+                                <span className="font-bold text-sm">{format}</span>
+                            </div>
+                            <div>
+                                <span className="text-sm font-bold" style={{ fontSize: '15px' }}>{nomAutre}</span>
+                            </div>
+                            <div>
+                                <span>QR Code(s): </span>
+                                <span className="text-sm font-bold">{quantiteAutre} </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="w-full flex justify-center items-center">
+                            <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                onClick={handleAjoutAutre}
+                            >
+                                Valider
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Modal>
