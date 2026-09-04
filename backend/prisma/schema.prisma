@@ -500,6 +500,7 @@ model users {
   mouvement_piece_a_reparer             mouvement_piece_a_reparer[]
   tpe_a_reparer_created                 tpe_a_reparer[]                @relation("tpe_a_reparer_created_by_user")
   tpe_a_reparer_updated                 tpe_a_reparer[]                @relation("tpe_a_reparer_updated_by_user")
+  stock_owners                          stock_owners[]
 }
 
 model validation_demande {
@@ -592,6 +593,7 @@ model stocks {
   stockOwner                     users?               @relation(fields: [owner], references: [id_user], map: "stocks_ibfk_6")
   validation_demande             validation_demande[]
   history_tpe                    history_tpe[]
+  stock_owners                   stock_owners[]
 
   @@index([created_by], map: "created_by")
   @@index([model_id], map: "model_id")
@@ -1278,6 +1280,18 @@ model retour_demande_qr {
   @@index([form_id], map: "form_id")
 }
 
+model stock_owners {
+  user_id  Int
+  stock_id Int
+  type     type_stock_owner
+  users    users  @relation(fields: [user_id], references: [id_user], map: "stock_owners_ibfk_1")
+  stocks   stocks @relation(fields: [stock_id], references: [id], map: "stock_owners_ibfk_2")
+
+  @@id([user_id, stock_id])
+  @@index([user_id], map: "user_id")
+  @@index([stock_id], map: "stock_id")
+}
+
 enum livraison_statut_livraison {
   en_cours
   livre
@@ -1505,4 +1519,9 @@ enum type_retour_demande_qr {
   suspension
   retour_generation
   annulation_suspension
+}
+
+enum type_stock_owner {
+  proprietaire
+  sous_proprietaire
 }

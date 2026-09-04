@@ -631,6 +631,7 @@ const getAllDemandes = async (req, res) => {
       orderBy: { date_demande: 'desc' },
       include: {
         forms: true,
+        items: true,
         validation_demande: {
           include: {
             forms: true,

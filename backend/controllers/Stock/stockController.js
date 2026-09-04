@@ -324,6 +324,12 @@ const getAllStocks = async (req, res) => {
   try {
     const stocks = await prisma.stocks.findMany({
       orderBy: { id: 'desc' },
+      include: {
+        items: true,
+        model_piece: true,
+        services: true,
+        stockOwner: true,
+      }
     });
 
     res.status(200).json(stocks);
@@ -338,8 +344,14 @@ const getOneStock = async (req, res) => {
     const stock = await prisma.stocks.findUnique({
       where: {
         id: parseInt(id)
+      },
+      include: {
+        items: true,
+        model_piece: true,
+        services: true,
+        stockOwner: true,
       }
-    })
+    });
 
     if (!stock) {
       return res.status(404).json({ message: "Stock introuvable !" })
@@ -1995,6 +2007,14 @@ const getAllMouvementStock = async (req, res) => {
   try {
     const mouvement = await prisma.mouvement_stock.findMany({
       orderBy: { id: 'desc' },
+      include: {
+        stocks: true,
+        items: true,
+        model_piece: true,
+        type_mouvement_stock: true,
+        services_mouvement_stock_service_origineToservices: true,
+        services_mouvement_stock_service_destinationToservices: true,
+      }
     });
 
     res.status(200).json(mouvement);

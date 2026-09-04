@@ -206,12 +206,11 @@ export default function AllDemandesList() {
         )
     }
     const titleTemplate = (demandeForms) => {
+        console.log(demandeForms)
         let linkSee = `/demande-details/${demandeForms.id}`;
         let titleClass = 'font-bold text-sm'
         let motif = `${demandeForms.motif_demande}`
-        const piece = items.find((item) => {
-            return item.id_piece == demandeForms.item_id
-        })
+        const piece = demandeForms.items
         const nomPiece = piece ? piece.nom_piece : ''
 
         const stock = stocks.find((item) => {
@@ -432,6 +431,8 @@ export default function AllDemandesList() {
         return matchesStatus && matchesItems && matchesStartDate && matchesEndDate && matchesServiceDemandeur && matchesModel && matchesServicesPieces && matchesStatusReception && matchesReg && matchesGlobalFilter;
     });
 
+    // const totalValide = filteredDemandeForms.reduce((sum, item) => sum + Number(item.))
+
     return (
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
@@ -580,7 +581,7 @@ export default function AllDemandesList() {
                         <Column field="id" header="ID" body={idTemplate} sortable></Column>
                         <Column field="item_id" header="Demande" body={titleTemplate} sortable></Column>
                         {/* <Column header="Mouvement" body={mouvementTemplate}></Column> */}
-                        <Column field="qte_total_demande" header="Quantité" sortable></Column>
+                        <Column field="qte_total_demande" header="Quantité demandée" sortable></Column>
                         <Column field="date_demande" header="Date d'émission" body={demandeDateTemplate} sortable></Column>
                         <Column field="statut_demande" header="Statut Validation" body={statutTemplate}></Column>
                         <Column header="Quantité Validée" body={quantiteValideeTemplate}></Column>

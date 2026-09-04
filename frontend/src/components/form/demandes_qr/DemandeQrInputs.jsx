@@ -330,7 +330,6 @@ export default function DemandeQrInputs() {
         }
     });
 
-
     const handleDeleteFile = (indexToRemove) => {
         setSelectedFiles((prev) =>
             prev.filter((_, index) => index !== indexToRemove)

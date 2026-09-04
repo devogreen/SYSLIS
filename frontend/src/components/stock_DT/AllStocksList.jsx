@@ -7,7 +7,6 @@ import { Link } from "react-router"
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 
-import { PackagePlus } from 'lucide-react'
 
 import Input from "../form/input/InputField";
 
@@ -46,16 +45,19 @@ export default function AllStocksList() {
     const [models, setModels] = useState([])
     const [services, setServices] = useState([])
     const [users, setUsers] = useState([])
-    
 
+    const [optionUsers, setOptionUsers] = useState([])
+    const [selectedUsers, setSelectedUsers] = useState(savedFilters?.selectedUsers || [])
+    
     useEffect(() => {
         saveFilters({
             globalFilter,
             selectedPieces,
             selectedModels,
             selectedServices,
+            selectedUsers,
         });
-    }, [globalFilter, selectedPieces, selectedModels, selectedServices]);
+    }, [globalFilter, selectedPieces, selectedModels, selectedServices, selectedUsers]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -99,6 +101,11 @@ export default function AllStocksList() {
                     return item.is_deleted == false
                 })
                 setUsers(users_data)
+                const options_users = users_data.map((item) => ({
+                    value: item.id_user,
+                    label: item.fullname,
+                }))
+                setOptionUsers(options_users)
                 
 
             } catch (error) {
@@ -138,6 +145,7 @@ export default function AllStocksList() {
         setSelectedPieces([])
         setSelectedModels([])
         setSelectedServices([])
+        setSelectedUsers([])
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
@@ -162,17 +170,17 @@ export default function AllStocksList() {
         const piece = items.find((item) => {
             return stock.piece_id == item.id_piece
         })
-        const nomPiece = piece ? piece.nom_piece : 'N/A'
+        const nomPiece = stock.items.nom_piece
 
         const model = models.find((item) => {
             return stock.model_id == item.id_model
         })
-        const nomModel = model ? model.nom_model : 'N/A'
+        const nomModel = stock.model_piece.nom_model
 
         const service = services.find((item) => {
             return stock.service_id == item.id
         })
-        const nomService = service ? service.nom_service : 'N/A'
+        const nomService = stock.services.nom_service
 
         return (
             <>
@@ -219,7 +227,7 @@ export default function AllStocksList() {
             return item.id_user == stock.updated_by
         })
 
-        const nomUser = user ? user.fullname : 'N/A'
+        const nomUser = stock.stockOwner.fullname
 
         return (
             <>
@@ -248,6 +256,7 @@ export default function AllStocksList() {
     }
 
     const filteredStocks = stocks.filter((item) => {
+        const matchesOwners = selectedUsers.length > 0 ? selectedUsers.includes(item.owner) : true
         const matchesPieces = selectedPieces.length > 0 ? selectedPieces.includes(item.piece_id) : true;
         const matchesModels = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
         const matchesServices = selectedServices.length > 0 ? selectedServices.includes(item.service_id) : true;
@@ -255,7 +264,7 @@ export default function AllStocksList() {
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
 
-        return matchesPieces && matchesModels && matchesServices && matchesGlobalFilter
+        return matchesOwners && matchesPieces && matchesModels && matchesServices && matchesGlobalFilter
     })
     return (
         <>
@@ -309,6 +318,16 @@ export default function AllStocksList() {
                                 placeholder="Filtrer par services"
                                 className=""
                             />
+                            <MultiSelect
+                                value={selectedUsers}
+                                options={optionUsers}
+                                display="chip"
+                                optionLabel="label"
+                                maxSelectedLabels={2}
+                                onChange={(e) => setSelectedUsers(e.value)}
+                                placeholder="Filtrer par propriétaires"
+                                className=""
+                            />
                         </div>
                     </div>
                     <div>
@@ -340,7 +359,7 @@ export default function AllStocksList() {
                                 <Column field="quantite_carton" header="Qte Carton" body={quantiteCartonTemplate} sortable></Column>
                                 <Column field="quantite_lot" header="Qte Lot" body={quantiteLotTemplate} sortable></Column>
                                 <Column field="last_update" header="Dernière Modification" body={dateTemplate} sortable></Column>
-                                <Column field="updated_by" header="Utilisateur" body={userTemplate}></Column>
+                                <Column field="updated_by" header="Propriétaire" body={userTemplate}></Column>
                                 <Column header="Actions" body={actionsTemplate}></Column>
 
                             </DataTable>
