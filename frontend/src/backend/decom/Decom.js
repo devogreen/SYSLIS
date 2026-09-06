@@ -296,5 +296,16 @@ export class Decom {
             throw error.response.data
         }
     }
+
+    async exportAllDecomToExcel() {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/exportAllDecomToExcel`,{
+                responseType: "blob",
+            });
+            return response;
+        } catch (error) {
+            throw error.response?.data || { message: "Export failed" };
+        }
+    }
     
 }

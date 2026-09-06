@@ -30,65 +30,65 @@ export default function NotificationDropdown() {
   };
 
   // Fonction pour récupérer les demandes en attente
-  const fetchDemandesEnAttente = async () => {
-    try {
-      const data = await demandes.getDemandesEnAttente();
-      const formattedData = data.map((item: any) => ({
-        ...item,
-        timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      }));
+  // const fetchDemandesEnAttente = async () => {
+  //   try {
+  //     const data = await demandes.getDemandesEnAttente();
+  //     const formattedData = data.map((item: any) => ({
+  //       ...item,
+  //       timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
+  //         day: '2-digit',
+  //         month: '2-digit',
+  //         year: 'numeric',
+  //         hour: '2-digit',
+  //         minute: '2-digit'
+  //       })
+  //     }));
       
-      if (formattedData.length > 0) {
-        setNotifying(true);
-      }
+  //     if (formattedData.length > 0) {
+  //       setNotifying(true);
+  //     }
       
-      setDemandesEnAttentes(formattedData);
-    } catch (error) {
-      console.error('Error fetching demandes en attente:', error);
-    }
-  };
+  //     setDemandesEnAttentes(formattedData);
+  //   } catch (error) {
+  //     console.error('Error fetching demandes en attente:', error);
+  //   }
+  // };
 
-  // Fonction pour récupérer les demandes validées et non livrées
-  const fetchDemandesValidees = async () => {
-    try {
-      const data = await demandes.getDemandesValidees();
-      const formattedData = data.map((item: any) => ({
-        ...item,
-        timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-      }));
+  // // Fonction pour récupérer les demandes validées et non livrées
+  // const fetchDemandesValidees = async () => {
+  //   try {
+  //     const data = await demandes.getDemandesValidees();
+  //     const formattedData = data.map((item: any) => ({
+  //       ...item,
+  //       timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
+  //         day: '2-digit',
+  //         month: '2-digit',
+  //         year: 'numeric',
+  //         hour: '2-digit',
+  //         minute: '2-digit'
+  //       })
+  //     }));
       
-      setDemandesValidees(formattedData);
-    } catch (error) {
-      console.error('Error fetching demandes validées:', error);
-    }
-  };
+  //     setDemandesValidees(formattedData);
+  //   } catch (error) {
+  //     console.error('Error fetching demandes validées:', error);
+  //   }
+  // };
 
-  useEffect(() => {
-    // Fetch immediately on mount
-    fetchDemandesEnAttente();
-    fetchDemandesValidees();
+  // useEffect(() => {
+  //   // Fetch immediately on mount
+  //   fetchDemandesEnAttente();
+  //   fetchDemandesValidees();
 
-    // Poll every 30 seconds
-    const interval = setInterval(() => {
-      fetchDemandesEnAttente();
-      fetchDemandesValidees();
-    }, 30000);
+  //   // Poll every 30 seconds
+  //   const interval = setInterval(() => {
+  //     fetchDemandesEnAttente();
+  //     fetchDemandesValidees();
+  //   }, 30000);
 
-    // Cleanup on unmount
-    return () => clearInterval(interval);
-  }, []);
+  //   // Cleanup on unmount
+  //   return () => clearInterval(interval);
+  // }, []);
 
   return (
     <div className="relative">

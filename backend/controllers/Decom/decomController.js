@@ -4331,6 +4331,99 @@ const liaisonTpePieces = async (req, res) => {
     }
 };
 
+// Fonction pour exporter tous les SN en décommissionnement vers un fichier Excel
+const exportAllDecomToExcel = async (req, res) => {
+    try {
+        const decoms = await prisma.form_decom.findMany({
+            include: {
+                forms: true,
+                sn_decom: true,
+            },
+            where: {
+                forms: {
+                    is_deleted: false,
+                },
+            },
+            orderBy: {
+                id: 'desc',
+            },
+        })
+
+        if (!decoms || decoms.length === 0) {
+            console.error('Aucun décommissionnement trouvé !')
+            return res.status(404).json({ message: "Aucun décommissionnement trouvé !" });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+
+        const decomSheet = workbook.addWorksheet('Décommissionnements');
+        const decomHeaders = [
+            "Index",
+            "Point Marchand",
+            "Caisse",
+            "S/N",
+            "Banque",
+            "TID GIM",
+            "TID ECOBANK",
+            "Etat",
+            "RI",
+            "Commercial",
+            "Commentaire",
+        ];
+        const decomHeaderRow = decomSheet.addRow(decomHeaders);
+        decomHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        decoms.forEach((item) => {
+            const listeDecom = typeof item.liste_decom === "string"
+            ? JSON.parse(item.liste_decom)
+            : item.liste_decom;
+
+            listeDecom.forEach((decomItem, index) => {
+                decomSheet.addRow([
+                    index + 1,
+                    decomItem.pointMarchand,
+                    decomItem.caisse,
+                    decomItem.terminalSN,
+                    decomItem.banque,
+                    decomItem.idGim,
+                    decomItem.idEcobank,
+                    decomItem.etat,
+                    decomItem.RI,
+                    decomItem.nomCommercial,
+                    decomItem.commentaire,
+                ])
+            })
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=decom.xlsx`
+        );
+        res.send(buffer);
+
+        console.log('Export des S/N en décommissionnement téléchargé avec succès !');
+
+    } catch (error) {
+        console.error('Erreur exportAllDecomToExcel:', error);
+        return res.status(500).json({ message: 'Erreur serveur' });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -4359,4 +4452,5 @@ module.exports = {
     downloadTemplateLiaisonTpePieces,
     extractLiaisonTpePiecesData,
     liaisonTpePieces,
+    exportAllDecomToExcel,
 }
