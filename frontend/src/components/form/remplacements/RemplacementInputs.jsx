@@ -113,6 +113,23 @@ export default function RemplacementInputs() {
   const [statutTpeOld, setStatutTpeOld] = useState('')
   const [statutTpeNew, setStatutTpeNew] = useState('')
 
+  const banques = {
+    '00343': 'BACI',
+    '05600': 'BGFI CI',
+    '00321': 'BOACI',
+    '05350': 'BBG',
+    '01543': 'BSIC CI',
+    '00599': 'ECOBANK',
+    '81633': 'GTBANK CI',
+    '82113': 'MANSA',
+    '00429': 'NSIA CI',
+    '01129': 'VERSUS',
+    '81623': 'BGFI CI',
+    '384G': 'ECOBANK',
+    '82143': 'OBACI',
+    '82013': 'BDA',
+  }
+
   useEffect(() => {
     const fetchTerminalInfos = async () => {
       setLoadingMerchant(true)
@@ -307,7 +324,38 @@ export default function RemplacementInputs() {
     try {
       if (pointMarchand) {
         setTerminalName(pointMarchand.POINT_MARCHAND)
-        setTerminalBanque(pointMarchand.BANQUE)
+        // setTerminalBanque(pointMarchand.BANQUE)
+
+        const tidGim = pointMarchand.Id_Terminal_GIM
+        const tidEcobank = pointMarchand.Id_Terminal_CB
+
+        let banqueGim = ''
+        let banqueEcobank = ''
+
+        if (tidGim) {
+          for (const [key, value] of Object.entries(banques)) {
+            if (tidGim.startsWith(key)) {
+              banqueGim = value
+            }
+          }
+        }
+
+        if (tidEcobank) {
+          for (const [key, value] of Object.entries(banques)) {
+            if (tidEcobank.startsWith(key)) {
+              banqueEcobank = value
+            }
+          }
+        }
+
+        if (banqueGim && !banqueEcobank) {
+          setTerminalBanque(banqueGim)
+        } else if (banqueEcobank && !banqueGim) {
+          setTerminalBanque(banqueEcobank)
+        } else if (banqueGim && banqueEcobank) {
+          setTerminalBanque(banqueGim +' - '+ banqueEcobank)
+        }
+        
         setTerminalCaisse(pointMarchand.TPE)
         if (pointMarchand.NUM_ORANGE.startsWith("07")) {
           setOrangeChecked(true)
