@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dropdown } from "../../ui/dropdown/Dropdown";
 import { DropdownItem } from "../../ui/dropdown/DropdownItem";
 import { Link, useNavigate } from "react-router";
@@ -11,9 +11,11 @@ import { Demandes } from "../../../backend/demandes/Demandes"
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [notifying, setNotifying] = useState(false);
+  // @ts-ignore
   const [demandesEnAttentes, setDemandesEnAttentes] = useState<any[]>([])
+  // @ts-ignore
   const [demandesValidees, setDemandesValidees] = useState<any[]>([])
-  const demandes = new Demandes();
+  // const demandes = new Demandes();
   const navigate = useNavigate()
 
   function toggleDropdown() {
