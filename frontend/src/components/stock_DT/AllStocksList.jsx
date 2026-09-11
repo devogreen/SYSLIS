@@ -227,7 +227,7 @@ export default function AllStocksList() {
             return item.id_user == stock.updated_by
         })
 
-        const nomUser = stock.stockOwner.fullname
+        const nomUser = stock.stockOwner?.fullname
 
         return (
             <>

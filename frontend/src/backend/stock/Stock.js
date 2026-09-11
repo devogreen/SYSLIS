@@ -282,11 +282,38 @@ export class Stock {
     }
 
     async getAllUserTypeStocks(itemId, modelId, serviceId) {
-    try {
-      const response = await axios.get(`${urlBase}/api/stock/getAllUserTypeStocks/${itemId}/${modelId}/${serviceId}`)
-      return response.data;
-    } catch (error) {
-      throw error.response.data
+        try {
+            const response = await axios.get(`${urlBase}/api/stock/getAllUserTypeStocks/${itemId}/${modelId}/${serviceId}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    };
+
+    async modifyStock(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/stock/modifyStock/${id}`, payload)
+            return response.data
+        } catch (error) {
+            throw error.response.data
+        }
     }
-  };
+
+    async createMouvementStock(stockId, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/stock/createMouvementStock/${stockId}`, payload)
+            return response.data
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async getAllStockSubOwners(stockId) {
+        try {
+            const response = await axios.get(`${urlBase}/api/stock/getAllStockSubOwners/${stockId}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
 }

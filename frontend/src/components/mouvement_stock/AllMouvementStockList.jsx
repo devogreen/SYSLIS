@@ -10,13 +10,26 @@ import { Column } from 'primereact/column';
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
 import { Calendar } from 'primereact/calendar';
-import DatePicker from "../form/date-picker";
+import { addLocale } from "primereact/api";
 import { MultiSelect } from "primereact/multiselect";
+import Label from "../form/Label";
 
 export default function AllMouvementStockList() {
 
     const stockData = new Stock()
     const userData = new Users()
+
+    addLocale('fr', {
+        firstDayOfWeek: 1,
+        showMonthAfterYear: false,
+        dayNames: ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'],
+        dayNamesShort: ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+        dayNamesMin: ['D', 'L', 'M', 'M', 'J', 'V', 'S'],
+        monthNames: ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+        monthNamesShort: ['janv', 'févr', 'mars', 'avril', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'],
+        today: 'Aujourd\'hui',
+        clear: 'Effacer'
+    });
 
     const [loading, setLoading] = useState(false)
     const [allMouvement, setAllMouvement] = useState([])
@@ -24,6 +37,19 @@ export default function AllMouvementStockList() {
 
     const [first, setFirst] = useState(savedPagination?.first || 0);
     const [rows, setRows] = useState(savedPagination?.rows || 10);
+
+    const FILTERS_KEY = "allMouvementStockFilters";
+
+    const saveFilters = (filters) => {
+        sessionStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+    };
+
+    const loadFilters = () => {
+        const stored = sessionStorage.getItem(FILTERS_KEY);
+        return stored ? JSON.parse(stored) : null;
+    };
+
+    const savedFilters = loadFilters();
 
     const [items, setItems] = useState([])
 
@@ -35,8 +61,52 @@ export default function AllMouvementStockList() {
 
     const [stocks, setStocks] = useState([])
 
-    const [optionTypes, setOptionTypes] = useState([])
-    const [selectedTypes, setSelectedTypes] = useState([])
+    const [globalFilter, setGlobalFilter] = useState(savedFilters?.globalFilter || "");
+
+    const optionsTypes = [
+        { label: 'entree', value: 'entree'},
+        { label: 'sortie', value: 'sortie'},
+    ]
+
+    const [selectedTypes, setSelectedTypes] = useState(savedFilters?.selectedTypes || [])
+
+    const [optionsPieces, setOptionsPieces] = useState([])
+    const [selectedItems, setSelectedItems] = useState(savedFilters?.selectedItems || []);
+
+    const [optionsModels, setOptionsModels] = useState([])
+    const [selectedModels, setSelectedModels] = useState(savedFilters?.selectedModels || []);
+
+    const [optionsServiceOrigines, setOptionsServiceOrigines] = useState([])
+    const [selectedServiceOrigines, setSelectedServiceOrigines] = useState(savedFilters?.selectedServiceOrigines || [])
+
+    const [optionsServiceReceptions, setOptionsServiceReceptions] = useState([])
+    const [selectedServiceReceptions, setSelectedServiceReceptions] = useState(savedFilters?.selectedServiceReceptions || [])
+
+    const [optionsStocks, setOptionsStocks] = useState([])
+    const [selectedStocks, setSelectedStocks] = useState(savedFilters?.selectedStocks || [])
+
+    const [optionsMouvements, setOptionsMouvements] = useState([])
+    const [selectedMouvements, setSelectedMouvements] = useState(savedFilters?.selectedMouvements || [])
+
+    const [periode, setPeriode] = useState(
+        savedFilters?.periode
+            ? savedFilters.periode.map((d) => new Date(d))
+            : null
+    );
+
+    useEffect(() => {
+        saveFilters({
+            globalFilter,
+            selectedItems,
+            selectedModels,
+            selectedServiceOrigines,
+            selectedServiceReceptions,
+            selectedStocks,
+            selectedMouvements,
+            periode: periode?.map(d => d?.toISOString()),
+            selectedTypes,
+        });
+    }, [globalFilter, selectedItems, selectedModels, selectedServiceOrigines, selectedServiceReceptions, selectedStocks, selectedMouvements, periode, selectedTypes]); 
 
     useEffect(() => {
         const fetchData = async () => {
@@ -46,24 +116,51 @@ export default function AllMouvementStockList() {
                 setAllMouvement(mouvement_data)
 
                 const piece_data = await stockData.getAllItems()
-                setItems(piece_data)
+                const items_data = piece_data.filter((item) => {
+                    return item.is_deleted == false
+                })
+                setItems(items_data)
+                const options_pieces = items_data.map((item) => ({
+                    value: item.id_piece,
+                    label: item.nom_piece,
+                }))
+                setOptionsPieces(options_pieces)
 
                 const models_data = await stockData.getAllModels()
                 setModels(models_data)
+                const options_model = models_data.map((item) => ({
+                    value: item.id_model,
+                    label: item.nom_model.toUpperCase(),
+                }))
+                setOptionsModels(options_model)
 
                 const typesMouvement_data = await stockData.getAllTypeMouvementStock()
                 setTypesMouvement(typesMouvement_data)
+                const options_typesMouvement = typesMouvement_data.map((item) => ({
+                    value: item.id,
+                    label: item.titre,
+                }))
+                setOptionsMouvements(options_typesMouvement)
 
                 const services_data = await userData.getAllServices()
                 setServices(services_data)
+                const options_services = services_data.map((item) => ({
+                    value: item.id,
+                    label: item.nom_service.toUpperCase(),
+                }))
+                setOptionsServiceOrigines(options_services)
+                setOptionsServiceReceptions(options_services)
 
                 const stocks_data_all = await stockData.getAllStocks()
                 const stocks_data = stocks_data_all.filter((item) => {
                     return item.is_deleted == false
                 })
                 setStocks(stocks_data)
-
-                
+                const options_stocks = stocks_data.map((item) => ({
+                    value: item.id,
+                    label: item.code_stock + ' - ' + item.stockOwner?.fullname,
+                }))
+                setOptionsStocks(options_stocks)
 
             } catch (error) {
                 console.log('Error fetching data ', error)
@@ -73,6 +170,22 @@ export default function AllMouvementStockList() {
         };
         fetchData()
     }, [])
+
+    const handleClearFilters = () => {
+        setGlobalFilter("");
+        setSelectedStocks([]);
+        setSelectedItems([]);
+        setSelectedModels([]);
+        setSelectedServiceOrigines([]);
+        setSelectedServiceReceptions([]);
+        setSelectedMouvements([]);
+        setPeriode(null);
+        setFirst(0);
+        setRows(10);
+        setSelectedTypes([]);
+        sessionStorage.removeItem("paginationState");
+        sessionStorage.removeItem(FILTERS_KEY);
+    }
 
     // const formatDate = (date) => {
     //     const d = new Date(date);
@@ -118,14 +231,18 @@ export default function AllMouvementStockList() {
         const stock = stocks.find((item) => {
             return item.id == mouvement.stock_id
         })
-        const codeStock = mouvement.stocks.code_stock
+        const codeStock = mouvement.stocks?.code_stock
         const idStock = mouvement.stock_id
         const linkSee = `/details-stock/${idStock}`
+        const owner = mouvement.stocks?.stockOwner?.fullname
 
         return (
             <>
                 <span className="font-bold text-gray-700">
-                    <Link to={linkSee}>{codeStock}</Link>
+                    <Link to={linkSee} className="flex flex-col">
+                        <span>{codeStock}</span>
+                        {owner && <span className="font-medium text-gray-500">{owner}</span>}
+                    </Link>
                 </span>
             </>
         )
@@ -277,7 +394,25 @@ export default function AllMouvementStockList() {
     }
 
     const filteredMouvementStock = allMouvement.filter((item) => {
-        
+
+        const dateMouvement = new Date(item.created_at);
+        const dateMouvementPlus = periode ? new Date(periode[1]) : null;
+        dateMouvementPlus?.setDate(dateMouvementPlus.getDate() + 1);
+        const nextDay = dateMouvementPlus ? new Date(dateMouvementPlus) : null;
+
+        const matchesPeriode = periode ? (periode[0] <= dateMouvement && nextDay >= dateMouvement) : true;
+        const matchesType = selectedTypes.length === 0 || selectedTypes.includes(item.type);
+        const matchesItem = selectedItems.length === 0 || selectedItems.includes(item.piece_id);
+        const matchesModel = selectedModels.length === 0 || selectedModels.includes(item.model_id);
+        const matchesServiceOrigine = selectedServiceOrigines.length === 0 || selectedServiceOrigines.includes(item.service_origine);
+        const matchesServiceReception = selectedServiceReceptions.length === 0 || selectedServiceReceptions.includes(item.service_destination);
+        const matchesStock = selectedStocks.length === 0 || selectedStocks.includes(item.stock_id);
+        const matchesMouvement = selectedMouvements.length === 0 || selectedMouvements.includes(item.mouvement);
+         const matchesGlobalFilter = globalFilter
+            ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
+            : true;
+
+        return matchesPeriode && matchesType && matchesItem && matchesModel && matchesServiceOrigine && matchesServiceReception && matchesStock && matchesMouvement && matchesGlobalFilter;
     });
 
     return (
@@ -302,13 +437,13 @@ export default function AllMouvementStockList() {
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <MultiSelect
-                            value={selectedStatus}
-                            onChange={(e) => setSelectedStatus(e.value)}
-                            options={statusOptions}
+                            value={selectedTypes}
+                            onChange={(e) => setSelectedTypes(e.value)}
+                            options={optionsTypes}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
-                            placeholder="Filtrer par statut demande"
+                            placeholder="Filtrer par type de mouvement"
                             className=""
                         />
                         <MultiSelect
@@ -334,86 +469,72 @@ export default function AllMouvementStockList() {
                             onChange={(e) => setSelectedModels(e.value)}
                         />
                         <MultiSelect
-                            value={servicesPieces}
-                            options={optionsServicesPiece}
+                            value={selectedStocks}
+                            options={optionsStocks}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
-                            onChange={(e) => setServicesPieces(e.value)}
-                            placeholder="Filtrer par service pièce"
+                            onChange={(e) => setSelectedStocks(e.value)}
+                            placeholder="Filtrer par stock"
                             className=""
                         />
                         <MultiSelect
-                            value={serviceDemandeurs}
-                            options={optionsServicesDemandeur}
+                            value={selectedServiceOrigines}
+                            options={optionsServiceOrigines}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
-                            onChange={(e) => setServiceDemandeurs(e.value)}
-                            placeholder="Filtrer par service demandeur"
+                            onChange={(e) => setSelectedServiceOrigines(e.value)}
+                            placeholder="Filtrer par service d'origine"
                             className=""
                         />
                         <MultiSelect
-                            value={selectedStatusReception}
-                            onChange={(e) => setSelectedStatusReception(e.value)}
-                            options={statusReception}
+                            value={selectedServiceReceptions}
+                            options={optionsServiceReceptions}
                             display="chip"
                             optionLabel="label"
                             maxSelectedLabels={2}
-                            placeholder="Filtrer par statut réception"
+                            onChange={(e) => setSelectedServiceReceptions(e.value)}
+                            placeholder="Filtrer par service recepteur"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedMouvements}
+                            options={optionsMouvements}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            onChange={(e) => setSelectedMouvements(e.value)}
+                            placeholder="Filtrer par mouvement"
                             className=""
                         />
                     </div>
                     <div className="flex justify-normal flex-wrap gap-3">
-                        <div className="flex gap-2">
-                            <DatePicker
-                                id="date-picker-debut"
-                                label="Date de début"
-                                placeholder={startDate ? formatDate(startDate) : 'Date de début'}
-                                value={startDate}
-                                onChange={(dates, currentDateString) => {
-                                    setStartDate(dates[0])
-                                }}
-                                dateFormat="dd/mm/yy" />
-                            <DatePicker
-                                id="date-picker-fin"
-                                label="Date de fin"
-                                placeholder={endDate ? formatDate(endDate) : 'Date de fin'}
-                                value={endDate}
-                                onChange={(dates, currentDateString) => {
-                                    if (dates && dates[0]) {
-                                        let selectedDate = new Date(dates[0]);
-                                        let nextDay = new Date(selectedDate);
-                                        nextDay.setDate(selectedDate.getDate() + 1);
-                                        setEndDate(nextDay);
-                                    }
-                                }}
-                                dateFormat="dd/mm/yy" />
-                        </div>
-                    </div>
-                    <div>
-                        <div className="flex items-center gap-3 my-2">
-                            <Checkbox
-                                checked={isReg}
+                        <div>
+                            <Label>Période</Label>
+                            <Calendar
+                                value={periode}
                                 onChange={(e) => {
-                                    if (isReg) {
-                                        setIsReg(false)
-                                    } else {
-                                        setIsReg(true)
-                                    }
+                                    setPeriode(e.value)
                                 }}
-                                label="Régularisations" />
+                                selectionMode="range"
+                                readOnlyInput
+                                hideOnRangeSelection
+                                locale="fr"
+                                dateFormat="dd/mm/yy"
+                                placeholder="jj/mm/aaaa - jj/mm/aaaa"
+                            />
                         </div>
                     </div>
                 </div>
-                <div className="p-6 pt-0">
+                <div className="">
                     <span className="text-sm text-gray-600 dark:text-gray-300">
-                        {filteredMouvementStock.length} demande(s) trouvée(s)
+                        {filteredMouvementStock.length} mouvement(s) trouvé(s)
                     </span>
                 </div>,
                 <div className="card">
                     <DataTable
-                        value={allMouvement}
+                        value={filteredMouvementStock}
                         loading={loading}
                         removableSort
                         paginator

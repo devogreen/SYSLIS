@@ -238,6 +238,7 @@ model mouvement_stock {
   motif                                                  String?               @db.Text
   commentaire                                            String?               @db.LongText
   details_mouvement                                      String?               @db.LongText
+  created_by                                             Int?
   services_mouvement_stock_service_origineToservices     services?             @relation("mouvement_stock_service_origineToservices", fields: [service_origine], references: [id], map: "mouvement_stock_ibfk_1")
   services_mouvement_stock_service_destinationToservices services?             @relation("mouvement_stock_service_destinationToservices", fields: [service_destination], references: [id], map: "mouvement_stock_ibfk_2")
   demandes                                               demandes?             @relation(fields: [demande_id], references: [id], map: "mouvement_stock_ibfk_3")
@@ -246,6 +247,7 @@ model mouvement_stock {
   model_piece                                            model_piece           @relation(fields: [model_id], references: [id_model], onDelete: Cascade, map: "mouvement_stock_ibfk_6")
   type_mouvement_stock                                   type_mouvement_stock? @relation(fields: [mouvement], references: [id], onDelete: Restrict, map: "mouvement_stock_ibfk_7")
   stocks                                                 stocks?               @relation(fields: [stock_id], references: [id], map: "mouvement_stock_ibfk_8")
+  users                                                  users?                @relation(fields: [created_by], references: [id_user], map: "mouvement_stock_ibfk_9")
 
   @@index([demande_id], map: "demande_id")
   @@index([formulaire_id], map: "formulaire_id")
@@ -255,6 +257,7 @@ model mouvement_stock {
   @@index([service_destination], map: "service_destination")
   @@index([service_origine], map: "service_origine")
   @@index([stock_id], map: "stock_id")
+  @@index([created_by], map: "created_by")
 }
 
 model reception_livraison {
@@ -501,6 +504,7 @@ model users {
   tpe_a_reparer_created                 tpe_a_reparer[]                @relation("tpe_a_reparer_created_by_user")
   tpe_a_reparer_updated                 tpe_a_reparer[]                @relation("tpe_a_reparer_updated_by_user")
   stock_owners                          stock_owners[]
+  mouvement_stocks                      mouvement_stock[]
 }
 
 model validation_demande {
@@ -1284,8 +1288,8 @@ model stock_owners {
   user_id  Int
   stock_id Int
   type     type_stock_owner
-  users    users  @relation(fields: [user_id], references: [id_user], map: "stock_owners_ibfk_1")
-  stocks   stocks @relation(fields: [stock_id], references: [id], map: "stock_owners_ibfk_2")
+  users    users            @relation(fields: [user_id], references: [id_user], map: "stock_owners_ibfk_1")
+  stocks   stocks           @relation(fields: [stock_id], references: [id], map: "stock_owners_ibfk_2")
 
   @@id([user_id, stock_id])
   @@index([user_id], map: "user_id")
@@ -1522,6 +1526,6 @@ enum type_retour_demande_qr {
 }
 
 enum type_stock_owner {
-  proprietaire
-  sous_proprietaire
+  owner
+  sub_owner
 }
