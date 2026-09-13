@@ -172,6 +172,26 @@ export default function ReparationTpeInputs() {
         }
     }
 
+    const handleAjout = () => {
+        setIsModalConfirmOpen(false)
+        const newElement = {
+            pointMarchand: terminalName,
+            terminalSn,
+            modele: selectedModel,
+            etatTpe,
+            pieces_defectueuses: selectedPiecesDef,
+        }
+
+        setListeReparation((prev) => [...prev, newElement]);
+        setQuantiteTotale((prev) => prev + 1);
+
+        setTerminalSN('')
+        setTerminalName('')
+        setStatutTpe('')
+        setIndexPiece(null)
+        setSelectedPiecesDef([])
+    }
+
     const handleConfirmSingle = () => {
         if (!terminalSn || terminalSn.length < 10) {
             setErrorAjout('S/N invalide !')
