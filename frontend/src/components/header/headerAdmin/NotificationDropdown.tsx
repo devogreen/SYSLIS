@@ -31,6 +31,7 @@ export default function NotificationDropdown() {
     setNotifying(false);
   };
 
+  // @ts-ignore
   // Fonction pour récupérer les demandes en attente
   // const fetchDemandesEnAttente = async () => {
   //   try {

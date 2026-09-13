@@ -162,7 +162,7 @@ export default function DemandeInputs() {
         const services_data = await userData.getAllServices()
         setServicesUsers(services_data)
         // setServicesPiece(services_data)
-        
+
         const users_data = await userData.getAllUsers()
         setUserList(users_data)
         const options_users = users_data.map((item) => ({
@@ -170,7 +170,7 @@ export default function DemandeInputs() {
           label: item.fullname,
         }))
         setOptionsUsers(options_users)
-        
+
         const stocks_data_all = await stockData.getAllStocks()
         const stocks_data = stocks_data_all.filter((item) => {
           return item.is_deleted == false
@@ -186,16 +186,16 @@ export default function DemandeInputs() {
             label: `${item.code_stock} - ${nomService}`
           })
         })
-        
+
         setOptionsStocks(options_stocks)
-        
+
         // const models_data = await stockData.getAllModels()
         // setModels(models_data)
-        
+
         const user = await userData.getOneUser(userId)
         console.log(user)
         setNomUser(user.fullname)
-        if(user.user_services.length > 1) {
+        if (user.user_services.length > 1) {
           const options_services = user.user_services.map((item) => ({
             value: item.services.id,
             label: item.services.nom_service.toUpperCase()
@@ -204,7 +204,7 @@ export default function DemandeInputs() {
         } else {
           setServiceUser(user.user_services[0].service_id)
         }
-        
+
       } catch (error) {
         console.log(error)
         setErrorForm('Une erreur est survenue lors de la génération du formulaire.')
@@ -214,6 +214,25 @@ export default function DemandeInputs() {
     }
     fetchData()
   }, [])
+
+  const pieceTemplate = (piece) => {
+    return (
+      <>
+        <span className="text-sm font-semibold">{piece.label}</span>
+      </>
+    )
+  }
+
+  const selectedPieceTemplate = (option, props) => {
+    if (option) {
+      return (
+        <>
+          <span className="text-sm font-semibold">{option.label}</span>
+        </>
+      )
+    }
+    return <span>{props.placeholder}</span>;
+  }
 
   const handleSelectServiceUser = (value) => {
     console.log("Selected value:", value);
@@ -239,7 +258,8 @@ export default function DemandeInputs() {
     setNomUser(nom)
   }
 
-  const handleSelectPiece = async (value) => {
+  const handleSelectPiece = async (e) => {
+    const value = e.value
     setPieceLoading(true)
     setSelectedModel(null)
     setSelectedServicePiece(null)
@@ -471,7 +491,7 @@ export default function DemandeInputs() {
     fd.append('nomUser', nomUser)
     fd.append('motif', motif)
     fd.append('commentaire', commentaire)
-    fd.append('otherFields', JSON.stringify(fields) )
+    fd.append('otherFields', JSON.stringify(fields))
 
     selectedFiles.forEach((file) => {
       fd.append("files", file);
@@ -523,6 +543,21 @@ export default function DemandeInputs() {
                         <span className="text-sm font-semibold">Informations générales</span>
                       </div>
                       <div>
+                        <Label>Pièces <span className="text-red-700">*</span></Label>
+                        <Dropdown
+                          options={optionsItems}
+                          optionLabel="Label"
+                          placeholder="Choisir pièce"
+                          filter
+                          filterBy="label"
+                          itemTemplate={pieceTemplate}
+                          className="w-full"
+                          onChange={handleSelectPiece}
+                          value={selectedPiece}
+                          valueTemplate={selectedPieceTemplate}
+                        />
+                      </div>
+                      {/* <div>
                         <Label>Pièce <span className="text-red-700">*</span></Label>
                         <Select
                           options={optionsItems}
@@ -530,7 +565,7 @@ export default function DemandeInputs() {
                           onChange={handleSelectPiece}
                           className="dark:bg-dark-900"
                         />
-                      </div>
+                      </div> */}
                       <div>
                         {pieceLoading ? (
                           <>
@@ -578,7 +613,7 @@ export default function DemandeInputs() {
                           </>
                         )}
                       </div>
-                      {optionsServicesUsers && optionsServicesUsers.length > 0  ? (
+                      {optionsServicesUsers && optionsServicesUsers.length > 0 ? (
                         <>
                           <div>
                             <Label>Service Demandeur <span className="text-red-700">*</span></Label>
@@ -747,7 +782,7 @@ export default function DemandeInputs() {
                                     id="input"
                                     value={quantite}
                                     onChange={(e) => {
-                                      if(isOnlyDigits(e.target.value) || e.target.value === '') {
+                                      if (isOnlyDigits(e.target.value) || e.target.value === '') {
                                         const value = e.target.value
                                         setQuantite(value)
                                       }

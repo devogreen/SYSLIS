@@ -6,6 +6,7 @@ const cloudinary = require("../../config/clouddinaryConifg");
 const multer = require("multer")
 const upload = multer({ storage: multer.memoryStorage() });
 const ExcelJS = require("exceljs");
+const { text } = require("stream/consumers");
 
 // baseUrl est l'addresse du site de livraison
 const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";
@@ -162,6 +163,14 @@ const createStock = async (req, res) => {
           last_update: dateAction,
           updated_by: utilisateur.id_user,
           owner: utilisateur.id_user,
+        }
+      })
+
+      await tx.stock_owners.create({
+        data: {
+          user_id: parseInt(userId),
+          stock_id: nouveauStock.id,
+          type: 'owner',
         }
       })
 
@@ -324,6 +333,12 @@ const getAllStocks = async (req, res) => {
   try {
     const stocks = await prisma.stocks.findMany({
       orderBy: { id: 'desc' },
+      include: {
+        items: true,
+        model_piece: true,
+        services: true,
+        stockOwner: true,
+      }
     });
 
     res.status(200).json(stocks);
@@ -338,8 +353,14 @@ const getOneStock = async (req, res) => {
     const stock = await prisma.stocks.findUnique({
       where: {
         id: parseInt(id)
+      },
+      include: {
+        items: true,
+        model_piece: true,
+        services: true,
+        stockOwner: true,
       }
-    })
+    });
 
     if (!stock) {
       return res.status(404).json({ message: "Stock introuvable !" })
@@ -1995,6 +2016,21 @@ const getAllMouvementStock = async (req, res) => {
   try {
     const mouvement = await prisma.mouvement_stock.findMany({
       orderBy: { id: 'desc' },
+      include: {
+        items: true,
+        model_piece: true,
+        type_mouvement_stock: true,
+        services_mouvement_stock_service_origineToservices: true,
+        services_mouvement_stock_service_destinationToservices: true,
+        stocks: {
+          select: {
+            id: true,
+            code_stock: true,
+            stockOwner: true,
+            created_by: true,
+          }
+        },
+      }
     });
 
     res.status(200).json(mouvement);
@@ -2283,31 +2319,286 @@ const getStockParPiece = async (req, res) => {
   }
 }
 
+// const getAllUserTypeStocks = async (req, res) => {
+//   const {
+//     itemId,
+//     modelId,
+//     serviceId,
+//   } = req.params
+
+//   try {
+//     const stockCreators = await prisma.users.findMany({
+//       where: {
+//         stocks_stocks_created_byTousers: {
+//           some: {
+//             piece_id: +itemId,
+//             model_id: +modelId,
+//             service_id: +serviceId,
+//           },
+//         },
+//       },
+//     });
+
+//     const stockOwners = await prisma.users.findMany({
+//       where: {
+//         stock_owners: {
+//           where: {
+//             stocks: {
+//               some: {
+//                 piece_id: +itemId,
+//                 model_id: +modelId,
+//                 service_id: +serviceId,
+//               },
+//             },
+//           },
+//         },
+//       },
+//     })
+
+//     const users = [...stockCreators, stockOwners]
+//     console.log('Succès récupération des users')
+//     return res.status(200).json(users);
+//   } catch (error) {
+//     console.log("Error : ", error)
+//     res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs par type de stock", error });
+//   }
+// }
+
 const getAllUserTypeStocks = async (req, res) => {
-  const {
-    itemId,
-    modelId,
-    serviceId,
-  } = req.params
+  const { itemId, modelId, serviceId } = req.params;
 
   try {
     const users = await prisma.users.findMany({
       where: {
-        stocks_stocks_created_byTousers: {
-          some: {
-            piece_id: +itemId,
-            model_id: +modelId,
-            service_id: +serviceId,
-          }
-        }
+        OR: [
+          {
+            stocks_stocks_created_byTousers: {
+              some: {
+                piece_id: +itemId,
+                model_id: +modelId,
+                service_id: +serviceId,
+              },
+            },
+          },
+          {
+            stock_owners: {
+              some: {
+                stocks: {
+                  piece_id: +itemId,
+                  model_id: +modelId,
+                  service_id: +serviceId,
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    console.log('Succès récupération des users');
+    return res.status(200).json(users);
+  } catch (error) {
+    console.log("Error : ", error);
+    res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs par type de stock", error });
+  }
+};
+
+const modifyStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code_stock, selectedOwner, selectedSubOwners, userId } = req.body;
+
+    const stock = await prisma.stocks.findUnique({
+      where: { id: parseInt(id) }
+    })
+
+    if (!stock) {
+      console.error("Stock introuvable !")
+      return res.status(404).json({ message: "Stock introuvable !" });
+    }
+
+    if (stock.is_deleted) {
+      console.error("Stock supprimé !")
+      return res.status(400).json({ message: "Stock supprimé !" });
+    }
+
+    const utilisateur = await prisma.users.findUnique({
+      where: {
+        id_user: parseInt(userId)
       }
     });
 
-    console.log('Succès récupération des users')
-    return res.status(200).json(users);
+    if (!utilisateur) {
+      console.error("Utilisateur introuvable !")
+      return res.status(404).json({ message: "Utilisateur introuvable !" });
+    }
+
+    const operation = await prisma.$transaction(async (tx) => {
+      await tx.stocks.update({
+        where: { id: parseInt(id) },
+        data: {
+          code_stock,
+          owner: parseInt(selectedOwner),
+          updated_by: parseInt(userId),
+          last_update: new Date(),
+        }
+      });
+
+      // Wipe every existing owner/sub_owner row for this stock
+      await tx.stock_owners.deleteMany({
+        where: { stock_id: parseInt(id) }
+      });
+
+      await tx.stock_owners.create({
+        data: {
+          user_id: parseInt(selectedOwner),
+          stock_id: parseInt(id),
+          type: 'owner',
+        }
+      });
+
+      const subOwners = Array.isArray(selectedSubOwners) ? selectedSubOwners : [];
+      if (subOwners.length > 0) {
+        await tx.stock_owners.createMany({
+          data: subOwners
+            .map(subId => parseInt(subId))
+            .filter(subId => subId !== parseInt(selectedOwner)) // avoid owner/sub_owner overlap
+            .map(subId => ({
+              user_id: subId,
+              stock_id: parseInt(id),
+              type: 'sub_owner',
+            })),
+        });
+      }
+
+      return true;
+    });
+
+    console.log(`Stock ${id} modifié avec succès par ${utilisateur.username}.`)
+    return res.status(200).json({
+      message: `Stock ${id} modifié avec succès par ${utilisateur.username}.`,
+      ...operation,
+    });
+
   } catch (error) {
-    console.log("Error : ", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs par type de stock", error });
+    console.error(error);
+    return res.status(500).json({ message: "Erreur lors de la modification du stock", error });
+  }
+}
+
+const createMouvementStock = async (req, res) => {
+  try {
+    const {
+      stockId,
+    } = req.params;
+    const {
+      pieceId,
+      serviceOrigine,
+      serviceDestination,
+      origine,
+      destination,
+      modelId,
+      details,
+      userId,
+      typeMouvement,
+      motif,
+      commentaire,
+    } = req.body;
+
+    const utilisateur = await prisma.users.findUnique({
+      where: {
+        id_user: parseInt(userId)
+      }
+    });
+
+    if (!utilisateur) {
+      console.error("Utilisateur introuvable !");
+      return res.status(404).json({ message: "Utilisateur introuvable !" });
+    }
+
+    const stock = await prisma.stocks.findUnique({
+      where: { id: parseInt(stockId) }
+    });
+
+    if (!stock) {
+      console.error("Stock introuvable !");
+      return res.status(404).json({ message: "Stock introuvable !" });
+    }
+
+    if (stock.is_deleted) {
+      console.error("Stock supprimé !");
+      return res.status(400).json({ message: "Stock supprimé !" });
+    }
+
+    const detailsMouvement = typeof details === "string" ? JSON.parse(details) : details;
+    const dateAction = new Date();
+
+    const operation = await prisma.$transaction(async (tx) => {
+      const mouvement = await tx.mouvement_stock.create({
+        data: {
+          type: typeMouvement,
+          mouvement: parseInt(detailsMouvement.typeMouvement),
+          created_at: dateAction,
+          stock_id: parseInt(stockId),
+          piece_id: parseInt(pieceId),
+          origine,
+          destination,
+          service_origine: serviceOrigine ? parseInt(serviceOrigine) : null,
+          service_destination: serviceDestination ? parseInt(serviceDestination) : null,
+          model_id: parseInt(modelId),
+          stock_initial: detailsMouvement.stockInitialPiece,
+          quantite: detailsMouvement.quantiteMouvement,
+          stock_final: detailsMouvement.stockFinalPiece,
+          quantite_totale_piece: detailsMouvement.stockFinalPiece,
+          motif,
+          commentaire,
+          details_mouvement: JSON.stringify(detailsMouvement),
+          created_by: parseInt(userId),
+        }
+      });
+
+      await tx.stocks.update({
+        where: { id: parseInt(stockId) },
+        data: {
+          last_update: dateAction,
+          updated_by: parseInt(userId),
+          quantite_piece: detailsMouvement.stockFinalPiece,
+        }
+      });
+
+      return {
+        mouvement,
+      }
+    })
+
+    console.log(`Mouvement de stock créé avec succès par ${utilisateur.username}.`)
+    return res.status(201).json({
+      message: `Mouvement de stock créé avec succès par ${utilisateur.username}.`,
+      operation,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur lors de la création du mouvement de stock", error });
+  }
+}
+
+const getAllStockSubOwners = async (req, res) => {
+  try {
+    const { stockId } = req.params;
+
+    const subOwners = await prisma.stock_owners.findMany({
+      where: {
+        stock_id: parseInt(stockId),
+        type: 'sub_owner',
+      },
+      include: {
+        users: true,
+      },
+    });
+    return res.status(200).json(subOwners);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erreur lors de la récupération des sous-propriétaires du stock", error });
   }
 }
 
@@ -2343,4 +2634,7 @@ module.exports = {
   getAllOneQuantitePiece,
   setStockSn,
   getAllUserTypeStocks,
+  modifyStock,
+  createMouvementStock,
+  getAllStockSubOwners,
 }

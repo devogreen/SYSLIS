@@ -340,7 +340,7 @@ const changePassword = async (req, res) => {
 const getAllUsers = async (req, res) => {
     try {
         const allUsers = await prisma.users.findMany({
-            orderBy: { id_user: 'asc' },
+            orderBy: { fullname: 'asc' },
             include: {
                 user_roles: {
                     include: {

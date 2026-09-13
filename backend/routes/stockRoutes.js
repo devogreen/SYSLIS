@@ -8,7 +8,8 @@ const {getAllItems, setStockPiece, getAllModels, addPiece, getAllMouvementStock,
     getLotPiece, getCartonLot, getCartonPiece, getItemModels, getItemServices, getQuantitePiece, getAllTypeMouvementStock,
     setStockCarton, setStockPieceCarton, setStockLot, setStockCartonLot, getOneMouvement, createStock,
     getAllStocks, getAllItemModels, getAllItemServices, getOneStock, getCartonStock, getLotStock, getOneStockMouvements,
-    getStockParPiece, getAllOneQuantitePiece, setStockSn, getAllUserTypeStocks,
+    getStockParPiece, getAllOneQuantitePiece, setStockSn, getAllUserTypeStocks, modifyStock,
+    createMouvementStock, getAllStockSubOwners,
 } = require("../controllers/Stock/stockController")
 
 router.get('/getAllItems', getAllItems);
@@ -42,5 +43,7 @@ router.get('/getStockParPiece/:id', getStockParPiece);
 router.get('/getAllOneQuantitePiece/:id', getAllOneQuantitePiece);
 router.post('/setStockSn', uploadExcel.single("file"), setStockSn);
 router.get('/getAllUserTypeStocks/:itemId/:modelId/:serviceId', getAllUserTypeStocks);
-
+router.put('/modifyStock/:id', modifyStock);
+router.put('/createMouvementStock/:stockId', createMouvementStock);
+router.get('/getAllStockSubOwners/:stockId', getAllStockSubOwners);
 module.exports = router
