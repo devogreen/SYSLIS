@@ -148,7 +148,7 @@ export default function StockDetails() {
                 const piece_data = await stockData.getPiece(stock_data.piece_id)
                 setNomPiece(piece_data.nom_piece)
 
-                const user_data = await userData.getOneUser(stock_data.created_by)
+                const user_data = await userData.getOneUser(stock_data.owner)
                 setNomAuteur(user_data.fullname)
 
                 const models = await stockData.getAllModels()
@@ -507,6 +507,7 @@ export default function StockDetails() {
                 userId,
             }
 
+            console.log("Payload: ", payload)
             await stockData.modifyStock(id, payload)
 
             Swal.fire({

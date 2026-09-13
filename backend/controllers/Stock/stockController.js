@@ -2319,33 +2319,89 @@ const getStockParPiece = async (req, res) => {
   }
 }
 
+// const getAllUserTypeStocks = async (req, res) => {
+//   const {
+//     itemId,
+//     modelId,
+//     serviceId,
+//   } = req.params
+
+//   try {
+//     const stockCreators = await prisma.users.findMany({
+//       where: {
+//         stocks_stocks_created_byTousers: {
+//           some: {
+//             piece_id: +itemId,
+//             model_id: +modelId,
+//             service_id: +serviceId,
+//           },
+//         },
+//       },
+//     });
+
+//     const stockOwners = await prisma.users.findMany({
+//       where: {
+//         stock_owners: {
+//           where: {
+//             stocks: {
+//               some: {
+//                 piece_id: +itemId,
+//                 model_id: +modelId,
+//                 service_id: +serviceId,
+//               },
+//             },
+//           },
+//         },
+//       },
+//     })
+
+//     const users = [...stockCreators, stockOwners]
+//     console.log('Succès récupération des users')
+//     return res.status(200).json(users);
+//   } catch (error) {
+//     console.log("Error : ", error)
+//     res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs par type de stock", error });
+//   }
+// }
+
 const getAllUserTypeStocks = async (req, res) => {
-  const {
-    itemId,
-    modelId,
-    serviceId,
-  } = req.params
+  const { itemId, modelId, serviceId } = req.params;
 
   try {
     const users = await prisma.users.findMany({
       where: {
-        stocks_stocks_created_byTousers: {
-          some: {
-            piece_id: +itemId,
-            model_id: +modelId,
-            service_id: +serviceId,
-          }
-        }
-      }
+        OR: [
+          {
+            stocks_stocks_created_byTousers: {
+              some: {
+                piece_id: +itemId,
+                model_id: +modelId,
+                service_id: +serviceId,
+              },
+            },
+          },
+          {
+            stock_owners: {
+              some: {
+                stocks: {
+                  piece_id: +itemId,
+                  model_id: +modelId,
+                  service_id: +serviceId,
+                },
+              },
+            },
+          },
+        ],
+      },
     });
 
-    console.log('Succès récupération des users')
+    console.log('Succès récupération des users');
     return res.status(200).json(users);
   } catch (error) {
-    console.log("Error : ", error)
+    console.log("Error : ", error);
     res.status(500).json({ message: "Erreur lors de la récupération des utilisateurs par type de stock", error });
   }
-}
+};
 
 const modifyStock = async (req, res) => {
   try {
@@ -2388,14 +2444,10 @@ const modifyStock = async (req, res) => {
         }
       });
 
-      await tx.stock_owners.delete({
-        where: {
-          user_id_stock_id: {
-            user_id: parseInt(selectedOwner),
-            stock_id: parseInt(id),
-          },
-        },
-      })
+      // Wipe every existing owner/sub_owner row for this stock
+      await tx.stock_owners.deleteMany({
+        where: { stock_id: parseInt(id) }
+      });
 
       await tx.stock_owners.create({
         data: {
@@ -2403,28 +2455,24 @@ const modifyStock = async (req, res) => {
           stock_id: parseInt(id),
           type: 'owner',
         }
-      })
+      });
 
-      await tx.stock_owners.deleteMany({
-        where: {
-          user_id: {
-            in: [...selectedSubOwners.map(id => parseInt(id))],
-          }
-        }
-      })
-
-      if (selectedSubOwners && Array.isArray(selectedSubOwners) && selectedSubOwners.length > 0) {
+      const subOwners = Array.isArray(selectedSubOwners) ? selectedSubOwners : [];
+      if (subOwners.length > 0) {
         await tx.stock_owners.createMany({
-          data: selectedSubOwners.map(userId => ({
-            user_id: userId,
-            stock_id: parseInt(id),
-            type: 'sub_owner',
-          })),
+          data: subOwners
+            .map(subId => parseInt(subId))
+            .filter(subId => subId !== parseInt(selectedOwner)) // avoid owner/sub_owner overlap
+            .map(subId => ({
+              user_id: subId,
+              stock_id: parseInt(id),
+              type: 'sub_owner',
+            })),
         });
       }
 
-      return (true)
-    })
+      return true;
+    });
 
     console.log(`Stock ${id} modifié avec succès par ${utilisateur.username}.`)
     return res.status(200).json({
