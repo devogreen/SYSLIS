@@ -487,7 +487,9 @@ const exportTpeToExcel = async (req, res) => {
         const serialsHeaders = [
             "ID",
             "S/N",
-            "Statut",        
+            "Statut",
+            "Dernière Modification",
+            "Date Création",       
         ];
         const serialsHeaderRow = serialsSheet.addRow(serialsHeaders);
         serialsHeaderRow.eachCell((cell) => {
@@ -506,6 +508,8 @@ const exportTpeToExcel = async (req, res) => {
                 item.id,
                 item.serial_number,
                 item.statut_tpe.statut,
+                new Date(item.updated_at),
+                new Date(item.created_at),
             ])
         });
 

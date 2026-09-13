@@ -13,6 +13,8 @@ import { addLocale } from "primereact/api";
 import { MultiSelect } from "primereact/multiselect";
 import Checkbox from "../form/input/Checkbox";
 
+import { ProgressSpinner } from "primereact/progressspinner";
+
 import Swal from "sweetalert2";
 
 export default function AllDecomList() {
@@ -74,6 +76,8 @@ export default function AllDecomList() {
     );
 
     const [isNotReg, setIsNotReg] = useState(savedFilters?.isNotReg || false)
+
+    const [loadingExtract, setLoadingExtract] = useState(false)
 
     useEffect(() => {
         saveFilters({
@@ -239,6 +243,50 @@ export default function AllDecomList() {
 
     const totalTPE = filteredDecom.reduce((sum, item) => sum + Number(item.quantite || 0), 0);
 
+    const handleExtractAllSnDecom = async () => {
+        try {
+            setLoadingExtract(true);
+
+            const listId = filteredDecom.map((d) => d.id);
+            if (listId.length == 0) {
+                Swal.fire({
+                    title: "Attention",
+                    text: "Aucun decom enregistré",
+                    icon: "warning"
+                });
+                return
+            }
+
+            const response = await decomData.exportAllDecomToExcel(listId);
+
+            const url = window.URL.createObjectURL(
+                new Blob([response.data])
+            );
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `sn_decom_${new Date().toISOString().replace(/[:.]/g, '-')}.xlsx`;
+
+            document.body.appendChild(a);
+            a.click();
+
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.log(error);
+
+            Swal.fire({
+                title: "Attention",
+                text: "Une erreur s'est produite lors du téléchargement",
+                icon: "warning"
+            });
+
+        } finally {
+            setLoadingExtract(false);
+        }
+    }
+
     return (
         <>
             <div className="rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
@@ -338,6 +386,26 @@ export default function AllDecomList() {
                         <span className="text-xs text-gray-700 font-semibold dark:text-gray-300">
                             {totalTPE} TPE(s)
                         </span>
+                    </div>
+                    <div>
+                        {loadingExtract ?
+                            (
+                                <>
+                                    <span className='flex items-center justify-center'>
+                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <button className="flex items-center text-red-600 justify-center rounded-full h-4 w-4 p-4 hover:text-white hover:bg-gray-dark hover:border-black transition-colors"
+                                        onClick={handleExtractAllSnDecom}>
+                                        <span className="">
+                                            <i className="pi pi-download"></i>
+                                        </span>
+                                    </button>
+                                </>
+                            )
+                        }
                     </div>
                 </div>
                 <div className="card">

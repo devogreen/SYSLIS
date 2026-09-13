@@ -262,10 +262,10 @@ export class Decom {
     async downloadTemplateLiaisonTpePieces(userId) {
         try {
             const response = await axios.post(`${urlBase}/api/decom/downloadTemplateLiaisonTpePieces`,
-            {userId},
-            {
-                responseType: "blob",
-            });
+                { userId },
+                {
+                    responseType: "blob",
+                });
             return response;
         } catch (error) {
             throw error.response?.data || { message: "Download failed" };
@@ -297,15 +297,16 @@ export class Decom {
         }
     }
 
-    async exportAllDecomToExcel() {
+    async exportAllDecomToExcel(listId) {
         try {
-            const response = await axios.post(`${urlBase}/api/decom/exportAllDecomToExcel`,{
-                responseType: "blob",
-            });
+            const response = await axios.post(`${urlBase}/api/decom/exportAllDecomToExcel`, { listId },
+                {
+                    responseType: "blob",
+                });
             return response;
         } catch (error) {
             throw error.response?.data || { message: "Export failed" };
         }
     }
-    
+
 }

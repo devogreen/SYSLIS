@@ -2466,8 +2466,8 @@ const exportOneDecomToExcel = async (req, res) => {
             "Point Marchand",
             "S/N",
             "Commentaire de retour",
-            ...piecesHeaders,
             "Statut",
+            ...piecesHeaders,
         ];
         const verificationHeaderRow = verificationSheet.addRow(verificationHeaders);
         verificationHeaderRow.eachCell((cell) => {
@@ -2532,8 +2532,8 @@ const exportOneDecomToExcel = async (req, res) => {
                 item.point_marchand,
                 item.serial_number,
                 item.commentaire_retour,
-                ...piecesStatus,
                 statut,
+                ...piecesStatus,
             ]);
         });
 
@@ -4334,12 +4334,18 @@ const liaisonTpePieces = async (req, res) => {
 // Fonction pour exporter tous les SN en décommissionnement vers un fichier Excel
 const exportAllDecomToExcel = async (req, res) => {
     try {
+
+        const { listId } = req.body
+
         const decoms = await prisma.form_decom.findMany({
             include: {
                 forms: true,
                 sn_decom: true,
             },
             where: {
+                id: {
+                    in: listId,
+                },
                 forms: {
                     is_deleted: false,
                 },
@@ -4359,6 +4365,7 @@ const exportAllDecomToExcel = async (req, res) => {
         const decomSheet = workbook.addWorksheet('Décommissionnements');
         const decomHeaders = [
             "Index",
+            "Decom ID",
             "Point Marchand",
             "Caisse",
             "S/N",
@@ -4369,6 +4376,7 @@ const exportAllDecomToExcel = async (req, res) => {
             "RI",
             "Commercial",
             "Commentaire",
+            "Statut decom",
         ];
         const decomHeaderRow = decomSheet.addRow(decomHeaders);
         decomHeaderRow.eachCell((cell) => {
@@ -4390,6 +4398,7 @@ const exportAllDecomToExcel = async (req, res) => {
             listeDecom.forEach((decomItem, index) => {
                 decomSheet.addRow([
                     index + 1,
+                    item.id,
                     decomItem.pointMarchand,
                     decomItem.caisse,
                     decomItem.terminalSN,
@@ -4400,9 +4409,85 @@ const exportAllDecomToExcel = async (req, res) => {
                     decomItem.RI,
                     decomItem.nomCommercial,
                     decomItem.commentaire,
+                    item.statut,
                 ])
             })
         });
+
+        const pieces = await prisma.items.findMany({
+            where: {
+                type: 'PIECE',
+                is_deleted: false,
+            }
+        })
+
+        const piecesHeaders = pieces.map((item) => {
+            return item.nom_piece.toUpperCase()
+        })
+
+        const verificationSheet = workbook.addWorksheet('Vérifications');
+        const verificationHeaders = [
+            "Index",
+            "Decom ID",
+            "Statut",
+            "Point Marchand",
+            "S/N",
+            "Commentaire de retour",
+            ...piecesHeaders,
+        ];
+        const verificationHeaderRow = verificationSheet.addRow(verificationHeaders);
+        verificationHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        decoms.forEach((decom) => {
+            decom.sn_decom?.forEach((item, index) => {
+    
+                const listePiecesRecup = typeof item.pieces_recuperees === "string"
+                    ? JSON.parse(item.pieces_recuperees)
+                    : item.pieces_recuperees || [];
+    
+                const listePiecesDef = typeof item.pieces_defectueuses === "string"
+                    ? JSON.parse(item.pieces_defectueuses)
+                    : item.pieces_defectueuses || [];
+    
+                const piecesStatus = pieces.map(piece => {
+    
+                    if (item.statut === "checking") {
+                        return "";
+                    }
+    
+                    if (listePiecesRecup.includes(piece.id_piece)) {
+                        return "OK";
+                    }
+    
+                    if (listePiecesDef.includes(piece.id_piece)) {
+                        return "NOK";
+                    }
+    
+                    return "";
+                });
+    
+                const statut = item.statut == 'rebus' || item.statut == 'rebut' ? 'rebut' : item.statut
+    
+                verificationSheet.addRow([
+                    index + 1,
+                    decom.id,
+                    statut,
+                    item.point_marchand,
+                    item.serial_number,
+                    item.commentaire_retour,
+                    ...piecesStatus,
+                ]);
+            });
+        })
 
         const buffer = await workbook.xlsx.writeBuffer();
         res.setHeader(
@@ -4412,7 +4497,7 @@ const exportAllDecomToExcel = async (req, res) => {
 
         res.setHeader(
             "Content-Disposition",
-            `attachment; filename=decom.xlsx`
+            `attachment; filename=sn_decom.xlsx`
         );
         res.send(buffer);
 
