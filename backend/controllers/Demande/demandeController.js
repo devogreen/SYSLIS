@@ -566,7 +566,7 @@ const faireDemande = async (req, res) => {
 
     const sendMail = require("../../utils/emailSender");
 
-    const subject = `MOUVEMENT DE STOCK DE ${nomPiece}`;
+    const subject = `SYSLIS - MOUVEMENT DE STOCK DE ${nomPiece}`;
     let html = `
       <p>Bonjour,</p>
       <p>Une nouvelle demande a été enregistrée.</p>
@@ -854,7 +854,7 @@ const validateDemande = async (req, res) => {
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
-    const subject = `VALIDATION DEMANDE DE ${nomPiece}`;
+    const subject = `SYSLIS - VALIDATION DEMANDE DE ${nomPiece}`;
     const html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été validée.</p>
@@ -2096,7 +2096,7 @@ const livraisonDemande = async (req, res) => {
     let demandeLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
-      const subject = `LIVRAISON STOCK DE ${nomPiece}`;
+      const subject = `SYSLIS - LIVRAISON STOCK DE ${nomPiece}`;
       const html = `
         <p>Bonjour,</p>
         <p>La demande ${demande.id} a été livrée.</p>
@@ -2455,7 +2455,7 @@ const returnDemande = async (req, res) => {
     let demandeLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
-      const subject = `DEMANDE RETOURNÉE`;
+      const subject = `SYSLIS - DEMANDE RETOURNÉE`;
       const html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} pour ${motif} a été retournée.</p>
@@ -2595,7 +2595,7 @@ const cancelDemande = async (req, res) => {
     // const demandeLink = `https://livraisons.greenpayci.com/formulaire-recu/${nouvelleLivraison.id_demande}`
     const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
-      const subject = `DEMANDE REFUSÉE`;
+      const subject = `SYSLIS - DEMANDE REFUSÉE`;
       const html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} pour ${motif} a été refusée.</p>
@@ -2832,7 +2832,7 @@ const updateDemande = async (req, res) => {
 
     const sendMail = require("../../utils/emailSender");
 
-    const subject = `MODIFICATION DEMANDE POUR ${motif}`;
+    const subject = `SYSLIS - MODIFICATION DEMANDE POUR ${motif}`;
     let html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été modifiée.</p>
@@ -3041,7 +3041,7 @@ const receivePiece = async (req, res) => {
     const url = GENERAL_URL
     const deliveryLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
-    const subject = `STOCK RECEPTIONNE`;
+    const subject = `SYSLIS - RECEPTION DE STOCK`;
     const html = `
       <p>Bonjour,</p>
       <p>La demande de stock ${demande.id} a été réceptionnée.</p>
@@ -3586,7 +3586,7 @@ const regularisationDemande = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
-      const subject = `REGULARISATION MOUVEMENT DE STOCK DE ${nomPiece}`;
+      const subject = `SYSLIS - REGULARISATION MOUVEMENT DE STOCK DE ${nomPiece}`;
       let html = `
         <p>Bonjour,</p>
         <p>Une nouvelle demande a été enregistrée.</p>
@@ -3787,7 +3787,7 @@ const regValidateDemande = async (req, res) => {
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
-    const subject = `REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
+    const subject = `SYSLIS - REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
     const html = `
       <p>Bonjour,</p>
       <p>La régularisation de la validation de la demande ${demande.id} a été éffectuée.</p>
@@ -4844,7 +4844,7 @@ const regLivraisonDemande = async (req, res) => {
     let demandeLink = `${url}/demande-details/${demande.id}`;
     const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
-      const subject = `REGULARISATION LIVRAISON STOCK DE ${nomPiece}`;
+      const subject = `SYSLIS - REGULARISATION LIVRAISON STOCK DE ${nomPiece}`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison pour la demande ${demande.id} a été régularisée.</p>
@@ -5033,7 +5033,7 @@ const regReceptionDemande = async (req, res) => {
     const deliveryLink = `${url}/demande-details/${demande.id}`;
 
     if (livreur) {
-      const subject = `REGULARISATION RECEPTION DE STOCK`;
+      const subject = `SYSLIS - REGULARISATION RECEPTION DE STOCK`;
       const html = `
         <p>Bonjour,</p>
         <p>La réception du stock de la ${demande.id} a été régularisée.</p>

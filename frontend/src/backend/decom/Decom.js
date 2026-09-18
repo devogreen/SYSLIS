@@ -309,4 +309,16 @@ export class Decom {
         }
     }
 
+    async getPieceDefectueuseTpe(serial) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getPieceDefectueuseTpe/${serial}`)
+            return {
+                data: response.data.data,
+                message: response.data.message
+            };
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }

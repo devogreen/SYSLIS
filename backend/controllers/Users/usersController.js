@@ -74,7 +74,7 @@ const register = async (req, res) => {
 
     /* ********************* GESTION DE MAIL A L'UTILISATEUR NOUVELEMENT AJOUTE *********************** */
     const url = GENERAL_URL
-    const subject = "NOUVEAU COMPTE CRÉÉ"
+    const subject = "SYSLIS - NOUVEAU COMPTE CRÉÉ"
     const html = `
         <p>Bonjour,<p>
         <p>Votre Email vient d'être enregistré dans l'application de livraison GREEN-PAY.<p>
@@ -179,7 +179,7 @@ const updateUser = async (req, res) => {
 
         /* ********************* GESTION DE MAIL A L'UTILISATEUR NOUVELEMENT AJOUTE *********************** */
         const url = GENERAL_URL
-        const subject = "MODIFICATION DE PROFIL"
+        const subject = "SYSLIS - MODIFICATION DE PROFIL"
         const html = `
             <p>Bonjour,<p>
             <p>Votre profil vient d'être modifié dans l'application de livraison GREEN-PAY.<p>

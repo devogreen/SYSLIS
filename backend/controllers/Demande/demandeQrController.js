@@ -344,7 +344,7 @@ const regularisationDemandeQrV2 = async (req, res) => {
             let link = `${url}/demande-qr-details/${newRegularisation.demande.id}`;
 
             if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-                const subject = `REGULARISATION DEMANDE QR CODE(S)`;
+                const subject = `SYSLIS - REGULARISATION DEMANDE QR CODE(S)`;
                 let html = `
                     <p>Bonjour,</p>
                     <p>Une demande régularisée de QR Code a été soumise.</p>
@@ -1596,7 +1596,7 @@ const modifyDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${updatedDemandeQr.demande.id}`;
 
         if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `MODIFICATION DEMANDE DE QR CODE(S)`;
+            const subject = `SYSLIS - MODIFICATION DEMANDE DE QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
                 <p>la demande de QR code(s) ${updatedDemandeQr.demande.id} a été modifiée.</p>
@@ -1915,7 +1915,7 @@ const regularisationLivraisonDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((recepteurs && recepteurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `REGULARISATION LIVRAISON QR CODE(S)`;
+            const subject = `SYSLIS - REGULARISATION LIVRAISON QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
                 <p>Une livraison régularisée pour la demande ${demande.id} de QR Code(s) a été faite.</p>
@@ -2099,7 +2099,7 @@ const regularisationReceptionDemandeQr = async (req, res) => {
         let link = `${url}/demande-qr-details/${demande.id}`;
 
         if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-            const subject = `REGULARISATION RECEPTION QR CODE(S)`;
+            const subject = `SYSLIS - REGULARISATION RECEPTION QR CODE(S)`;
             let html = `
                 <p>Bonjour,</p>
                 <p>Une réception régularisée de la demande ${demande.id} de QR CODE(S) a été faite.</p>
