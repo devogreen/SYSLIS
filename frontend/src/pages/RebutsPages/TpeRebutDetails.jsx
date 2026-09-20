@@ -469,8 +469,8 @@ export default function TpeRebutDetails() {
                                                 <div className="relative w-full">
                                                     <Input
                                                         className="pl-10"
-                                                        value={piecesFoncFilter}
-                                                        onChange={(e) => setPiecesFoncFilter(e.target.value)}
+                                                        value={piecesDefFilter}
+                                                        onChange={(e) => setPiecesDefFilter(e.target.value)}
                                                         placeholder="Rechercher parmis les pièces défectueuses..."
                                                     />
                                                     <span className="absolute top-1/4 left-3"><i className="pi pi-search"></i></span>

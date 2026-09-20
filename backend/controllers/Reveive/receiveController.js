@@ -214,7 +214,7 @@ const createValidation = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `RECEPTION LIVRAISON (${livraisonTypeName})`;
+      const subject = `SYSLIS - RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${livraison.id_livraison} a été réceptionnée.</p>
@@ -464,7 +464,7 @@ const returnDelivery = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `RETOUR DE LIVRAISON (${livraisonTypeName})`;
+      const subject = `SYSLIS - RETOUR DE LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${livraison.id_livraison} a été retournée.</p>
@@ -816,7 +816,7 @@ const returnDemandeDelivery = async (req, res) => {
     });
     if (livreurs && livreurs.length > 0) {
       // 2. Prepare email content
-      const subject = `LIVRAISON RETOURNÉE ${livraisonTypeName}`;
+      const subject = `SYSLIS - LIVRAISON RETOURNÉE ${livraisonTypeName}`;
       const html = `
       <p>Bonjour,</p>
       <p>La livraison ${livraison.id_livraison} a été retournée.</p>

@@ -226,7 +226,7 @@ const regReception = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `REGULARISATION RECEPTION LIVRAISON (${livraisonTypeName})`;
+      const subject = `SYSLIS - REGULARISATION RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La réception de la livraison ${livraison.id_livraison} a été régularisée.</p>
@@ -520,7 +520,7 @@ const deliver = async (req, res) => {
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `NOUVELLE LIVRAISON (${livraisonTypeName})`;
+      const subject = `SYSLIS - NOUVELLE LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>Une nouvelle livraison a été enregistrée.</p>
@@ -765,7 +765,7 @@ const regLivraison = async (req, res) => {
     let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    const subject = `REGULARISATION LIVRAISON (${livraisonTypeName})`;
+    const subject = `SYSLIS - REGULARISATION LIVRAISON (${livraisonTypeName})`;
     const html = `
       <p>Bonjour,</p>
       <p>Une régularisation de livraison a été enregistrée.</p>
@@ -1082,7 +1082,7 @@ const updateLivraison = async (req, res) => {
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `MODIFICATION LIVRAISON (${livraisonTypeName})`;
+      const subject = `SYSLIS - MODIFICATION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${livraison.updated.id_livraison} a été modifiée.</p>
@@ -1416,7 +1416,7 @@ const deliverStock = async (req, res) => {
     const deliveryLink = `${url}/demande-details/${demande_id}`;
 
     if ((recepteurs && recepteurs.length > 0) || (service_users && service_users.length > 0)) {
-      const subject = `NOUVELLE LIVRAISON ${livraisonTypeName}`;
+      const subject = `SYSLIS - NOUVELLE LIVRAISON ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
         <p>Une nouvelle livraison a été enregistrée.</p>
@@ -1626,7 +1626,7 @@ const receiveStock = async (req, res) => {
     const deliveryLink = `${url}/demande-details/${livraison.demande_id}`;
 
     if ((livreurs && livreurs.length > 0)) {
-      const subject = `NOUVELLE LIVRAISON ${livraisonTypeName}`;
+      const subject = `SYSLIS - RECEPTION STOCK ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison de stock ${livraison.id} a été réceptionnée.</p>
@@ -1923,7 +1923,7 @@ const updateDeliveryStock = async (req, res) => {
     const deliveryLink = `${url}/demande-details/${updated.demande_id}`;
 
     if ((recepteurs && recepteurs.length > 0) || (service_users && service_users.length > 0)) {
-      const subject = `NOUVELLE LIVRAISON ${livraisonTypeName}`;
+      const subject = `SYSLIS - MODIFICATION LIVRAISON ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${updated.id} a été modifiée.</p>
@@ -2524,7 +2524,7 @@ const makeRemplacement = async (req, res) => {
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `NOUVEAU REMPLACEMENT TPE`;
+      const subject = `SYSLIS - NOUVEAU REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
         <p>Un nouveau remplacement a été enregistré.</p>
@@ -2778,7 +2778,7 @@ const validateRemplacement = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `VALIDATION REMPLACEMENT TPE`;
+      const subject = `SYSLIS - VALIDATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
         <p>Le remplacement ${remplacement.id} a été validé.</p>
@@ -3534,7 +3534,7 @@ const updateRemplacement = async (req, res) => {
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `MODIFICATION REMPLACEMENT TPE`;
+      const subject = `SYSLIS - MODIFICATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
         <p>Le formulaire de remplacement ${newRemplacement.nouveauRemplacement.id} a été modifié.</p>
@@ -3687,7 +3687,7 @@ const returnRemplacement = async (req, res) => {
     const sendMail = require("../../utils/emailSender");
 
     if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
-      const subject = `RETOUR DE REMPLACEMENT`;
+      const subject = `SYSLIS - RETOUR DE REMPLACEMENT`;
       const html = `
         <p>Bonjour,</p>
         <p>Le remplacement ${remplacement.id} a été retourné.</p>
@@ -4209,7 +4209,7 @@ const regRemplacement = async (req, res) => {
 
     const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
     if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
-      const subject = `REGULARISATION REMPLACEMENT TPE`;
+      const subject = `SYSLIS - REGULARISATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
         <p>Une regularisation de remplacement a été enregistrée.</p>

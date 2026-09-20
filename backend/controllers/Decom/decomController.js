@@ -552,7 +552,7 @@ const modifyDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${updatedDecom.decom.id}`;
 
-        const subject = `MODIFICATION DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - MODIFICATION DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Le décommissionnement ${updatedDecom.decom.id} a été modifié.</p>
@@ -684,7 +684,7 @@ const cancelDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${canceledDecom.decom.id}`;
 
-        const subject = `ANNULATION DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - ANNULATION DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
                 <p>Le décommissionnement ${canceledDecom.decom.id} a été annulé.</p>
@@ -1170,7 +1170,7 @@ const returnDecom = async (req, res) => {
         const url = GENERAL_URL
         let link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `RETOUR DE DECOMMISSIONNEMENT`;
+        const subject = `SYSLIS - RETOUR DE DECOMMISSIONNEMENT`;
         let html = `
             <p>Bonjour,</p>
             <p>Le décommissionnement ${decom.id} a été retourné pour modification ou annulation.</p>
@@ -2818,6 +2818,7 @@ const extractSnReparation = async (req, res) => {
                     sn_id: tpeAreparer.id,
                 },
                 select: {
+                    items: true,
                     piece_id: true,
                 },
             })
@@ -2871,12 +2872,12 @@ const reparerListeTpe = async (req, res) => {
 
         const STATUT_REPARE_ID = 10
         const terminaux = detailsListe.map((terminal) => {
-            const piecesDef = Array.isArray(terminal.listePiece)
+            const listePiece = Array.isArray(terminal.listePiece)
                 ? terminal.listePiece
                 : [];
 
-            const pieces = piecesDef.map((item) => ({
-                piece_id: item.piece_id,
+            const pieces = listePiece.map((item) => ({
+                piece_id: item.items.id_piece,
                 etat: "repare",
                 updated_by: utilisateur.id_user,
                 updated_at: dateAction,
@@ -3089,7 +3090,7 @@ const reparerListeTpe = async (req, res) => {
             const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
             const url = GENERAL_URL
-            const link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+            const link = `${url}/livraison-reparation-details/${operation.livraison.id}`;
 
             const subject = `SYSLIS - LIVRAISON TPE REPARE`;
             // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
@@ -4058,7 +4059,7 @@ const extractLiaisonTpePiecesData = async (req, res) => {
                     getCellValue(row.getCell(colIndex)) || ""
                 ).trim().toUpperCase();
 
-                if ((!etat ||etat === "1" || etat === "OK") && statut === "rebut") {
+                if ((!etat || etat === "1" || etat === "OK") && statut === "rebut") {
                     listePieceRec.push(pieceId);
                 } else if (etat === "NOK" || etat === "0") {
                     listePieceDef.push(pieceId)
@@ -4392,8 +4393,8 @@ const exportAllDecomToExcel = async (req, res) => {
 
         decoms.forEach((item) => {
             const listeDecom = typeof item.liste_decom === "string"
-            ? JSON.parse(item.liste_decom)
-            : item.liste_decom;
+                ? JSON.parse(item.liste_decom)
+                : item.liste_decom;
 
             listeDecom.forEach((decomItem, index) => {
                 decomSheet.addRow([
@@ -4449,34 +4450,34 @@ const exportAllDecomToExcel = async (req, res) => {
 
         decoms.forEach((decom) => {
             decom.sn_decom?.forEach((item, index) => {
-    
+
                 const listePiecesRecup = typeof item.pieces_recuperees === "string"
                     ? JSON.parse(item.pieces_recuperees)
                     : item.pieces_recuperees || [];
-    
+
                 const listePiecesDef = typeof item.pieces_defectueuses === "string"
                     ? JSON.parse(item.pieces_defectueuses)
                     : item.pieces_defectueuses || [];
-    
+
                 const piecesStatus = pieces.map(piece => {
-    
+
                     if (item.statut === "checking") {
                         return "";
                     }
-    
+
                     if (listePiecesRecup.includes(piece.id_piece)) {
                         return "OK";
                     }
-    
+
                     if (listePiecesDef.includes(piece.id_piece)) {
                         return "NOK";
                     }
-    
+
                     return "";
                 });
-    
+
                 const statut = item.statut == 'rebus' || item.statut == 'rebut' ? 'rebut' : item.statut
-    
+
                 verificationSheet.addRow([
                     index + 1,
                     decom.id,
@@ -4509,6 +4510,67 @@ const exportAllDecomToExcel = async (req, res) => {
     }
 }
 
+// Fonction pour obtenir les pièces défectueuses d'un TPE à réparer
+const getPieceDefectueuseTpe = async (req, res) => {
+    try {
+        const {
+            serial
+        } = req.params
+
+        const serial_number = await prisma.parc_tpe.findUnique({
+            where: {
+                serial_number: serial
+            },
+            include: {
+                statut_tpe: true
+            }
+        })
+        if (serial_number.statut_tpe.statut != 'a_reparer') {
+            console.error(`Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`)
+            return res.status(400).json({
+                message: `Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`,
+            });
+        }
+        if (serial_number) {
+            statut = serial_number.statut_tpe.statut
+        }
+
+        const tpeAreparer = await prisma.tpe_a_reparer.findFirst({
+            where: {
+                tpe_id: serial_number.id,
+                is_deleted: false,
+                etat: 'defectueux',
+            },
+            orderBy: {
+                id: 'desc',
+            },
+        });
+        const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
+            where: {
+                sn_id: tpeAreparer.id,
+            },
+            select: {
+                items: true,
+                piece_id: true,
+            },
+        })
+        const listePiece = new Array(...pieces_a_reparer)
+        const element = {
+            statut,
+            listePiece,
+            marchand: tpeAreparer.nom_marchand,
+        }
+
+     res.status(200).json({
+        message: `Récupération des pièces défectueuses du terminal ${serial}.`,
+        data: element,
+     });
+    } catch (error) {
+        console.error("Erreur lors de la récupération des pièces défectueuses : ", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des pièces défectueuses : ", error });
+    }
+}
+
 module.exports = {
     faireDecom,
     getAllDecoms,
@@ -4538,4 +4600,5 @@ module.exports = {
     extractLiaisonTpePiecesData,
     liaisonTpePieces,
     exportAllDecomToExcel,
+    getPieceDefectueuseTpe,
 }
