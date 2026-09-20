@@ -14,70 +14,70 @@ const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.
 const localUrl = "http://localhost:5173"
 // GENERAL_URL va être utilisée dans les mails envoyés pour pouvoir rediriger correctement l'utilisateur vers la page avec le bon lien
 // En test GENERAL_URL doit avoir la valeur de localUrl et celle de baseUrl lors du deploiement.
-let GENERAL_URL = baseUrl 
+let GENERAL_URL = baseUrl
 let test_env = TEST_ENV
-if(test_env){
-  GENERAL_URL = localUrl
+if (test_env) {
+    GENERAL_URL = localUrl
 }
 
 
 const register = async (req, res) => {
-  const { fullname, username, email, password, userServices, userRoles, mailChecked} = req.body;
+    const { fullname, username, email, password, userServices, userRoles, mailChecked } = req.body;
 
-  try {
+    try {
 
-    console.log("FULLNAME : ",fullname)
-    // Check if user already exists
-    const exists = await prisma.users.findFirst({
-      where: { email }
-    });
+        console.log("FULLNAME : ", fullname)
+        // Check if user already exists
+        const exists = await prisma.users.findFirst({
+            where: { email }
+        });
 
-    if (exists) {
-      return res.status(400).json({ message: "L'email existe déjà" });
-    }
+        if (exists) {
+            return res.status(400).json({ message: "L'email existe déjà" });
+        }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const newUser = await prisma.users.create({
-      data: {
-        fullname: fullname,
-        username: username,
-        email: email,
-        password: hashedPassword,
-        created_at: new Date(),
-      }
-    });
+        // Create user
+        const newUser = await prisma.users.create({
+            data: {
+                fullname: fullname,
+                username: username,
+                email: email,
+                password: hashedPassword,
+                created_at: new Date(),
+            }
+        });
 
-    // Create user-services
+        // Create user-services
 
-    const userId = newUser.id_user
+        const userId = newUser.id_user
 
-    if (userRoles && Array.isArray(userRoles)) {
-      await prisma.user_roles.createMany({
-        data: userRoles.map(roleId => ({
-          user_id: userId,
-          role_id: roleId,
-        })),
-      });
-    }
+        if (userRoles && Array.isArray(userRoles)) {
+            await prisma.user_roles.createMany({
+                data: userRoles.map(roleId => ({
+                    user_id: userId,
+                    role_id: roleId,
+                })),
+            });
+        }
 
-    if (userServices && Array.isArray(userServices)) {
-      await prisma.user_services.createMany({
-        data: userServices.map(serviceId => ({
-          user_id: userId,
-          service_id: serviceId,
-        })),
-      });
-    }
+        if (userServices && Array.isArray(userServices)) {
+            await prisma.user_services.createMany({
+                data: userServices.map(serviceId => ({
+                    user_id: userId,
+                    service_id: serviceId,
+                })),
+            });
+        }
 
-    /* ********************* GESTION DE MAIL A L'UTILISATEUR NOUVELEMENT AJOUTE *********************** */
-    const url = GENERAL_URL
-    const subject = "SYSLIS - NOUVEAU COMPTE CRÉÉ"
-    const html = `
+        /* ********************* GESTION DE MAIL A L'UTILISATEUR NOUVELEMENT AJOUTE *********************** */
+        const url = GENERAL_URL
+        const subject = "SYSLIS - NOUVEAU COMPTE CRÉÉ"
+        const html = `
         <p>Bonjour,<p>
-        <p>Votre Email vient d'être enregistré dans l'application de livraison GREEN-PAY.<p>
+        <p>Votre e-mail vient d'être enregistré dans l'application de livraison de GREEN-PAY.<p>
         <br>
         <p>Connectez vous à ce lien : <p>
         <a href="${url}" target="_blank">${url}<a>
@@ -94,27 +94,27 @@ const register = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
     `
-    if(mailChecked){
-        await sendMail({
-            to: newUser.email,
-            subject,
-            html,
-        })
+        if (mailChecked) {
+            await sendMail({
+                to: newUser.email,
+                subject,
+                html,
+            })
+        }
+
+        return res.status(201).json(newUser);
+
+    } catch (error) {
+        console.error("Registration error:", error);
+        return res.status(500).json({ message: "Erreur serveur lors de l'inscription" });
     }
-
-    return res.status(201).json(newUser);
-
-  } catch (error) {
-    console.error("Registration error:", error);
-    return res.status(500).json({ message: "Erreur serveur lors de l'inscription" });
-  }
 };
 
 /** ✅ LOGIN (Connexion) */
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await prisma.users.findFirst({ where: { email }});
+        const user = await prisma.users.findFirst({ where: { email } });
 
         if (!user) return res.status(404).json({ message: "Utilisateur non enregistré." });
 
@@ -147,7 +147,7 @@ const updateUser = async (req, res) => {
         }
 
         const updatedUser = await prisma.users.update({
-            where : { id_user: parseInt(id) },
+            where: { id_user: parseInt(id) },
             data: dataToUpdate
         })
 
@@ -156,7 +156,7 @@ const updateUser = async (req, res) => {
         })
 
         await prisma.user_services.deleteMany({
-            where: { user_id: parseInt(id)}
+            where: { user_id: parseInt(id) }
         })
 
         if (userRoles && Array.isArray(userRoles)) {
@@ -191,7 +191,7 @@ const updateUser = async (req, res) => {
             <br><br>
             <p>Green - Pay vous remercie.</p>
         `
-        if(mailChecked){
+        if (mailChecked) {
             await sendMail({
                 to: user.email,
                 subject,
@@ -280,15 +280,15 @@ const resetPassword = async (req, res) => {
 
         // 🔹 Mettre à jour l'utilisateur et supprimer le token
         await prisma.users.updateMany({
-            where: { id_user : parseInt(user.id_user)},
+            where: { id_user: parseInt(user.id_user) },
             data: { password: hashedPassword, reset_token: null, reset_expires: null }
-        }).then((ok)=>{
-            if(ok){
+        }).then((ok) => {
+            if (ok) {
                 console.log(ok)
-            }else{
+            } else {
                 console.log("NON OK")
             }
-        }).catch(error=>{console.table(error)})
+        }).catch(error => { console.table(error) })
 
         res.status(200).json({ message: "Mot de passe réinitialisé avec succès." });
     } catch (error) {
@@ -362,91 +362,91 @@ const getAllUsers = async (req, res) => {
 }
 
 const getUserRoles = async (req, res) => {
-    try{
+    try {
         const { id } = req.params;
 
         const user_roles = await prisma.user_roles.findMany({
-            where: {user_id : parseInt(id)},
-            include: {roles : true}
+            where: { user_id: parseInt(id) },
+            include: { roles: true }
         })
 
         res.status(200).json({
             roles: user_roles.map(r => r.roles)
         });
     } catch (error) {
-      res.status(500).json({ message: "Erreur serveur", error });
+        res.status(500).json({ message: "Erreur serveur", error });
     }
 }
 
 const getAllRoles = async (req, res) => {
-    try{
+    try {
         const AllRoles = await prisma.roles.findMany({
-            orderBy: { nom_role : 'asc' }
+            orderBy: { nom_role: 'asc' }
         })
 
         res.status(200).json(AllRoles)
-    } catch(error){
-        res.status(500).json({ message: "Erreur lors de la récupération des rôles ", error})
+    } catch (error) {
+        res.status(500).json({ message: "Erreur lors de la récupération des rôles ", error })
     }
 }
 
 const getAllUserRoles = async (req, res) => {
-    try{
+    try {
         const roles = await prisma.user_roles.findMany({
-            orderBy: { user_id : 'asc' }
+            orderBy: { user_id: 'asc' }
         })
 
         res.status(200).json(roles);
-    } catch(error){
+    } catch (error) {
         res.status(500).json({ message: "Erreur lors de la récupération des rôles utilisateurs ", error });
     }
 }
 
 const getAllServices = async (req, res) => {
-    try{
+    try {
         const services = await prisma.services.findMany({
-           orderBy: { nom_service : 'asc' } 
+            orderBy: { nom_service: 'asc' }
         })
 
         res.status(200).json(services);
-    } catch(error){
-        res.status(500).json({ message: "Erreur lors de la récupération des services ", error})
+    } catch (error) {
+        res.status(500).json({ message: "Erreur lors de la récupération des services ", error })
     }
 }
 
 const getAllUserServices = async (req, res) => {
-    try{
+    try {
         const services = await prisma.user_services.findMany({
-            orderBy: { user_id : 'asc' }
+            orderBy: { user_id: 'asc' }
         })
 
         res.status(200).json(services);
-    } catch(error){
+    } catch (error) {
         res.status(500).json({ message: "Erreur lors de la récupération des services utilisateurs ", error });
     }
 }
 
 const getUserServices = async (req, res) => {
-    try{
+    try {
         const { id } = req.params;
 
         const user_services = await prisma.user_services.findMany({
-            where: {user_id : parseInt(id)},
-            include: {services : true}
+            where: { user_id: parseInt(id) },
+            include: { services: true }
         })
 
         res.status(200).json({
             services: user_services.map(s => s.services)
         });
     } catch (error) {
-      res.status(500).json({ message: "Erreur serveur", error });
+        res.status(500).json({ message: "Erreur serveur", error });
     }
 }
 
-const getOneUser = async (req, res) =>{
+const getOneUser = async (req, res) => {
     const { id } = req.params;
 
-    try{
+    try {
         const user = await prisma.users.findUnique({
             where: { id_user: parseInt(id) },
             include: {
@@ -463,20 +463,17 @@ const getOneUser = async (req, res) =>{
             },
         });
 
-        if(!user){
+        if (!user) {
             return res.status(404).json({ message: "Utilisateur introuvable" });
         }
 
         return res.status(200).json(user)
-    } catch(error){
+    } catch (error) {
         res.status(500).json({ message: "Erreur serveur", error });
     }
 }
 
-
-
-
-module.exports ={
+module.exports = {
     register,
     login,
     forgotPassword,

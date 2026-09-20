@@ -140,8 +140,8 @@ export default function ReparationTpeInputs() {
         const fetchData = async () => {
             try {
                 setLoadingData(true)
-                const merchants = await merchantsData.findMerchant()
-                setMerchantList(merchants)
+                // const merchants = await merchantsData.findMerchant()
+                // setMerchantList(merchants)
 
                 const allItems = await stockData.getAllItems()
                 const items = allItems.filter((item) => {
