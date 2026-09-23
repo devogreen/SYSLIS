@@ -4342,6 +4342,16 @@ const exportAllDecomToExcel = async (req, res) => {
             include: {
                 forms: true,
                 sn_decom: true,
+                reception_decom: {
+                    include: {
+                        forms: true,
+                    },
+                },
+                retour_decom: {
+                    include: {
+                        forms: true,
+                    },
+                },
             },
             where: {
                 id: {
@@ -4378,6 +4388,9 @@ const exportAllDecomToExcel = async (req, res) => {
             "Commercial",
             "Commentaire",
             "Statut decom",
+            "Date décommissionnement",
+            "Dernière Verification",
+            "Date Cloture",
         ];
         const decomHeaderRow = decomSheet.addRow(decomHeaders);
         decomHeaderRow.eachCell((cell) => {
@@ -4391,15 +4404,20 @@ const exportAllDecomToExcel = async (req, res) => {
             cell.alignment = { vertical: "middle", horizontal: "center" };
         });
 
-        decoms.forEach((item) => {
-            const listeDecom = typeof item.liste_decom === "string"
-                ? JSON.parse(item.liste_decom)
-                : item.liste_decom;
+        decoms.forEach((decom) => {
+            const listeDecom = typeof decom.liste_decom === "string"
+                ? JSON.parse(decom.liste_decom)
+                : decom.liste_decom;
+
+            const index = decom.retour_decom.length - 1
+            const retour = decom.retour_decom[index]
+            const derniereVerif = retour && decom.statut != 'en_cours' ? retour.forms.last_modified_at : 'N/A'
+            const dateCloture = retour && decom.statut == 'clos' ? retour.forms.last_modified_at : 'N/A'
 
             listeDecom.forEach((decomItem, index) => {
                 decomSheet.addRow([
                     index + 1,
-                    item.id,
+                    decom.id,
                     decomItem.pointMarchand,
                     decomItem.caisse,
                     decomItem.terminalSN,
@@ -4410,7 +4428,10 @@ const exportAllDecomToExcel = async (req, res) => {
                     decomItem.RI,
                     decomItem.nomCommercial,
                     decomItem.commentaire,
-                    item.statut,
+                    decom.statut,
+                    decom.forms.last_modified_at,
+                    derniereVerif,
+                    dateCloture,
                 ])
             })
         });
@@ -4434,6 +4455,9 @@ const exportAllDecomToExcel = async (req, res) => {
             "Point Marchand",
             "S/N",
             "Commentaire de retour",
+            "Date décommissionnement",
+            "Dernière Verification",
+            "Date Cloture",
             ...piecesHeaders,
         ];
         const verificationHeaderRow = verificationSheet.addRow(verificationHeaders);
@@ -4478,6 +4502,11 @@ const exportAllDecomToExcel = async (req, res) => {
 
                 const statut = item.statut == 'rebus' || item.statut == 'rebut' ? 'rebut' : item.statut
 
+                const indexDecom = decom.retour_decom.length - 1
+                const retour = decom.retour_decom[indexDecom]
+                const derniereVerif = retour && decom.statut != 'en_cours' ? retour.forms.last_modified_at : 'N/A'
+                const dateCloture = retour && decom.statut == 'clos' ? retour.forms.last_modified_at : 'N/A'
+
                 verificationSheet.addRow([
                     index + 1,
                     decom.id,
@@ -4485,6 +4514,9 @@ const exportAllDecomToExcel = async (req, res) => {
                     item.point_marchand,
                     item.serial_number,
                     item.commentaire_retour,
+                    decom.forms.last_modified_at,
+                    derniereVerif,
+                    dateCloture,
                     ...piecesStatus,
                 ]);
             });
@@ -4561,10 +4593,10 @@ const getPieceDefectueuseTpe = async (req, res) => {
             marchand: tpeAreparer.nom_marchand,
         }
 
-     res.status(200).json({
-        message: `Récupération des pièces défectueuses du terminal ${serial}.`,
-        data: element,
-     });
+        res.status(200).json({
+            message: `Récupération des pièces défectueuses du terminal ${serial}.`,
+            data: element,
+        });
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces défectueuses : ", error)
         res.status(500).json({ message: "Erreur lors de la récupération des pièces défectueuses : ", error });
