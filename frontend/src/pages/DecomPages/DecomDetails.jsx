@@ -22,6 +22,7 @@ import { Calendar } from 'primereact/calendar';
 import { addLocale } from "primereact/api";
 import { Stock } from "../../backend/stock/Stock";
 import { set } from "date-fns";
+import { GestionTpe } from "../../backend/gestionTpe/GestionTpe";
 
 addLocale('fr', {
     firstDayOfWeek: 1,
@@ -40,6 +41,7 @@ export default function DecomDetails() {
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
     const filesData = new FilesHandler()
+    const gestionTpeData = new GestionTpe()
 
     const [loadingData, setLoadingData] = useState(false)
     const [loadingCancel, setLoadingCancel] = useState(false)
@@ -91,6 +93,9 @@ export default function DecomDetails() {
     const [errorReception, setErrorReception] = useState('')
 
     const [loadingExtract, setLoadingExtract] = useState(false)
+
+    const [livraisonParam, setLivraisonParam] = useState(false)
+    const [livraisonRepare, setLivraisonRepare] = useState(false)
 
     const formatDate = (date) => {
         const d = new Date(date);
@@ -182,6 +187,35 @@ export default function DecomDetails() {
                         return item.statut == 'checking'
                     })
                     setListeChecking(listeChecking)
+
+                    if (nomRoles.includes('reparation')) {
+                        if (statut == 'clos') {
+                            const serialStatus = await Promise.all(
+                                listeSn.map(async (item) => {
+                                    const serial = item.serial_number
+                                    const tpeData = await gestionTpeData.getTpeInfos(serial)
+                                    return {
+                                        serial,
+                                        statut: tpeData.statut_tpe.statut,
+                                    }
+                                })
+                            )
+    
+                            const listeParam = serialStatus.filter((item) => {
+                                return item.statut == 'param_maintenance'
+                            })
+                            const listeReparation = serialStatus.filter((item) => {
+                                return item.statut == 'a_reparer'
+                            })
+    
+                            if (listeParam.length > 0) {
+                                setLivraisonParam(true)
+                            }
+                            if (listeReparation.length > 0) {
+                                setLivraisonRepare(true)
+                            }
+                        }   
+                    }
                 }
 
                 const allItems = await stockData.getAllItems()
@@ -567,6 +601,44 @@ export default function DecomDetails() {
                                                                     </div>
                                                                 </>
                                                             )}
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {livraisonParam ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigate(`/creer-stock`, {
+                                                                        state: {
+                                                                            from: 'demande-details',
+                                                                            idDemande: id
+                                                                        }
+                                                                    })
+                                                                }}
+                                                                className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
+                                                                <span className='mr-4'><i className="pi pi-shopping-cart"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Livraison Param</span>
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <></>
+                                                    )}
+                                                    {livraisonRepare ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigate(`/reparation-tpe`, {
+                                                                        state: {
+                                                                            from: 'decom-details',
+                                                                            idDecom
+                                                                        }
+                                                                    })
+                                                                }}
+                                                                className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200' >
+                                                                <span className='mr-4'><i className="pi pi-wrench"></i></span>
+                                                                <span className='text-sm text-gray-700 font-medium'>Réparation TPE</span>
+                                                            </button>
                                                         </>
                                                     ) : (
                                                         <></>

@@ -125,11 +125,13 @@ export default function AllDecomList() {
     const statutTemplate = (decom) => {
         let statutClass = ''
         let statut = ''
+        const linkSee = `/decom-details/${decom.id}`
+
         if (decom.statut == 'en_cours') {
             statut = 'en cours'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-warning-100 text-warning-300'
         } else if (decom.statut == 'recu') {
-            statut = 'en vérification'
+            statut = 'réceptionné'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-300'
         } else if (decom.statut == 'retourne') {
             statut = 'retourné'
@@ -140,7 +142,9 @@ export default function AllDecomList() {
         }
         return (
             <div>
-                <span className={statutClass}>{statut}</span>
+                <Link to={linkSee}>
+                    <span className={statutClass}>{statut}</span>
+                </Link>
             </div>
         )
     }

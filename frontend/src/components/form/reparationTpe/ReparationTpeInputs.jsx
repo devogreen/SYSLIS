@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useParams, Link, useNavigate } from "react-router";
+import { useParams, Link, useNavigate, useLocation } from "react-router";
 import { Decom } from "../../../backend/decom/decom.js"
 import { Users } from "../../../backend/users/Users.js";
 import { Stock } from "../../../backend/stock/Stock.js";
@@ -35,6 +35,9 @@ export default function ReparationTpeInputs() {
     const rebutData = new Rebut();
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
+
+    const location = useLocation();
+    const { from, idDecom } = location.state || {};
 
     const LISTE_KEY = "listeAreparer";
     const saveListe = (liste) => {
@@ -156,6 +159,45 @@ export default function ReparationTpeInputs() {
                     value: item.id_model,
                 }))
                 setOptionsModel(optionsModel)
+
+                if (idDecom) {
+                    const serials = await decomData.getSnDecom(idDecom)
+
+                    const serialStatus = await Promise.all(
+                        serials.map(async (item) => {
+                            const serial = item.serial_number
+                            const tpeData = await gestionTpeData.getTpeInfos(serial)
+                            return {
+                                serial,
+                                statut: tpeData.statut_tpe.statut,
+                            }
+                        })
+                    )
+
+                    const listeReparation = serialStatus.filter((item) => {
+                        return item.statut == 'a_reparer'
+                    })
+                    const listeSn = listeReparation.map((item) => {
+                        return item.serial
+                    })
+
+                    const response = await decomData.getPieceDefectueuseListeTpe(listeSn)
+                    const terminals = response.data
+
+                    console.log(terminals)
+
+                    const newList = terminals.filter((terminal) => {
+                        const isDuplicate = listeAreparer.some(item => {
+                            return item.sn == terminal.sn
+                        });
+                        if (isDuplicate == false) {
+                            return terminal
+                        }
+                    })
+
+                    setQuantiteTotale((prev) => prev + newList.length);
+                    setListeAreparer((prev) => [...prev, ...newList]);
+                }
             } catch (error) {
                 console.error('Error fetching data ', error)
                 setErrorForm('Erreur lors de la génération du formulaire')

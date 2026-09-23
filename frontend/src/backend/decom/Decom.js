@@ -321,4 +321,13 @@ export class Decom {
         }
     }
 
+    async getPieceDefectueuseListeTpe(listeSn) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getPieceDefectueuseListeTpe/${listeSn}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
 }
