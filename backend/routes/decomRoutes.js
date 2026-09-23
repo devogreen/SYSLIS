@@ -11,6 +11,7 @@ const {
     getAllLivraisonReparation, getOneLivraisonReparation, receptionLivraisonReparation, 
     cloturerLivraisonReparation, miseEnReparationTpe, extractMiseEnReparation, downloadTemplateLiaisonTpePieces,
     extractLiaisonTpePiecesData, liaisonTpePieces, exportAllDecomToExcel, getPieceDefectueuseTpe,
+    getPieceDefectueuseListeTpe,
 } = require("../controllers/Decom/decomController")
 
 router.post('/faireDecom', uploadAll.fields([
@@ -50,4 +51,5 @@ router.post('/extractLiaisonTpePiecesData', uploadExcel.single('file'), extractL
 router.post('/liaisonTpePieces', liaisonTpePieces);
 router.post('/exportAllDecomToExcel', exportAllDecomToExcel);
 router.get('/getPieceDefectueuseTpe/:serial', getPieceDefectueuseTpe);
+router.get('/getPieceDefectueuseListeTpe/:listeSn', getPieceDefectueuseListeTpe);
 module.exports = router

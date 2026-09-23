@@ -782,6 +782,8 @@ const receptionDecom = async (req, res) => {
             isReg = true
         }
 
+        const STATUT_DECOM = 12
+
         const receptionDecom = await prisma.$transaction(async (tx) => {
             const receptionForm = await tx.forms.create({
                 data: {
@@ -823,6 +825,7 @@ const receptionDecom = async (req, res) => {
                     created_at: dateAction,
                     decom_id: decom.id,
                     last_modified_at: dateAction,
+                    statut: 'attente_checking',
                 }))
             })
 
@@ -864,7 +867,7 @@ const receptionDecom = async (req, res) => {
                         created_by: utilisateur.id_user,
                         created_at: dateAction,
                         last_modified_at: dateAction,
-                        statut_id: 9,
+                        statut_id: STATUT_DECOM,
                     }))
                 });
             }
@@ -879,7 +882,7 @@ const receptionDecom = async (req, res) => {
                                 updated_by: utilisateur.id_user,
                                 updated_at: dateAction,
                                 last_modified_at: dateAction,
-                                statut_id: 9,
+                                statut_id: STATUT_DECOM,
                             }
                         })
                     )
@@ -927,7 +930,7 @@ const receptionDecom = async (req, res) => {
                                 updated_by: utilisateur.id_user,
                                 updated_at: dateAction,
                                 last_modified_at: dateAction,
-                                statut_id: 9,
+                                statut_id: STATUT_DECOM,
                             }
                         })
                     )
@@ -951,7 +954,7 @@ const receptionDecom = async (req, res) => {
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: 9,
+                    statut_id: STATUT_DECOM,
                     form_id: decomForm.id,
                 }))
             });
@@ -1831,7 +1834,7 @@ const clotureDecom = async (req, res) => {
         const REBUT_STATUT_ID = 5;
         const A_REPARER_STATUT_ID = 11;
         const statutMap = {
-            parametrage: 4,
+            parametrage: 13,
             rebus: 5,
             rebut: 5,
             a_reparer: 11,
@@ -4561,13 +4564,98 @@ const getPieceDefectueuseTpe = async (req, res) => {
             marchand: tpeAreparer.nom_marchand,
         }
 
-     res.status(200).json({
-        message: `Récupération des pièces défectueuses du terminal ${serial}.`,
-        data: element,
-     });
+        res.status(200).json({
+            message: `Récupération des pièces défectueuses du terminal ${serial}.`,
+            data: element,
+        });
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces défectueuses : ", error)
         res.status(500).json({ message: "Erreur lors de la récupération des pièces défectueuses : ", error });
+    }
+}
+
+// Fonction pour obternir les pièces défectueuses d'une liste de TPE à réparer
+const getPieceDefectueuseListeTpe = async (req, res) => {
+    try {
+        const {
+            listeSn,
+        } = req.params
+        // const {
+        //     userId,
+        // } = req.body
+
+        const listeSerials = listeSn.split(',')
+        console.log("LISTE SN: ", typeof(listeSn))
+        if (!Array.isArray(listeSerials) || listeSerials.length === 0) {
+            return res.status(400).json({ message: "Liste de terminaux vide ou invalide." });
+        }
+
+        // const utilisateur = await prisma.users.findUnique({
+        //     where: { id_user: parseInt(userId, 10) },
+        // });
+        // if (!utilisateur) {
+        //     console.error("Utilisateur introuvable !")
+        //     return res.status(404).json({ message: "Utilisateur introuvable !" });
+        // }
+
+        const serials = []
+
+        let statut = 'non enregistré'
+        for (let sn of listeSerials) {
+            const serial_number = await prisma.parc_tpe.findUnique({
+                where: {
+                    serial_number: sn
+                },
+                include: {
+                    statut_tpe: true
+                }
+            })
+            if (serial_number.statut_tpe.statut != 'a_reparer') {
+                console.error(`Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`)
+                return res.status(400).json({
+                    message: `Statut invalide pour le S/N ${serial_number.serial_number} avec le statut ${serial_number.statut_tpe.statut}`,
+                });
+            }
+            if (serial_number) {
+                statut = serial_number.statut_tpe.statut
+            }
+
+            const tpeAreparer = await prisma.tpe_a_reparer.findFirst({
+                where: {
+                    tpe_id: serial_number.id,
+                    is_deleted: false,
+                    etat: 'defectueux',
+                },
+                orderBy: {
+                    id: 'desc',
+                },
+            });
+            const pieces_a_reparer = await prisma.pieces_a_reparer.findMany({
+                where: {
+                    sn_id: tpeAreparer.id,
+                },
+                select: {
+                    items: true,
+                    piece_id: true,
+                },
+            })
+            const listePiece = new Array(...pieces_a_reparer)
+            const element = {
+                sn,
+                statut,
+                listePiece,
+                marchand: tpeAreparer.nom_marchand,
+            }
+            serials.push(element)
+        }
+
+        console.log(`Récupération des pièces complète !`)
+        return res.status(201).json({
+            data: serials,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la récuparation des pièces :", error);
+        return res.status(500).json({ message: "Erreur interne", error });
     }
 }
 
@@ -4601,4 +4689,5 @@ module.exports = {
     liaisonTpePieces,
     exportAllDecomToExcel,
     getPieceDefectueuseTpe,
+    getPieceDefectueuseListeTpe,
 }
