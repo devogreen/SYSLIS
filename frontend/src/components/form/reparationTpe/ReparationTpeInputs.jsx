@@ -59,7 +59,9 @@ export default function ReparationTpeInputs() {
 
     const [selectedTpe, setSelectedTpe] = useState(null)
 
-    const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
+    // const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
+
+    const quantiteTotale = listeAreparer.length
 
     const [isRAS, setIsRAS] = useState(false)
     const [isProblem, setIsProblem] = useState(false)
@@ -140,80 +142,56 @@ export default function ReparationTpeInputs() {
     ]
 
     useEffect(() => {
+        let ignore = false
+
         const fetchData = async () => {
             try {
                 setLoadingData(true)
-                // const merchants = await merchantsData.findMerchant()
-                // setMerchantList(merchants)
+                if (!idDecom) return
 
-                const allItems = await stockData.getAllItems()
-                const items = allItems.filter((item) => {
-                    return item.is_deleted == false && item.type != 'TERMINAL'
+                const serials = await decomData.getSnDecom(idDecom)
+
+                const serialStatus = await Promise.all(
+                    serials.map(async (item) => {
+                        const tpeData = await gestionTpeData.getTpeInfos(item.serial_number)
+                        return { serial: item.serial_number, statut: tpeData.statut_tpe.statut }
+                    })
+                )
+
+                const listeSn = serialStatus
+                    .filter((item) => item.statut === 'a_reparer')
+                    .map((item) => item.serial)
+
+                const response = await decomData.getPieceDefectueuseListeTpe(listeSn)
+                if (ignore) return   // this run was cancelled (unmount / StrictMode)
+
+                const terminals = response.data
+
+                setListeAreparer((prev) => {
+                    const existing = new Set(prev.map((item) => item.sn))
+                    const newList = terminals.filter((t) => !existing.has(t.sn))
+                    return [...prev, ...newList]
                 })
-                setPieces(items)
-
-                const modelData = await stockData.getAllModels()
-                setListeModel(modelData)
-                const optionsModel = modelData.map((item) => ({
-                    label: item.nom_model,
-                    value: item.id_model,
-                }))
-                setOptionsModel(optionsModel)
-
-                if (idDecom) {
-                    const serials = await decomData.getSnDecom(idDecom)
-
-                    const serialStatus = await Promise.all(
-                        serials.map(async (item) => {
-                            const serial = item.serial_number
-                            const tpeData = await gestionTpeData.getTpeInfos(serial)
-                            return {
-                                serial,
-                                statut: tpeData.statut_tpe.statut,
-                            }
-                        })
-                    )
-
-                    const listeReparation = serialStatus.filter((item) => {
-                        return item.statut == 'a_reparer'
-                    })
-                    const listeSn = listeReparation.map((item) => {
-                        return item.serial
-                    })
-
-                    const response = await decomData.getPieceDefectueuseListeTpe(listeSn)
-                    const terminals = response.data
-
-                    console.log(terminals)
-
-                    const newList = terminals.filter((terminal) => {
-                        const isDuplicate = listeAreparer.some(item => {
-                            return item.sn == terminal.sn
-                        });
-                        if (isDuplicate == false) {
-                            return terminal
-                        }
-                    })
-
-                    setQuantiteTotale((prev) => prev + newList.length);
-                    setListeAreparer((prev) => [...prev, ...newList]);
-                }
             } catch (error) {
-                console.error('Error fetching data ', error)
-                setErrorForm('Erreur lors de la génération du formulaire')
+                if (!ignore) {
+                    console.error('Error fetching data ', error)
+                    setErrorForm('Erreur lors de la génération du formulaire')
+                }
             } finally {
-                setLoadingData(false)
+                if (!ignore) setLoadingData(false)
             }
         }
-        fetchData()
-    }, [])
 
-    useEffect(() => {
-        saveListe({
-            listeAreparer,
-            quantiteTotale,
-        })
-    }, [listeAreparer, quantiteTotale])
+        fetchData()
+        return () => { ignore = true }
+    }, [idDecom])
+
+    // useEffect(() => {
+    //     saveListe({
+    //         listeAreparer,
+    //         quantiteTotale,
+    //     })
+    // }, [listeAreparer, quantiteTotale])
 
     const onDrop = useCallback(async (acceptedFiles) => {
         const updatedFiles = [...selectedFiles];
