@@ -10,16 +10,18 @@ const transporter = nodemailer.createTransport({
     pass: process.env.NODEMAILER_PASSWORD, // mot de passe ou app password
   },
   // PAS de tls.servername ici
-  connectionTimeout: 30_000,
+  connectionTimeout: 30_000,
 });
 
-const sendMail = async ({ to, subject, html, attachments = [] }) => {
+const sendMail = async ({ to, cc, bcc, subject, html, attachments = [] }) => {
   await transporter.sendMail({
     from: process.env.NODEMAILER_USER,
     to,
+    cc,   // CC: visible to all recipients
+    bcc,  // CCI: hidden from other recipients
     subject,
     html,
-    attachments
+    attachments,
   });
 };
 

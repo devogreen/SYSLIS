@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useParams, Link, useNavigate } from "react-router";
+import { useParams, Link, useNavigate, useLocation } from "react-router";
 import { Decom } from "../../../backend/decom/decom.js"
 import { Users } from "../../../backend/users/Users.js";
 import { Stock } from "../../../backend/stock/Stock.js";
@@ -36,6 +36,9 @@ export default function ReparationTpeInputs() {
     const userId = localStorage.getItem('id');
     const navigate = useNavigate()
 
+    const location = useLocation();
+    const { from, idDecom } = location.state || {};
+
     const LISTE_KEY = "listeAreparer";
     const saveListe = (liste) => {
         sessionStorage.setItem(LISTE_KEY, JSON.stringify(liste));
@@ -56,7 +59,9 @@ export default function ReparationTpeInputs() {
 
     const [selectedTpe, setSelectedTpe] = useState(null)
 
-    const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
+    // const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
+
+    const quantiteTotale = listeAreparer.length
 
     const [isRAS, setIsRAS] = useState(false)
     const [isProblem, setIsProblem] = useState(false)
@@ -137,41 +142,56 @@ export default function ReparationTpeInputs() {
     ]
 
     useEffect(() => {
+        let ignore = false
+
         const fetchData = async () => {
             try {
                 setLoadingData(true)
-                // const merchants = await merchantsData.findMerchant()
-                // setMerchantList(merchants)
+                if (!idDecom) return
 
-                const allItems = await stockData.getAllItems()
-                const items = allItems.filter((item) => {
-                    return item.is_deleted == false && item.type != 'TERMINAL'
+                const serials = await decomData.getSnDecom(idDecom)
+
+                const serialStatus = await Promise.all(
+                    serials.map(async (item) => {
+                        const tpeData = await gestionTpeData.getTpeInfos(item.serial_number)
+                        return { serial: item.serial_number, statut: tpeData.statut_tpe.statut }
+                    })
+                )
+
+                const listeSn = serialStatus
+                    .filter((item) => item.statut === 'a_reparer')
+                    .map((item) => item.serial)
+
+                const response = await decomData.getPieceDefectueuseListeTpe(listeSn)
+                if (ignore) return   // this run was cancelled (unmount / StrictMode)
+
+                const terminals = response.data
+
+                setListeAreparer((prev) => {
+                    const existing = new Set(prev.map((item) => item.sn))
+                    const newList = terminals.filter((t) => !existing.has(t.sn))
+                    return [...prev, ...newList]
                 })
-                setPieces(items)
-
-                const modelData = await stockData.getAllModels()
-                setListeModel(modelData)
-                const optionsModel = modelData.map((item) => ({
-                    label: item.nom_model,
-                    value: item.id_model,
-                }))
-                setOptionsModel(optionsModel)
             } catch (error) {
-                console.error('Error fetching data ', error)
-                setErrorForm('Erreur lors de la génération du formulaire')
+                if (!ignore) {
+                    console.error('Error fetching data ', error)
+                    setErrorForm('Erreur lors de la génération du formulaire')
+                }
             } finally {
-                setLoadingData(false)
+                if (!ignore) setLoadingData(false)
             }
         }
-        fetchData()
-    }, [])
 
-    useEffect(() => {
-        saveListe({
-            listeAreparer,
-            quantiteTotale,
-        })
-    }, [listeAreparer, quantiteTotale])
+        fetchData()
+        return () => { ignore = true }
+    }, [idDecom])
+
+    // useEffect(() => {
+    //     saveListe({
+    //         listeAreparer,
+    //         quantiteTotale,
+    //     })
+    // }, [listeAreparer, quantiteTotale])
 
     const onDrop = useCallback(async (acceptedFiles) => {
         const updatedFiles = [...selectedFiles];
@@ -588,25 +608,27 @@ export default function ReparationTpeInputs() {
                 userId,
                 listeSn: JSON.stringify(listeAreparer),
                 commentaire,
+                // Lot créé depuis un décom : le décom avancera quand tous ses TPE à réparer seront en réparation
+                decomId: idDecom ? Number(idDecom) : null,
             }
             console.log(payload)
-            await decomData.reparerListeTpe(payload)
+            const response = await decomData.reparerListeTpe(payload)
             Swal.fire({
                 title: "Succès",
-                text: "Réparation TPE(s) éffectuée avec succès !",
+                text: "Lot de réparation créé : il est en attente de validation.",
                 icon: "success"
             })
             setListeAreparer([])
             setQuantiteTotale(0)
-            navigate('/toutes-livraisons-reparation')
+            const idLot = response?.data?.reparation?.id
+            navigate(idLot ? `/reparation-tpe-details/${idLot}` : '/reparations-tpe')
         } catch (error) {
             console.log("Erreur de demande : ", error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la réparation !",
+                text: error?.message || "Une erreur est survenue lors de la mise en réparation !",
                 icon: "warning"
             })
-            navigate('/toutes-livraisons-reparation')
         } finally {
             setLoadingValidation(false)
         }

@@ -58,9 +58,19 @@ export default function AllDecomList() {
     const [globalFilter, setGlobalFilter] = useState(savedFilters?.globalFilter || "");
     const [selectedStatus, setSelectedStatus] = useState(savedFilters?.selectedStatus || []);
     const statusOptions = [
-        { label: 'En cours', value: 'en_cours' },
-        { label: 'Retourné', value: 'retourne' },
-        { label: 'En vérification', value: 'recu' },
+        { label: 'soumis_decom', value: 'en_cours' },
+        { label: 'retourné', value: 'retourne' },
+        { label: 'récupéré_decom', value: 'recu' },
+        { label: 'validé_decom', value: 'valide_decom' },
+        { label: 'transmis_decom_maintenance', value: 'transmis_decom' },
+        { label: 'verification', value: 'verification' },
+        { label: 'complet', value: 'complet' },
+        { label: 'transmis_decom_param', value: 'transmis_decom_param' },
+        { label: 'reception_decom_param', value: 'reception_decom_param' },
+        { label: 'decom_en_reparation', value: 'decom_en_reparation' },
+        { label: 'decom_repare', value: 'decom_repare' },
+        { label: 'transmis_decom_repare', value: 'transmis_decom_repare' },
+        { label: 'receptionne_decom_repare', value: 'receptionne_decom_repare' },
         { label: 'Clos', value: 'clos' },
     ];
     const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
@@ -76,6 +86,8 @@ export default function AllDecomList() {
     );
 
     const [isNotReg, setIsNotReg] = useState(savedFilters?.isNotReg || false)
+    const [isRemplacement, setIsRemplacement] = useState(savedFilters?.isRemplacement || false)
+    const [isNotRemplacement, setIsNotRemplacement] = useState(savedFilters?.isNotRemplacement || false)
 
     const [loadingExtract, setLoadingExtract] = useState(false)
 
@@ -85,10 +97,12 @@ export default function AllDecomList() {
             selectedStatus,
             isReg,
             isNotReg,
+            isRemplacement,
+            isNotRemplacement,
             datesDecom: datesDecom?.map(d => d?.toISOString()),
             datesReception: datesReception?.map(d => d?.toISOString()),
         });
-    }, [globalFilter, selectedStatus, isReg, isNotReg, datesDecom, datesReception]);
+    }, [globalFilter, selectedStatus, isReg, isNotReg, isRemplacement, isNotRemplacement, datesDecom, datesReception]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -112,6 +126,8 @@ export default function AllDecomList() {
         setSelectedStatus([]);
         setIsReg(false);
         setIsNotReg(false);
+        setIsRemplacement(false);
+        setIsNotRemplacement(false);
         setDatesDecom(null);
         setDatesReception(null);
         sessionStorage.removeItem(FILTERS_KEY);
@@ -125,13 +141,46 @@ export default function AllDecomList() {
     const statutTemplate = (decom) => {
         let statutClass = ''
         let statut = ''
+        const linkSee = `/decom-details/${decom.id}`
+
         if (decom.statut == 'en_cours') {
-            statut = 'en cours'
+            statut = 'soumis_decom'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-warning-100 text-warning-300'
         } else if (decom.statut == 'recu') {
-            statut = 'en vérification'
+            statut = 'recupere_decom'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-100 text-blue-300'
-        } else if (decom.statut == 'retourne') {
+        } else if (decom.statut == 'valide_decom') {
+            statut = 'valide_decom'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-400'
+        } else if (decom.statut == 'transmis_decom') {
+            statut = 'transmis_decom_maint'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-orange-100 text-orange-400'
+        } else if (decom.statut == 'verification') {
+            statut = 'verification'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-200 text-blue-600'
+        } else if (decom.statut == 'complet') {
+            statut = 'complet'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-green-200 text-green-700'
+        } else if (decom.statut == 'transmis_decom_param') {
+            statut = 'transmis_decom_param'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-orange-100 text-orange-500'
+        } else if (decom.statut == 'reception_decom_param') {
+            statut = 'reception_decom_param'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-blue-200 text-blue-700'
+        } else if (decom.statut == 'decom_en_reparation') {
+            statut = 'decom_en_reparation'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-warning-100 text-warning-400'
+        } else if (decom.statut == 'decom_repare') {
+            statut = 'decom_repare'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-green-100 text-green-600'
+        } else if (decom.statut == 'transmis_decom_repare') {
+            statut = 'transmis_decom_repare'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-orange-100 text-orange-500'
+        } else if (decom.statut == 'receptionne_decom_repare') {
+            statut = 'receptionne_decom_repare'
+            statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-gray-200 text-gray-600'
+        }
+        else if (decom.statut == 'retourne') {
             statut = 'retourné'
             statutClass = 'grid grid-cols-1 text-center text-xs font-semibold rounded-xl p-0.5 bg-red-100 text-red-300'
         } else if (decom.statut == 'clos') {
@@ -140,7 +189,9 @@ export default function AllDecomList() {
         }
         return (
             <div>
-                <span className={statutClass}>{statut}</span>
+                <Link to={linkSee}>
+                    <span className={statutClass}>{statut}</span>
+                </Link>
             </div>
         )
     }
@@ -233,12 +284,14 @@ export default function AllDecomList() {
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut) : true;
         const matchesReg = isReg ? form.is_reg : true;
         const matchesNotReg = isNotReg ? !form?.is_reg && !item.is_reg : true;
+        const matchesRemplacement = isRemplacement ? item.is_remplacement : true;
+        const matchesNotRemplacement = isNotRemplacement ? !item.is_remplacement : true;
         const matchesDatesDecom = datesDecom ? (datesDecom[0] <= dateDecom && nextDayDecom >= dateDecom) : true;
         const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesReg && matchesNotReg && matchesDatesDecom && matchesDatesReception && matchesGlobalFilter;
+        return matchesStatus && matchesReg && matchesNotReg && matchesRemplacement && matchesNotRemplacement && matchesDatesDecom && matchesDatesReception && matchesGlobalFilter;
     });
 
     const totalTPE = filteredDecom.reduce((sum, item) => sum + Number(item.quantite || 0), 0);
@@ -375,6 +428,30 @@ export default function AllDecomList() {
                                     }
                                 }}
                                 label="Sans Régularisations" />
+                        </div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isRemplacement}
+                                onChange={(e) => {
+                                    if (isRemplacement) {
+                                        setIsRemplacement(false)
+                                    } else {
+                                        setIsRemplacement(true)
+                                    }
+                                }}
+                                label="Remplacements" />
+                        </div>
+                        <div className="flex items-center gap-3 my-2">
+                            <Checkbox
+                                checked={isNotRemplacement}
+                                onChange={(e) => {
+                                    if (isNotRemplacement) {
+                                        setIsNotRemplacement(false)
+                                    } else {
+                                        setIsNotRemplacement(true)
+                                    }
+                                }}
+                                label="Sans Remplacements" />
                         </div>
                     </div>
                 </div>

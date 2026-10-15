@@ -837,6 +837,7 @@ model form_decom {
   statut           forms_decom_statut
   quantite         Int?
   liste_decom      String?            @db.LongText
+  is_remplacement   Boolean            @default(false)
   forms            forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
   reception_decom  reception_decom[]
   sn_decom         sn_decom[]
@@ -844,6 +845,8 @@ model form_decom {
   retour_decom     retour_decom[]
   sn_rebut         sn_rebut[]
   tpe_a_reparer    tpe_a_reparer[]
+  livraison_param_decom livraison_param_decom[]
+  reparation_tpe   reparation_tpe[]
 
   @@index([form_id], map: "form_id")
 }
@@ -853,6 +856,8 @@ model reception_decom {
   form_id    Int
   decom_id   Int
   type       reception_decom_type
+  quantite   Int?
+  liste_decom   String?              @db.LongText
   forms      forms                @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_1")
   form_decom form_decom           @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_2")
 
@@ -964,6 +969,9 @@ model forms {
   reparation_tpe                reparation_tpe[]
   mise_en_reparation            mise_en_reparation[]
   retour_demande_qr             retour_demande_qr[]
+  livraison_param_decom         livraison_param_decom[]
+  reception_param_decom         reception_param_decom[]
+  validation_reparation_tpe     validation_reparation_tpe[]
 
   @@index([created_by], map: "created_by")
   @@index([updated_by], map: "updated_by")
@@ -1224,13 +1232,31 @@ model mouvement_piece_a_reparer {
 model reparation_tpe {
   id                        Int                         @id @default(autoincrement())
   form_id                   Int
+  decom_id                  Int?
+  statut                    statut_reparation_tpe       @default(en_reparation)
   quantite                  Int?
   liste_sn                  String?                     @db.LongText
   forms                     forms                       @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reparation_tpe_ibfk_1")
+  form_decom                form_decom?                 @relation(fields: [decom_id], references: [id], map: "reparation_tpe_ibfk_2")
   mouvement_piece_a_reparer mouvement_piece_a_reparer[]
   tpe_a_reparer             tpe_a_reparer[]
+  validation_reparation_tpe validation_reparation_tpe[]
 
   @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+}
+
+model validation_reparation_tpe {
+  id             Int            @id @default(autoincrement())
+  form_id        Int
+  reparation_id  Int
+  quantite       Int?
+  liste_sn       String?        @db.LongText
+  forms          forms          @relation(fields: [form_id], references: [id], map: "validation_reparation_tpe_ibfk_1")
+  reparation_tpe reparation_tpe @relation(fields: [reparation_id], references: [id], map: "validation_reparation_tpe_ibfk_2")
+
+  @@index([form_id], map: "form_id")
+  @@index([reparation_id], map: "reparation_id")
 }
 
 model livraison_tpe_repare {
@@ -1256,6 +1282,35 @@ model reception_tpe_repare {
   liste_sn             String?                   @db.LongText
   forms                forms                     @relation(fields: [form_id], references: [id], map: "reception_tpe_repare_ibfk_1")
   livraison_tpe_repare livraison_tpe_repare      @relation(fields: [livraison_id], references: [id], map: "reception_tpe_repare_ibfk_2")
+
+  @@index([form_id], map: "form_id")
+  @@index([livraison_id], map: "livraison_id")
+}
+
+model livraison_param_decom {
+  id                    Int                          @id @default(autoincrement())
+  form_id               Int
+  decom_id              Int?
+  statut                statut_livraison_param_decom
+  quantite              Int?
+  liste_sn              String?                      @db.LongText
+  forms                 forms                        @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "livraison_param_decom_ibfk_1")
+  form_decom            form_decom?                  @relation(fields: [decom_id], references: [id], map: "livraison_param_decom_ibfk_2")
+  reception_param_decom reception_param_decom[]
+
+  @@index([form_id], map: "form_id")
+  @@index([decom_id], map: "decom_id")
+}
+
+model reception_param_decom {
+  id                    Int                        @id @default(autoincrement())
+  form_id               Int
+  livraison_id          Int
+  type                  type_reception_param_decom
+  quantite              Int?
+  liste_sn              String?                    @db.LongText
+  forms                 forms                      @relation(fields: [form_id], references: [id], map: "reception_param_decom_ibfk_1")
+  livraison_param_decom livraison_param_decom      @relation(fields: [livraison_id], references: [id], map: "reception_param_decom_ibfk_2")
 
   @@index([form_id], map: "form_id")
   @@index([livraison_id], map: "livraison_id")
@@ -1388,6 +1443,10 @@ enum form_decom_statut {
 enum reception_decom_type {
   validation
   retour
+  reception
+  verification
+  transmission_maintenance
+  validation_maintenance
 }
 
 enum form_signatures_role {
@@ -1444,13 +1503,27 @@ enum forms_type {
   reparation_tpe
   mise_en_reparation
   retour_demande_qr
+  livraison_param_decom
+  reception_param_decom
+  validation_reparation_tpe
 }
 
 enum forms_decom_statut {
   en_cours
   retourne
   recu
+  verifie_decom
+  valide_decom
+  transmis_decom
+  verification
+  complet
   clos
+  transmis_decom_param
+  reception_decom_param
+  decom_en_reparation
+  decom_repare
+  transmis_decom_repare
+  receptionne_decom_repare
 }
 
 enum sn_decom_statut {
@@ -1463,6 +1536,8 @@ enum sn_decom_statut {
 enum retour_decom_type {
   verification
   cloture
+  confirmation_diagnostic
+  annulation_diagnostic
 }
 
 enum statut_parc_tpe {
@@ -1511,6 +1586,25 @@ enum type_reception_tpe_repare {
   reception
   retour
   cloture
+}
+
+enum statut_livraison_param_decom {
+  en_cours
+  livre
+  clos
+  annule
+}
+
+enum type_reception_param_decom {
+  reception
+  cloture
+}
+
+enum statut_reparation_tpe {
+  en_reparation
+  valide
+  livre
+  annule
 }
 
 enum etat_piece_a_reparer {

@@ -68,6 +68,7 @@ export default function ModifyDecomInputs() {
     const [quantiteTotale, setQuantiteTotale] = useState(savedListe?.quantiteTotale || 0)
 
     const [message, setMessage] = useState(savedListe?.message || '')
+    const [isRemplacement, setIsRemplacement] = useState(false)
     const [selectedFiles, setSelectedFiles] = useState([])
 
     const [loadingValidation, setLoadingValidation] = useState(false)
@@ -117,6 +118,7 @@ export default function ModifyDecomInputs() {
                 setQuantiteTotale(listeDecom.length)
 
                 setMessage(decomForm.commentaire)
+                setIsRemplacement(Boolean(decom.is_remplacement))
 
             } catch (error) {
                 console.error('Error fetching data ', error)
@@ -473,6 +475,7 @@ export default function ModifyDecomInputs() {
             fd.append("listeDecom", JSON.stringify(listeDecom))
             fd.append("quantite", quantiteTotale)
             fd.append("userId", Number(userId))
+            fd.append("isRemplacement", isRemplacement)
 
             const id = idDecom
             console.log("Sending data : ")
@@ -521,6 +524,12 @@ export default function ModifyDecomInputs() {
                                     <ComponentCard className="md:w-1/2 w-full" title="Décommissionnement">
                                         <div className="space-y-3">
                                             <div className="space-y-4">
+                                                <div className="flex items-center gap-3">
+                                                    <Checkbox
+                                                        checked={isRemplacement}
+                                                        onChange={() => setIsRemplacement(!isRemplacement)}
+                                                        label="Remplacement" />
+                                                </div>
                                                 <div>
                                                     <Label>Commentaire Général</Label>
                                                     <TextArea
@@ -1224,6 +1233,14 @@ export default function ModifyDecomInputs() {
                                 <span>Total decom : </span>
                                 <span className="font-bold text-sm">{quantiteTotale}</span>
                             </div>
+                            {isRemplacement ? (
+                                <div>
+                                    <span>Type : </span>
+                                    <span className="font-bold text-sm">Remplacement</span>
+                                </div>
+                            ) : (
+                                <></>
+                            )}
                         </div>
                     </div>
                     <div>

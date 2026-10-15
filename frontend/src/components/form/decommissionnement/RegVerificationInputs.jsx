@@ -109,9 +109,21 @@ export default function RegVerificationInputs() {
             try {
                 setLoadingData(true)
                 const decom = await decomData.getOneDecom(idDecom)
+                if (decom.statut != 'verification') {
+                    Swal.fire({
+                        title: "Attention",
+                        text: "La vérification technique n'est possible qu'après validation de la transmission par la maintenance.",
+                        icon: "warning",
+                        confirmButtonColor: "#3085d6",
+                        confirmButtonText: "OK"
+                    });
+                    navigate(`/decom-details/${idDecom}`)
+                    return;
+                }
                 // const listeDecom = JSON.parse(decom.liste_decom)
-                const indexReception = decom.reception_decom.length - 1
-                const reception = decom.reception_decom[indexReception]
+                // Date de référence : la validation par la maintenance (à défaut, la dernière étape enregistrée)
+                const reception = decom.reception_decom.filter((item) => item.type === 'validation_maintenance').at(-1)
+                    || decom.reception_decom.at(-1)
                 const receptionForm = reception?.forms
                 const dateReception = new Date(receptionForm?.last_modified_at);
                 setDateReception(dateReception)
