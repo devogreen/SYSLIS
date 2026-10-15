@@ -118,29 +118,6 @@ export default function DecomDetails() {
     // Validation de la transmission par la maintenance
     const ROLE_VALIDATION_MAINTENANCE = 'verification_decom'
     const [isValidateurMaintenance, setIsValidateurMaintenance] = useState(false)
-
-    // Diagnostic (fin de la vérification technique)
-    const [isDiagnostiqueur, setIsDiagnostiqueur] = useState(false)
-    const [isComplet, setIsComplet] = useState(false)
-
-    // Livraison des TPE à paramétrer (après clôture) : rôle verification_decom (25)
-    const [isLivreurParam, setIsLivreurParam] = useState(false)
-    const [nbParamRestants, setNbParamRestants] = useState(0)
-    const [livraisonsParam, setLivraisonsParam] = useState([])
-
-    // Réparation des TPE a_reparer par lots : rôles maintenance (25) ou réparation (35)
-    const ROLES_REPARATION_IDS = [25, 35]
-    const [isReparateur, setIsReparateur] = useState(false)
-    const [nbAReparerRestants, setNbAReparerRestants] = useState(0)
-    const [lotsReparation, setLotsReparation] = useState([])
-    const [loadingDiagnostic, setLoadingDiagnostic] = useState(false)
-    const [isModalDiagnosticOpen, setIsModalDiagnosticOpen] = useState(false)
-    const [isModalCancelDiagnosticOpen, setIsModalCancelDiagnosticOpen] = useState(false)
-    const [messageDiagnostic, setMessageDiagnostic] = useState('')
-    const [messageCancelDiagnostic, setMessageCancelDiagnostic] = useState('')
-    const [errorCancelDiagnostic, setErrorCancelDiagnostic] = useState('')
-    const [commentaireDiagnostic, setCommentaireDiagnostic] = useState('')
-    const [titreDiagnostic, setTitreDiagnostic] = useState('')
     const [commentaireValidationMaintenance, setCommentaireValidationMaintenance] = useState('')
 
     const formatDate = (date) => {
@@ -188,7 +165,6 @@ export default function DecomDetails() {
                 const nomRoles = rolesData.roles.map((item) => {
                     return item.nom_role
                 })
-                const idRoles = rolesData.roles.map((item) => item.id_role)
 
                 const indexReception = decom.reception_decom.length - 1
                 const reception = decom.reception_decom[indexReception]
@@ -267,75 +243,19 @@ export default function DecomDetails() {
                         setListeValideDecom(listeRecue)
                         setQuantiteValideDecom(listeRecue.length)
                     }
-                    // Vérification technique et confirmation du diagnostic : réservées au rôle verification_decom
+                    // Vérification technique : réservée au rôle verification_decom
                     if (nomRoles.includes(ROLE_VALIDATION_MAINTENANCE)) {
                         setIsVerificateur(true)
                     }
-                    setChecking(true)
-                } else if (statut == 'complet') {
-                    // Diagnostic confirmé : plus de vérification possible, la clôture est ouverte
-                    setStatutDecom('complet')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-1 bg-green-200 text-green-700')
-                    setIsComplet(true)
                     if (nomRoles.includes('cloture_decom')) {
                         setIsCloture(true)
-                    }
-                    // Annulation du diagnostic : réservée au rôle verification_decom
-                    if (nomRoles.includes(ROLE_VALIDATION_MAINTENANCE)) {
-                        setIsDiagnostiqueur(true)
                     }
                     setChecking(true)
                 } else if (statut == 'clos' && verification && verification.type == 'cloture') {
                     setStatutDecom('clos')
                     setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-100 text-gray-400')
                     setChecking(true)
-                    if (nomRoles.includes(ROLE_VALIDATION_MAINTENANCE)) {
-                        setIsLivreurParam(true)
-                    }
-                    // Réparation possible depuis 'clos' uniquement s'il n'y a pas de TPE à paramétrer (vérifié plus bas)
-                    if (idRoles.some((r) => ROLES_REPARATION_IDS.includes(r))) {
-                        setIsReparateur(true)
-                    }
-                } else if (statut == 'transmis_decom_param') {
-                    setStatutDecom('transmis_decom_param')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-orange-100 text-orange-500')
-                    setChecking(true)
-                } else if (statut == 'reception_decom_param') {
-                    setStatutDecom('reception_decom_param')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-blue-200 text-blue-700')
-                    setChecking(true)
-                    if (idRoles.some((r) => ROLES_REPARATION_IDS.includes(r))) {
-                        setIsReparateur(true)
-                    }
-                } else if (statut == 'decom_en_reparation') {
-                    setStatutDecom('decom_en_reparation')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-warning-100 text-warning-400')
-                    setChecking(true)
-                    // Les TPE refusés à la validation peuvent être remis en réparation
-                    if (idRoles.some((r) => ROLES_REPARATION_IDS.includes(r))) {
-                        setIsReparateur(true)
-                    }
-                } else if (statut == 'decom_repare') {
-                    setStatutDecom('decom_repare')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-green-100 text-green-600')
-                    setChecking(true)
-                } else if (statut == 'transmis_decom_repare') {
-                    setStatutDecom('transmis_decom_repare')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-orange-100 text-orange-500')
-                    setChecking(true)
-                } else if (statut == 'receptionne_decom_repare') {
-                    setStatutDecom('receptionne_decom_repare')
-                    setStatutClass('text-center text-xs font-semibold rounded-xl p-0.5 px-2 bg-gray-200 text-gray-600')
-                    setChecking(true)
                 }
-
-                // Livraisons des TPE à paramétrer liées à ce décom
-                const livraisonsParamDecom = (decom.livraison_param_decom || []).filter((l) => !l.forms?.is_deleted)
-                setLivraisonsParam(livraisonsParamDecom)
-
-                // Lots de réparation liés à ce décom
-                const lotsReparationDecom = (decom.reparation_tpe || []).filter((l) => !l.forms?.is_deleted)
-                setLotsReparation(lotsReparationDecom)
 
                 // if (statut == 'recu' || statut == 'clos') {
                 //     const listeSn = await decomData.getSnDecom(idDecom)
@@ -377,39 +297,12 @@ export default function DecomDetails() {
                 // }
 
                 // En vérification et après clôture, le tableau affiche les TPE vérifiés (sn_decom)
-                if (['verification', 'complet', 'clos', 'transmis_decom_param', 'reception_decom_param',
-                    'decom_en_reparation', 'decom_repare', 'transmis_decom_repare', 'receptionne_decom_repare'].includes(statut)) {
+                if (statut == 'verification' || statut == 'clos') {
                     const listeSn = await decomData.getSnDecom(idDecom)
                     const listeSnActifs = listeSn.filter((item) => !item.is_deleted)
                     setListeDecom(listeSnActifs)
                     setListeChecking(listeSnActifs.filter((item) => item.statut == 'checking'))
                     console.log('Liste SN: ', listeSnActifs)
-
-                    // TPE à paramétrer pas encore présents dans une livraison param (non annulée)
-                    const snLivres = new Set()
-                    livraisonsParamDecom
-                        .filter((l) => l.statut != 'annule')
-                        .forEach((l) => JSON.parse(l.liste_sn || '[]').forEach((item) => snLivres.add(String(item.sn))))
-                    const restants = listeSnActifs.filter((item) => item.statut == 'parametrage' && !snLivres.has(String(item.serial_number)))
-                    setNbParamRestants(restants.length)
-
-                    // TPE à réparer pas encore couverts par un lot (en réparation ou validé)
-                    const snCouverts = new Set()
-                    lotsReparationDecom
-                        .filter((l) => l.statut != 'annule')
-                        .forEach((l) => {
-                            if (l.statut == 'en_reparation') {
-                                JSON.parse(l.liste_sn || '[]').forEach((item) => snCouverts.add(String(item.sn)))
-                            }
-                            const validation = (l.validation_reparation_tpe || []).at(-1)
-                            if (validation) {
-                                JSON.parse(validation.liste_sn || '[]').forEach((item) => snCouverts.add(String(item.sn)))
-                            }
-                        })
-                    const aReparerRestants = listeSnActifs.filter((item) => item.statut == 'a_reparer' && !snCouverts.has(String(item.serial_number)))
-                    // La livraison des TPE à paramétrer passe en premier : depuis 'clos', pas de réparation s'il y a des TPE param
-                    const aDesTpeParam = listeSnActifs.some((item) => item.statut == 'parametrage')
-                    setNbAReparerRestants(statut == 'clos' && aDesTpeParam ? 0 : aReparerRestants.length)
                 }
 
                 const allItems = await stockData.getAllItems()
@@ -424,17 +317,7 @@ export default function DecomDetails() {
                 setCommentaireReception(derniereReception?.forms.commentaire)
                 setCommentaireTransmission(transmissionDecom?.forms.commentaire)
                 setCommentaireValidationMaintenance(validationMaintenance?.forms.commentaire)
-                // Commentaire de la dernière vérification technique (hors confirmation / annulation de diagnostic)
-                const derniereVerification = decom.retour_decom.filter((item) => item.type === 'verification').at(-1)
-                setCommentaireVerification(derniereVerification?.forms.commentaire)
-                // Dernier événement de diagnostic : confirmation ou annulation
-                const dernierDiagnostic = decom.retour_decom
-                    .filter((item) => item.type === 'confirmation_diagnostic' || item.type === 'annulation_diagnostic')
-                    .at(-1)
-                if (dernierDiagnostic) {
-                    setTitreDiagnostic(dernierDiagnostic.type === 'confirmation_diagnostic' ? 'Commentaire diagnostic' : 'Motif annulation diagnostic')
-                    setCommentaireDiagnostic(dernierDiagnostic.forms?.commentaire)
-                }
+                setCommentaireVerification(verification?.forms.commentaire)
 
 
                 const allFiles = await filesData.getAllFormFiles(decomForm.id)
@@ -631,63 +514,6 @@ export default function DecomDetails() {
             navigate('/tous-les-decommissionnements')
         } finally {
             setLoadingVerification(false)
-        }
-    }
-
-    const handleConfirmDiagnostic = async () => {
-        setIsModalDiagnosticOpen(false)
-        try {
-            setLoadingDiagnostic(true)
-            await decomData.confirmDiagnosticDecom(idDecom, {
-                userId,
-                commentaire: messageDiagnostic,
-            })
-            Swal.fire({
-                title: "Succès",
-                text: "Diagnostic confirmé : le décom peut maintenant être clôturé.",
-                icon: "success"
-            })
-            navigate('/tous-les-decommissionnements')
-        } catch (error) {
-            console.log("Erreur de confirmation du diagnostic : ", error)
-            Swal.fire({
-                title: "Attention",
-                text: error?.message || "Une erreur est survenue lors de la confirmation du diagnostic !",
-                icon: "warning"
-            })
-        } finally {
-            setLoadingDiagnostic(false)
-        }
-    }
-
-    const handleCancelDiagnostic = async () => {
-        if (!messageCancelDiagnostic?.trim()) {
-            setErrorCancelDiagnostic("Veuillez indiquer le motif de l'annulation.")
-            return
-        }
-        setIsModalCancelDiagnosticOpen(false)
-        try {
-            setLoadingDiagnostic(true)
-            setErrorCancelDiagnostic('')
-            await decomData.cancelDiagnosticDecom(idDecom, {
-                userId,
-                commentaire: messageCancelDiagnostic,
-            })
-            Swal.fire({
-                title: "Succès",
-                text: "Diagnostic annulé : le décom est de nouveau en vérification.",
-                icon: "success"
-            })
-            navigate('/tous-les-decommissionnements')
-        } catch (error) {
-            console.log("Erreur d'annulation du diagnostic : ", error)
-            Swal.fire({
-                title: "Attention",
-                text: error?.message || "Une erreur est survenue lors de l'annulation du diagnostic !",
-                icon: "warning"
-            })
-        } finally {
-            setLoadingDiagnostic(false)
         }
     }
 
@@ -977,22 +803,16 @@ export default function DecomDetails() {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                        {listeDecom.length > 0 && listeChecking.length == 0 ? (
+                                                                        {listeChecking.length == 0 && isCloture ? (
                                                                             <>
-                                                                                {loadingDiagnostic ? (
-                                                                                    <div className='text-center mt-1'>
-                                                                                        <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                                        onClick={() => {
-                                                                                            setIsModalDiagnosticOpen(true)
-                                                                                        }}
-                                                                                    >
-                                                                                        <span className='mr-4'><i className="pi pi-verified"></i></span>
-                                                                                        <span className='text-sm text-gray-700 font-medium'>Confirmer diagnostic</span>
-                                                                                    </button>
-                                                                                )}
+                                                                                <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
+                                                                                    onClick={() => {
+                                                                                        setIsModalClotureOpen(true)
+                                                                                    }}
+                                                                                >
+                                                                                    <span className='mr-4'><i className="pi pi-circle-fill"></i></span>
+                                                                                    <span className='text-sm text-gray-700 font-medium'>Cloturer décomm</span>
+                                                                                </button>
                                                                             </>
                                                                         ) : (
                                                                             <></>
@@ -1001,70 +821,6 @@ export default function DecomDetails() {
                                                                 </>
                                                             )}
                                                         </>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                    {isComplet ? (
-                                                        <>
-                                                            {loadingDiagnostic || loadingVerification ? (
-                                                                <div className='text-center'>
-                                                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                </div>
-                                                            ) : (
-                                                                <div className="space-y-0.5">
-                                                                    {isCloture ? (
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                            onClick={() => {
-                                                                                setIsModalClotureOpen(true)
-                                                                            }}
-                                                                        >
-                                                                            <span className='mr-4'><i className="pi pi-circle-fill"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Cloturer décomm</span>
-                                                                        </button>
-                                                                    ) : (
-                                                                        <></>
-                                                                    )}
-                                                                    {isDiagnostiqueur ? (
-                                                                        <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'
-                                                                            onClick={() => {
-                                                                                setErrorCancelDiagnostic('')
-                                                                                setIsModalCancelDiagnosticOpen(true)
-                                                                            }}
-                                                                        >
-                                                                            <span className='mr-4'><i className="pi pi-replay"></i></span>
-                                                                            <span className='text-sm text-gray-700 font-medium'>Annuler diagnostic</span>
-                                                                        </button>
-                                                                    ) : (
-                                                                        <></>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                    {isReparateur && nbAReparerRestants > 0 ? (
-                                                        <button
-                                                            onClick={() => {
-                                                                navigate(`/reparation-tpe`, {
-                                                                    state: {
-                                                                        from: 'decom-details',
-                                                                        idDecom
-                                                                    }
-                                                                })
-                                                            }}
-                                                            className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'>
-                                                            <span className='mr-4'><i className="pi pi-wrench"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Réparer TPE ({nbAReparerRestants})</span>
-                                                        </button>
-                                                    ) : (
-                                                        <></>
-                                                    )}
-                                                    {isLivreurParam && nbParamRestants > 0 ? (
-                                                        <Link to={`/livraison-param-decom?decom=${idDecom}`} className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'>
-                                                            <span className='mr-4'><i className="pi pi-cog"></i></span>
-                                                            <span className='text-sm text-gray-700 font-medium'>Livrer TPE à paramétrer ({nbParamRestants})</span>
-                                                        </Link>
                                                     ) : (
                                                         <></>
                                                     )}
@@ -1211,19 +967,6 @@ export default function DecomDetails() {
                                                 ) : (
                                                     <></>
                                                 )}
-                                                {commentaireDiagnostic ? (
-                                                    <>
-                                                        <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
-                                                            <div className='mb-6 pb-2 w-full border-b text-left'>
-                                                                <span className='text-sm mr-2'>{titreDiagnostic}</span>
-                                                                <span className='text-sm'><i className="pi pi-comment"></i></span>
-                                                            </div>
-                                                            <p className='text-sm text-blue-500 text-left'>{commentaireDiagnostic}</p>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <></>
-                                                )}
                                                 {commentaireVerification ? (
                                                     <>
                                                         <div className='overflow-hidden pt-2 p-6 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]'>
@@ -1239,50 +982,6 @@ export default function DecomDetails() {
                                                 )}
                                             </div>
                                         </div>
-                                        {/* Livraisons des TPE à paramétrer issues de ce décom */}
-                                        {livraisonsParam.length > 0 ? (
-                                            <div className='overflow-hidden p-4 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] space-y-2'>
-                                                <div className='pb-2 w-full border-b text-left'>
-                                                    <span className='text-sm mr-2'>Livraisons TPE à paramétrer</span>
-                                                    <span className='text-sm'><i className="pi pi-cog"></i></span>
-                                                </div>
-                                                <div className='flex flex-wrap gap-2 text-xs'>
-                                                    {livraisonsParam.map((l) => (
-                                                        <Link key={l.id} to={`/livraison-param-decom-details/${l.id}`} className='border rounded-lg px-2 py-1 hover:bg-gray-100'>
-                                                            <span className='font-semibold'>#{l.id}</span>
-                                                            <span className='mx-1'>·</span>
-                                                            <span>{l.quantite} TPE</span>
-                                                            <span className='mx-1'>·</span>
-                                                            <span className='italic'>{l.statut}</span>
-                                                        </Link>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {/* Lots de réparation issus de ce décom */}
-                                        {lotsReparation.length > 0 ? (
-                                            <div className='overflow-hidden p-4 rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03] space-y-2'>
-                                                <div className='pb-2 w-full border-b text-left'>
-                                                    <span className='text-sm mr-2'>Lots de réparation</span>
-                                                    <span className='text-sm'><i className="pi pi-wrench"></i></span>
-                                                </div>
-                                                <div className='flex flex-wrap gap-2 text-xs'>
-                                                    {lotsReparation.map((l) => (
-                                                        <Link key={l.id} to={`/reparation-tpe-details/${l.id}`} className='border rounded-lg px-2 py-1 hover:bg-gray-100'>
-                                                            <span className='font-semibold'>#{l.id}</span>
-                                                            <span className='mx-1'>·</span>
-                                                            <span>{l.quantite} TPE</span>
-                                                            <span className='mx-1'>·</span>
-                                                            <span className='italic'>{l.statut}</span>
-                                                        </Link>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <></>
-                                        )}
                                         {/* Deuxième partie de page avec le tableau de la liste de décommissionnement */}
                                         <div>
                                             <div>
@@ -1384,6 +1083,7 @@ export default function DecomDetails() {
 
                                                                             const piecesDefectueuses = item.pieces_defectueuses ? JSON.parse(item.pieces_defectueuses) : []
                                                                             const piecesRecuperables = item.pieces_recuperees ? JSON.parse(item.pieces_recuperees) : []
+                                                                            
                                                                             return (
                                                                                 <>
                                                                                     <TableRow>
@@ -1788,88 +1488,6 @@ export default function DecomDetails() {
                             <div className="w-full flex justify-center items-center">
                                 <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
                                     onClick={handleClotureDecom}
-                                >
-                                    Oui
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={isModalDiagnosticOpen} onClose={() => setIsModalDiagnosticOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-7">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-green-100 text-green-700 font-medium">Confirmer diagnostic</span>
-                    </div>
-                    <div className="text-center text-sm font-medium">
-                        <span>La vérification technique des {listeDecom.length} TPE(s) est terminée. Une fois le diagnostic confirmé, plus aucune vérification ne sera possible et le décom pourra être clôturé.</span>
-                    </div>
-                    <div className="text-center text-xs space-x-3">
-                        <span>a réparer : <span className="text-blue-600 font-medium">{totals.a_reparer}</span></span>
-                        <span>paramétrage : <span className="text-blue-300 font-medium">{totals.param}</span></span>
-                        <span>rebut : <span className="text-red-500 font-medium">{totals.rebut}</span></span>
-                    </div>
-                    <div>
-                        <Label>Commentaire</Label>
-                        <TextArea
-                            value={messageDiagnostic}
-                            onChange={(value) => setMessageDiagnostic(value)}
-                            rows={3}
-                            placeholder="Ajoutez un commentaire"
-                        />
-                    </div>
-                    <div>
-                        <div className="flex justify-between">
-                            <div className="w-full flex justify-center items-center">
-                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={() => setIsModalDiagnosticOpen(false)}
-                                >
-                                    Non
-                                </button>
-                            </div>
-                            <div className="w-full flex justify-center items-center">
-                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={handleConfirmDiagnostic}
-                                >
-                                    Oui
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={isModalCancelDiagnosticOpen} onClose={() => setIsModalCancelDiagnosticOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-7">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-red-200 text-red-500 font-medium">Annuler diagnostic</span>
-                    </div>
-                    <div className="text-center text-sm font-medium">
-                        <span>Le décom repassera en vérification pour permettre une nouvelle vérification technique. La clôture ne sera plus possible tant que le diagnostic n'aura pas été reconfirmé.</span>
-                    </div>
-                    <div>
-                        <Label>Motif <span className="text-red-700">*</span></Label>
-                        <TextArea
-                            value={messageCancelDiagnostic}
-                            onChange={(value) => setMessageCancelDiagnostic(value)}
-                            rows={3}
-                            placeholder="Pourquoi une nouvelle vérification est-elle nécessaire ?"
-                        />
-                    </div>
-                    <div className="text-center">
-                        <span className="text-red-700 text-xs">{errorCancelDiagnostic}</span>
-                    </div>
-                    <div>
-                        <div className="flex justify-between">
-                            <div className="w-full flex justify-center items-center">
-                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={() => setIsModalCancelDiagnosticOpen(false)}
-                                >
-                                    Non
-                                </button>
-                            </div>
-                            <div className="w-full flex justify-center items-center">
-                                <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
-                                    onClick={handleCancelDiagnostic}
                                 >
                                     Oui
                                 </button>
