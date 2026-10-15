@@ -212,6 +212,7 @@ import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
 import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomForm"
 // @ts-ignore
 import ValidationDecomForm from "./pages/Forms/DecomForms/ValidationDecomForm"
+// @ts-ignore
 import ValidationTransmissionDecomForm from "./pages/Forms/DecomForms/ValidationTransmissionDecomForm"
 
 // @ts-ignore
@@ -260,12 +261,19 @@ import UpdateReparationTpeForm from "./pages/Forms/ReparationTpeForms/UpdateRepa
 import ReceptionLivraisonReparationForm from "./pages/Forms/ReparationTpeForms/ReceptionLivraisonReparationInputs"
 // @ts-ignore
 import MiseEnReparationForm from "./pages/Forms/ReparationTpeForms/MiseEnReparationForm"
+// @ts-ignore
 import AllLivraisonParamDecom from "./pages/LivraisonParamPages/AllLivraisonParamDecom"
+// @ts-ignore
 import LivraisonParamDecomDetails from "./pages/LivraisonParamPages/LivraisonParamDecomDetails"
+// @ts-ignore
 import LivraisonParamDecomForm from "./pages/Forms/LivraisonParamForms/LivraisonParamDecomForm"
+// @ts-ignore
 import ReceptionLivraisonParamDecomForm from "./pages/Forms/LivraisonParamForms/ReceptionLivraisonParamDecomForm"
+// @ts-ignore
 import AllReparationTpe from "./pages/ReparationPages/AllReparationTpe"
+// @ts-ignore
 import ReparationTpeDetails from "./pages/ReparationPages/ReparationTpeDetails"
+// @ts-ignore
 import ValidationReparationTpeForm from "./pages/Forms/ReparationTpeForms/ValidationReparationTpeForm"
 
 // @ts-ignore
