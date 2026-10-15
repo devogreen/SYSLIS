@@ -608,25 +608,27 @@ export default function ReparationTpeInputs() {
                 userId,
                 listeSn: JSON.stringify(listeAreparer),
                 commentaire,
+                // Lot créé depuis un décom : le décom avancera quand tous ses TPE à réparer seront en réparation
+                decomId: idDecom ? Number(idDecom) : null,
             }
             console.log(payload)
-            await decomData.reparerListeTpe(payload)
+            const response = await decomData.reparerListeTpe(payload)
             Swal.fire({
                 title: "Succès",
-                text: "Réparation TPE(s) éffectuée avec succès !",
+                text: "Lot de réparation créé : il est en attente de validation.",
                 icon: "success"
             })
             setListeAreparer([])
             setQuantiteTotale(0)
-            navigate('/toutes-livraisons-reparation')
+            const idLot = response?.data?.reparation?.id
+            navigate(idLot ? `/reparation-tpe-details/${idLot}` : '/reparations-tpe')
         } catch (error) {
             console.log("Erreur de demande : ", error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la réparation !",
+                text: error?.message || "Une erreur est survenue lors de la mise en réparation !",
                 icon: "warning"
             })
-            navigate('/toutes-livraisons-reparation')
         } finally {
             setLoadingValidation(false)
         }

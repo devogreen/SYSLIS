@@ -189,7 +189,7 @@ export default function LivraisonReparationDetails() {
                     if (nomRoles.includes('reparation')) {
                         setIsLivreur(true)
                     }
-                    if (nomRoles.includes('reception_tpe_repare')) {
+                    if (nomRoles.includes('reception_reparation')) {
                         setIsReception(true)
                     }
                 } else if (statut == 'livre') {
@@ -202,7 +202,7 @@ export default function LivraisonReparationDetails() {
                     if (nomRoles.includes('reparation')) {
                         setIsLivreur(true)
                     }
-                    if (nomRoles.includes('reception_tpe_repare')) {
+                    if (nomRoles.includes('reception_reparation')) {
                         setIsReception(true)
                     }
                 } else if (statut == 'clos') {
@@ -550,7 +550,7 @@ export default function LivraisonReparationDetails() {
                                                             )}
                                                             {isLivre ? (
                                                                 <>
-                                                                    {isLivreur || isReception ? (
+                                                                    {isReception ? (
                                                                         <>
                                                                             <div>
                                                                                 <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200 mt-1'

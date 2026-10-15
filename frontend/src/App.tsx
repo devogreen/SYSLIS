@@ -210,6 +210,9 @@ import DecomDetails from "./pages/DecomPages/DecomDetails"
 import ModifyDecomForm from "./pages/Forms/DecomForms/ModifyDecomForm"
 // @ts-ignore
 import VerificationDecomForm from "./pages/Forms/DecomForms/VerificationDecomForm"
+// @ts-ignore
+import ValidationDecomForm from "./pages/Forms/DecomForms/ValidationDecomForm"
+import ValidationTransmissionDecomForm from "./pages/Forms/DecomForms/ValidationTransmissionDecomForm"
 
 // @ts-ignore
 import AllParcTpe from "./pages/GestionTpePages/AllParcTpe"
@@ -257,6 +260,13 @@ import UpdateReparationTpeForm from "./pages/Forms/ReparationTpeForms/UpdateRepa
 import ReceptionLivraisonReparationForm from "./pages/Forms/ReparationTpeForms/ReceptionLivraisonReparationInputs"
 // @ts-ignore
 import MiseEnReparationForm from "./pages/Forms/ReparationTpeForms/MiseEnReparationForm"
+import AllLivraisonParamDecom from "./pages/LivraisonParamPages/AllLivraisonParamDecom"
+import LivraisonParamDecomDetails from "./pages/LivraisonParamPages/LivraisonParamDecomDetails"
+import LivraisonParamDecomForm from "./pages/Forms/LivraisonParamForms/LivraisonParamDecomForm"
+import ReceptionLivraisonParamDecomForm from "./pages/Forms/LivraisonParamForms/ReceptionLivraisonParamDecomForm"
+import AllReparationTpe from "./pages/ReparationPages/AllReparationTpe"
+import ReparationTpeDetails from "./pages/ReparationPages/ReparationTpeDetails"
+import ValidationReparationTpeForm from "./pages/Forms/ReparationTpeForms/ValidationReparationTpeForm"
 
 // @ts-ignore
 import LiaisonTpePiecesForm from "./pages/Forms/MaintenanceTpeForms/LiaisonTpePiecesForm"
@@ -346,6 +356,8 @@ export default function App() {
               <Route path="/decom-details/:id" element={<DecomDetails />} />
               <Route path="/modifier-decom/:id" element={<ModifyDecomForm />} />
               <Route path="/verification-decom/:id" element={<VerificationDecomForm />} />
+              <Route path="/validation-decom/:id" element={<ValidationDecomForm />} />
+              <Route path="/validation-transmission-decom/:id" element={<ValidationTransmissionDecomForm />} />
               <Route path="/regularisation-decom" element={<RegDecomForm />} />
               <Route path="/reg-verification-decom/:id" element={<RegVerificationForm />} />
 
@@ -367,6 +379,13 @@ export default function App() {
               <Route path="/update-reparation-tpe/:id" element={<UpdateReparationTpeForm />} />
               <Route path="/reception-livraison-reparation/:id" element={<ReceptionLivraisonReparationForm />} />
               <Route path="/mise-en-reparation" element={<MiseEnReparationForm />} />
+              <Route path="/livraisons-param-decom" element={<AllLivraisonParamDecom />} />
+              <Route path="/livraison-param-decom-details/:id" element={<LivraisonParamDecomDetails />} />
+              <Route path="/livraison-param-decom" element={<LivraisonParamDecomForm />} />
+              <Route path="/reception-livraison-param-decom/:id" element={<ReceptionLivraisonParamDecomForm />} />
+              <Route path="/reparations-tpe" element={<AllReparationTpe />} />
+              <Route path="/reparation-tpe-details/:id" element={<ReparationTpeDetails />} />
+              <Route path="/validation-reparation-tpe/:id" element={<ValidationReparationTpeForm />} />
 
               {/* Gestion Maintenance TPE */}
               <Route path="/liaison-tpe-pieces" element={<LiaisonTpePiecesForm />} />

@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const globalForPrisma = globalThis;
 
+/** @type {PrismaClient} */
 const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `reception_decom` MODIFY `type` ENUM('validation', 'retour', 'reception', 'verification') NOT NULL;

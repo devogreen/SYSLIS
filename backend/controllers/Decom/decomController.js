@@ -11,6 +11,9 @@ const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
+const { avancerDecomApresReceptionReparation } = require("./reparationTpeController");
+
+const configEmail = process.env.NODEMAILER_USER
 
 const formatDate = (isoDate) => {
     const date = new Date(isoDate);
@@ -36,6 +39,15 @@ if (test_env) {
     GENERAL_URL = localUrl
 }
 
+// Les champs FormData arrivent en chaîne ("true" / "false")
+const toBoolean = (value) => value === true || value === 'true' || value === '1' || value === 1
+
+// Statut parc des TPE à l'entrée dans un décom :
+// attente_decom (8) pour un décom classique, decom_remplacement (16) pour un décom de remplacement
+const STATUT_ATTENTE_DECOM = 8
+const STATUT_DECOM_REMPLACEMENT = 16
+const getStatutEntreeDecom = (isRemplacement) => isRemplacement ? STATUT_DECOM_REMPLACEMENT : STATUT_ATTENTE_DECOM
+
 const faireDecom = async (req, res) => {
     try {
         const {
@@ -44,6 +56,7 @@ const faireDecom = async (req, res) => {
             quantite,
             userId,
             dateDecom,
+            isRemplacement,
         } = req.body
 
         const files = req.files?.files || [];
@@ -75,6 +88,9 @@ const faireDecom = async (req, res) => {
             isReg = true
         }
 
+        // Statut des TPE : attente_decom (8), ou decom_remplacement (16) si le décom est un remplacement
+        const statutEntree = getStatutEntreeDecom(toBoolean(isRemplacement))
+
         const decom = await prisma.$transaction(async (tx) => {
             const decomForm = await tx.forms.create({
                 data: {
@@ -93,6 +109,7 @@ const faireDecom = async (req, res) => {
                     quantite: Number(quantite),
                     liste_decom: JSON.stringify(details),
                     form_id: decomForm.id,
+                    is_remplacement: toBoolean(isRemplacement),
                 }
             })
             if (files_content.length > 0) {
@@ -125,7 +142,7 @@ const faireDecom = async (req, res) => {
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     last_modified_at: dateAction,
-                    statut_id: 8,
+                    statut_id: statutEntree,
                 })),
                 skipDuplicates: true
             });
@@ -140,7 +157,7 @@ const faireDecom = async (req, res) => {
                         updated_by: utilisateur.id_user,
                         updated_at: dateAction,
                         last_modified_at: dateAction,
-                        statut_id: 8,
+                        statut_id: statutEntree,
                     }
                 });
             } else {
@@ -184,7 +201,7 @@ const faireDecom = async (req, res) => {
                                 updated_by: utilisateur.id_user,
                                 updated_at: dateAction,
                                 last_modified_at: dateAction,
-                                statut_id: 8,
+                                statut_id: statutEntree,
                             }
                         })
                     )
@@ -208,7 +225,7 @@ const faireDecom = async (req, res) => {
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: 8,
+                    statut_id: statutEntree,
                     form_id: decomForm.id,
                 }))
             });
@@ -369,6 +386,17 @@ const getOneDecom = async (req, res) => {
                         forms: true,
                     },
                 },
+                livraison_param_decom: {
+                    include: {
+                        forms: true,
+                    },
+                },
+                reparation_tpe: {
+                    include: {
+                        forms: true,
+                        validation_reparation_tpe: true,
+                    },
+                },
             },
         })
         console.log(`Décommissionnement ${id}`)
@@ -389,6 +417,7 @@ const modifyDecom = async (req, res) => {
             listeDecom,
             quantite,
             userId,
+            isRemplacement,
         } = req.body
 
         const files = req.files?.files || [];
@@ -416,6 +445,18 @@ const modifyDecom = async (req, res) => {
             : listeDecom;
 
         const dateAction = new Date()
+
+        // Statut des TPE selon l'option remplacement (envoyée par le formulaire, sinon celle déjà enregistrée)
+        const decomActuel = await prisma.form_decom.findUnique({
+            where: { id: parseInt(id) },
+            select: { is_remplacement: true },
+        })
+        if (!decomActuel) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        const estRemplacement = isRemplacement !== undefined ? toBoolean(isRemplacement) : decomActuel.is_remplacement
+        const statutEntree = getStatutEntreeDecom(estRemplacement)
 
         const updatedDecom = await prisma.$transaction(async (tx) => {
             const decom = await tx.form_decom.findUnique({
@@ -448,6 +489,8 @@ const modifyDecom = async (req, res) => {
                     statut: 'en_cours',
                     quantite: Number(quantite),
                     liste_decom: JSON.stringify(details),
+                    // On ne touche à l'option que si elle est envoyée
+                    ...(isRemplacement !== undefined && { is_remplacement: toBoolean(isRemplacement) }),
                 }
             })
 
@@ -481,7 +524,7 @@ const modifyDecom = async (req, res) => {
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     last_modified_at: dateAction,
-                    statut_id: 8,
+                    statut_id: statutEntree,
                 })),
                 skipDuplicates: true
             });
@@ -495,7 +538,7 @@ const modifyDecom = async (req, res) => {
                     updated_by: utilisateur.id_user,
                     updated_at: dateAction,
                     last_modified_at: dateAction,
-                    statut_id: 8,
+                    statut_id: statutEntree,
                 }
             });
 
@@ -516,7 +559,7 @@ const modifyDecom = async (req, res) => {
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: 8,
+                    statut_id: statutEntree,
                     form_id: decomForm.id,
                 }))
             });
@@ -768,12 +811,6 @@ const receptionDecom = async (req, res) => {
             return res.status(404).json({ message: "Utilisateur non enregistré !" });
         }
 
-        const listeDecom = typeof decom.liste_decom === "string"
-            ? JSON.parse(decom.liste_decom)
-            : decom.liste_decom;
-
-        const addOneSecond = (date) => new Date(new Date(date).getTime() + 2000);
-
         let isReg = false
         let dateAction = new Date()
         const dateVer = new Date(date_reception)
@@ -782,9 +819,15 @@ const receptionDecom = async (req, res) => {
             isReg = true
         }
 
+        const detailsListe = typeof decom.liste_decom === "string"
+            ? JSON.parse(decom.liste_decom)
+            : decom.liste_decom;
+
+        const serials = detailsListe.map((t) => t.terminalSN);
+
         const STATUT_DECOM = 12
 
-        const receptionDecom = await prisma.$transaction(async (tx) => {
+        const operation = await prisma.$transaction(async (tx) => {
             const receptionForm = await tx.forms.create({
                 data: {
                     type: 'reception_decom',
@@ -800,7 +843,7 @@ const receptionDecom = async (req, res) => {
                 data: {
                     form_id: receptionForm.id,
                     decom_id: decom.id,
-                    type: 'validation',
+                    type: 'reception',
                 }
             })
             await tx.form_decom.update({
@@ -811,252 +854,776 @@ const receptionDecom = async (req, res) => {
                     statut: 'recu',
                 },
             })
-            await tx.sn_decom.createMany({
-                data: listeDecom.map((item) => ({
-                    serial_number: item.terminalSN,
-                    point_marchand: item.pointMarchand,
-                    tid_gim: item.idGim,
-                    tid_ecobank: item.idEcobank,
-                    banque: item.banque,
-                    etat: item.etat,
-                    ri: item.RI,
-                    commercial: item.nomCommercial,
-                    commentaire: item.commentaire,
+
+            // // Créer uniquement les parc_tpe manquants
+            // await tx.parc_tpe.createMany({
+            //     data: serials.map((serial) => ({
+            //         serial_number: serial,
+            //         created_by: utilisateur.id_user,
+            //         created_at: dateAction,
+            //         last_modified_at: dateAction,
+            //         statut_id: STATUT_DECOM,
+            //     })),
+            //     skipDuplicates: true,
+            // });
+
+            // // Mettre TOUS les TPE (existants + nouveaux) au statut paramétrage
+            // await tx.parc_tpe.updateMany({
+            //     where: { serial_number: { in: serials } },
+            //     data: {
+            //         updated_by: utilisateur.id_user,
+            //         updated_at: dateAction,
+            //         last_modified_at: dateAction,
+            //         statut_id: STATUT_DECOM,
+            //     },
+            // });
+
+            // // Récupérer les ids
+            // const allTpes = await tx.parc_tpe.findMany({
+            //     where: { serial_number: { in: serials } },
+            //     select: { id: true, serial_number: true },
+            // });
+            // const tpeBySerial = new Map(allTpes.map((tpe) => [tpe.serial_number, tpe]));
+
+            // // Historique du changement de statut parc
+            // await tx.history_tpe.createMany({
+            //     data: allTpes.map((tpe) => ({
+            //         id_tpe: tpe.id,
+            //         created_by: utilisateur.id_user,
+            //         created_at: dateAction,
+            //         statut_id: STATUT_DECOM,
+            //         form_id: receptionForm.id, // était "decomForm.id" (non défini)
+            //     })),
+            // });
+
+            return {
+                receptionForm,
+                reception,
+            }
+        })
+
+        try {
+            const rolesDecom = await prisma.user_roles.findMany({
+                where: { role_id: 23 },
+                include: { users: true }
+            })
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
+            // never used. Re-add it here and include it in the mail loop if needed.
+
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const decoms = rolesDecom.map(us => us.users.email)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
+
+            const subject = `SYSLIS - RECEPTION TPE DECOM`;
+            // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
+            const html = `
+                <p>Bonjour,</p>
+                <p>Les TPE du lot ${id} ont été réceptionnés par ${utilisateur.fullname}.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${detailsListe.length}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la livraison à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...superviseurs, ...decoms];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            // Log but do not fail the request — the repair/delivery already succeeded.
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log(`Réception du lot de décommissionnement ${decom.id} effectué avec succès par ${utilisateur.username} !`)
+        res.status(201).json({
+            message: 'Liste de décom réceptionnée avec succès !',
+            data: operation,
+        });
+
+    } catch (error) {
+        console.error(`Erreur lors de la réception du lot de décommissionnement :`, error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const transmisDecomMaintenance = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            userId,
+            commentaire,
+            date_transmission,
+        } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id),
+            },
+            include: {
+                reception_decom: true,
+            },
+        })
+        if (!decom) {
+            console.error('Erreur: décommissionnement introuvable !')
+            return res.status(404).json({ message: "decom introuvable !" });
+        }
+        if (decom.statut == 'transmis_decom') {
+            console.error('Décommissionnement déjà transmis à la maintenance !')
+            return res.status(400).json({ message: "Décommissionnement déjà transmis à la maintenance !" });
+        }
+        if (decom.statut != 'valide_decom') {
+            console.error('Statut de décommissionnement non conforme !')
+            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: {
+                id: decom.form_id
+            }
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+
+        // Régularisation : si une date valide est fournie, elle remplace la date du jour
+        let isReg = false
+        let dateAction = new Date()
+        const dateVer = new Date(date_transmission)
+        if (date_transmission && !isNaN(dateVer.valueOf())) {
+            dateAction = dateVer
+            isReg = true
+        }
+
+        // On transmet uniquement la liste validée (dernière validation enregistrée)
+        const validation = decom.reception_decom
+            .filter((item) => item.type === 'validation')
+            .at(-1)
+        const listeValidee = validation?.liste_decom
+            ? (typeof validation.liste_decom === "string" ? JSON.parse(validation.liste_decom) : validation.liste_decom)
+            : []
+        if (listeValidee.length == 0) {
+            console.error('Aucun TPE validé à transmettre !')
+            return res.status(400).json({ message: "Aucun TPE validé à transmettre !" });
+        }
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const transmissionForm = await tx.forms.create({
+                data: {
+                    type: 'reception_decom',
+                    created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    decom_id: decom.id,
                     last_modified_at: dateAction,
-                    statut: 'attente_checking',
-                }))
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                    is_reg: isReg,
+                }
+            })
+            const transmission = await tx.reception_decom.create({
+                data: {
+                    form_id: transmissionForm.id,
+                    decom_id: decom.id,
+                    type: 'transmission_maintenance',
+                    quantite: listeValidee.length,
+                    liste_decom: JSON.stringify(listeValidee),
+                }
+            })
+            await tx.form_decom.update({
+                where: {
+                    id: decom.id,
+                },
+                data: {
+                    statut: 'transmis_decom',
+                },
             })
 
-            // Récupérer les SN de la liste
-            const serials = listeDecom.map(item => item.terminalSN);
+            return {
+                transmissionForm,
+                transmission,
+            }
+        })
 
-            // Récupérer les TPE déjà enregistrés dans le PARC
-            const existingTpes = await tx.parc_tpe.findMany({
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler la transmission.
+        try {
+            const rolesMaintenance = await prisma.user_roles.findMany({
+                where: { role_id: 25 },
+                include: { users: true }
+            })
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+
+            const maintenance = rolesMaintenance.map(us => us.users.email)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
+
+            const subject = `SYSLIS - TRANSMISSION TPE DECOM A LA MAINTENANCE`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>Les TPE validés du lot ${id} ont été transmis à la maintenance par ${utilisateur.fullname}.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${listeValidee.length}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez le décommissionnement à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir les deux rôles
+            const destinataires = [...new Set([...maintenance, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log(`Transmission à la maintenance du lot de décommissionnement ${decom.id} effectuée avec succès par ${utilisateur.username} !`)
+        res.status(201).json({
+            message: 'Liste de décom transmise à la maintenance avec succès !',
+            data: operation,
+        });
+
+    } catch (error) {
+        console.error(`Erreur lors de la transmission du lot de décommissionnement à la maintenance :`, error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const validationListeDecom = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            listeDecom,
+            listeValidee,
+            listeNonValidee,
+            quantite,
+            userId,
+            dateReception,
+            isReg,
+        } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+        })
+
+        const decomForm = await prisma.forms.findUnique({
+            where: {
+                id: parseInt(decom.form_id)
+            },
+        })
+
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        if (decom.statut == 'valide_decom') {
+            console.error('Décommissionnement déjà validé !')
+            return res.status(400).json({ message: "Décommissionnement déjà validé !" });
+        }
+        if (decom.statut != 'recu') {
+            console.error('Statut du décommissionnement invalide !')
+            return res.status(400).json({ message: "Statut du décommissionnement invalide !" });
+        }
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement déjà supprimée !')
+            return res.status(400).json({ message: "Décommissionnement déjà supprimée !" });
+        }
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        // Le formulaire de validation n'envoie pas listeDecom : on reprend la liste enregistrée
+        const details = listeDecom
+            ? (typeof listeDecom === "string" ? JSON.parse(listeDecom) : listeDecom)
+            : JSON.parse(decom.liste_decom);
+        const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
+        const detailsNonValidee = typeof listeNonValidee === "string" ? JSON.parse(listeNonValidee) : listeNonValidee;
+
+        const reg = isReg == "false" ? false : true
+        let dateAction = new Date()
+        // Le formulaire envoie "date_reception" : on accepte les deux noms
+        const dateRegValidation = dateReception || req.body.date_reception
+        const dateVer = new Date(dateRegValidation)
+        if (dateRegValidation && !isNaN(dateVer.valueOf())) {
+            dateAction = dateVer
+        }
+
+        const serialsNonValidees = detailsNonValidee.map((t) => t.terminalSN);
+        const STATUT_DECOM = 12
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const receptionForm = await tx.forms.create({
+                data: {
+                    type: 'reception_decom',
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    commentaire,
+                }
+            })
+
+            const reception = await tx.reception_decom.create({
+                data: {
+                    form_id: receptionForm.id,
+                    decom_id: decom.id,
+                    type: 'validation',
+                    quantite: Number(quantite),
+                    liste_decom: JSON.stringify(detailsValidee),
+                }
+            })
+
+            const updatedDecom = await tx.form_decom.update({
                 where: {
-                    serial_number: { in: serials }
+                    id: decom.id
                 },
-                select: {
-                    id: true,
-                    serial_number: true
+                data: {
+                    statut: 'valide_decom',
+                    liste_decom: JSON.stringify(details),
                 }
-            });
-            // Faire une liste SN, ID pour les TPE déjà enregistrés
-            const existingMap = new Map(
-                existingTpes.map(e => [e.serial_number, e.id])
-            );
+            })
 
-            const toCreate = [];
-            const toUpdate = [];
-
-            // Ajouter aux différentes liste à créer si les SN n'existent pas et à update s'ils existent
-            listeDecom.forEach(item => {
-                if (existingMap.has(item.terminalSN)) {
-                    toUpdate.push(item);
-                } else {
-                    toCreate.push(item);
-                }
-            });
-
-            // Créer les nouveaux TPE dans le PARC avec le statut qu'il faut
-            if (toCreate.length > 0) {
-                await tx.parc_tpe.createMany({
-                    data: toCreate.map(item => ({
-                        serial_number: item.terminalSN,
-                        created_by: utilisateur.id_user,
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: decomForm.id,
+                        type_formulaire: 'decom',
+                        role: 'receveur',
                         created_at: dateAction,
-                        last_modified_at: dateAction,
-                        statut_id: STATUT_DECOM,
                     }))
-                });
+                })
             }
 
-            if (isReg == false) {
-                // Mettre à jour les anciens TPE dans le PARC avec le nouveau statut
-                await Promise.all(
-                    toUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: { serial_number: item.terminalSN },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: dateAction,
-                                last_modified_at: dateAction,
-                                statut_id: STATUT_DECOM,
-                            }
-                        })
-                    )
-                );
-            } else {
-                // Récupérer les TPE existants avec leur date de modification
-                const existingTpesWithDates = await tx.parc_tpe.findMany({
-                    where: {
-                        serial_number: {
-                            in: toUpdate.map(item => item.terminalSN)
-                        }
-                    },
-                    select: {
-                        serial_number: true,
-                        last_modified_at: true,
-                    }
-                });
-
-                // Créer une map pour accès rapide
-                const tpeDateMap = new Map(
-                    existingTpesWithDates.map(tpe => [
-                        tpe.serial_number,
-                        tpe.last_modified_at
-                    ])
-                );
-
-                // Filtrer seulement ceux dont la date est plus ancienne
-                const filteredToUpdate = toUpdate.filter(item => {
-                    const lastModified = tpeDateMap.get(item.terminalSN);
-
-                    // Si aucune date existe, on autorise l'update
-                    if (!lastModified) return true;
-
-                    return new Date(lastModified) <= new Date(dateAction);
-                });
-
-                // Faire les updates seulement pour ceux autorisés
-                await Promise.all(
-                    filteredToUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: {
-                                serial_number: item.terminalSN
-                            },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: dateAction,
-                                last_modified_at: dateAction,
-                                statut_id: STATUT_DECOM,
-                            }
-                        })
-                    )
-                );
-            }
-
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            const allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
+            // Créer uniquement les parc_tpe manquants
+            await tx.parc_tpe.createMany({
+                data: serialsNonValidees.map((serial) => ({
+                    serial_number: serial,
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: STATUT_DECOM,
+                })),
+                skipDuplicates: true,
             });
 
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+            // Mettre TOUS les TPE (existants + nouveaux) au statut paramétrage
+            await tx.parc_tpe.updateMany({
+                where: { serial_number: { in: serialsNonValidees } },
+                data: {
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                    last_modified_at: dateAction,
+                    statut_id: STATUT_DECOM,
+                },
+            });
+
+            // Récupérer les ids
+            const allTpes = await tx.parc_tpe.findMany({
+                where: { serial_number: { in: serialsNonValidees } },
+                select: { id: true, serial_number: true },
+            });
+
+            // Historique du changement de statut parc
             await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => ({
+                data: allTpes.map((tpe) => ({
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
                     statut_id: STATUT_DECOM,
-                    form_id: decomForm.id,
-                }))
+                    form_id: receptionForm.id,
+                })),
             });
 
             return {
-                receptionForm, reception
-            }
-        }, {
-            timeout: 20000,
-        })
-
-        /************** GESTION DES MAILS  **************/
-
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
+                receptionForm,
+                reception,
+                updatedDecom,
             }
         })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+        /****************    GESTION DES MAILS     *****************/
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
+        try {
+            const rolesDecom = await prisma.user_roles.findMany({
+                where: { role_id: 23 },
+                include: { users: true }
+            })
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
+            // never used. Re-add it here and include it in the mail loop if needed.
 
-        const subject = `SYSLIS - RECEPTION DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Le décommissionnement ${decom.id} a été réceptionné.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (verificateurs && verificateurs.length > 0) {
-            for (const verificateur of verificateurs) {
-                await sendMail({
-                    to: verificateur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const decoms = rolesDecom.map(us => us.users.email)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
+
+            const subject = `SYSLIS - VALIDATION TPE DECOM`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>${detailsValidee.length} sur ${details.length} des TPE du lot ${id} ont été validés par ${utilisateur.fullname}.</p>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez le décommissionnement à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            const destinataires = [...superviseurs, ...decoms];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            // Log but do not fail the request — the repair/delivery already succeeded.
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
-        console.log('Liste de décom réceptionnée avec succès !')
+        console.log(`Validation de TPE décommissionnés ${id} effectuée avec succès par ${utilisateur.username}`)
         res.status(201).json({
-            message: 'Liste de décom réceptionnée avec succès !',
-            data: receptionDecom,
+            message: `Validation de TPE décommissionnés ${id} effectuée avec succès par ${utilisateur.username}`,
+            data: operation,
         });
-
     } catch (error) {
-        console.error("Erreur lors de la réception :", error);
+        console.error("Erreur lors de la validation du lot de décommissionnements :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const validationTransmissionDecom = async (req, res) => {
+    try {
+        const {
+            id
+        } = req.params
+        const {
+            commentaire,
+            listeValidee,
+            listeNonValidee,
+            userId,
+            date_validation,
+        } = req.body
+
+        const ROLE_VERIFICATION_DECOM = 25
+
+        const decom = await prisma.form_decom.findUnique({
+            where: {
+                id: parseInt(id)
+            },
+            include: {
+                reception_decom: true,
+            },
+        })
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        if (decom.statut == 'verification') {
+            console.error('Transmission déjà validée par la maintenance !')
+            return res.status(400).json({ message: "Transmission déjà validée par la maintenance !" });
+        }
+        if (decom.statut != 'transmis_decom') {
+            console.error('Statut du décommissionnement invalide !')
+            return res.status(400).json({ message: "Statut du décommissionnement invalide !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: {
+                id: decom.form_id
+            },
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId)
+            }
+        })
+        if (!utilisateur) {
+            console.error('Utilisteur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        // Seuls les utilisateurs ayant le rôle verification_decom (id 25) peuvent valider une transmission
+        const roleVerification = await prisma.user_roles.findFirst({
+            where: {
+                user_id: utilisateur.id_user,
+                role_id: ROLE_VERIFICATION_DECOM,
+            }
+        })
+        if (!roleVerification) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à valider une transmission !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à valider cette transmission !" });
+        }
+
+        const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : (listeValidee || []);
+        const detailsNonValidee = typeof listeNonValidee === "string" ? JSON.parse(listeNonValidee) : (listeNonValidee || []);
+        if (detailsValidee.length == 0) {
+            console.error('Aucun TPE validé !')
+            return res.status(400).json({ message: "Vous devez valider au moins un TPE !" });
+        }
+
+        // Liste transmise à la maintenance (dernière transmission enregistrée)
+        const transmission = decom.reception_decom
+            .filter((item) => item.type === 'transmission_maintenance')
+            .at(-1)
+        const listeTransmise = transmission?.liste_decom ? JSON.parse(transmission.liste_decom) : []
+
+        // Régularisation : si une date valide est fournie, elle remplace la date du jour
+        let isReg = false
+        let dateAction = new Date()
+        const dateVer = new Date(date_validation)
+        if (date_validation && !isNaN(dateVer.valueOf())) {
+            dateAction = dateVer
+            isReg = true
+        }
+
+        const files = req.files?.files || [];
+        const files_content = files.length ? files.map(file => ({
+            name: file.originalname,
+            path: file.path,
+            type: file.mimetype,
+            size: file.size
+        }))
+            : [];
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const validationForm = await tx.forms.create({
+                data: {
+                    type: 'reception_decom',
+                    created_by: utilisateur.id_user,
+                    nom_user: utilisateur.fullname,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    commentaire,
+                    is_reg: isReg,
+                }
+            })
+
+            const validation = await tx.reception_decom.create({
+                data: {
+                    form_id: validationForm.id,
+                    decom_id: decom.id,
+                    type: 'validation_maintenance',
+                    quantite: detailsValidee.length,
+                    liste_decom: JSON.stringify(detailsValidee),
+                }
+            })
+
+            // Création des lignes sn_decom pour les TPE reçus par la maintenance :
+            // ce sont elles que la vérification technique va traiter (statut 'checking' par défaut)
+            const snExistants = await tx.sn_decom.findMany({
+                where: { decom_id: decom.id, is_deleted: false },
+                select: { serial_number: true },
+            })
+            const dejaPresents = new Set(snExistants.map((s) => s.serial_number))
+            const aCreer = detailsValidee.filter((item) => item.terminalSN && !dejaPresents.has(String(item.terminalSN)))
+            const coupe = (valeur) => (valeur === undefined || valeur === null || valeur === '') ? null : String(valeur).slice(0, 255)
+            if (aCreer.length > 0) {
+                await tx.sn_decom.createMany({
+                    data: aCreer.map((item) => ({
+                        decom_id: decom.id,
+                        serial_number: String(item.terminalSN),
+                        point_marchand: coupe(item.pointMarchand),
+                        tid_gim: coupe(item.idGim),
+                        tid_ecobank: coupe(item.idEcobank),
+                        banque: coupe(item.banque),
+                        etat: coupe(item.etat),
+                        ri: coupe(item.RI),
+                        commercial: coupe(item.nomCommercial),
+                        commentaire: coupe(item.commentaire),
+                        created_at: dateAction,
+                        last_modified_at: dateAction,
+                    }))
+                })
+            }
+
+            const updatedDecom = await tx.form_decom.update({
+                where: {
+                    id: decom.id
+                },
+                data: {
+                    statut: 'verification',
+                }
+            })
+
+            if (files_content.length > 0) {
+                await tx.fichiers.createMany({
+                    data: files_content.map(fichier => ({
+                        path: fichier.path,
+                        filename: fichier.name,
+                        originalName: fichier.name,
+                        mimeType: fichier.type,
+                        size: fichier.size,
+                        uploaded_by: utilisateur.id_user,
+                        form_id: decomForm.id,
+                        type_formulaire: 'decom',
+                        role: 'validateur',
+                        created_at: dateAction,
+                    }))
+                })
+            }
+
+            return {
+                validationForm,
+                validation,
+                updatedDecom,
+            }
+        })
+
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler la validation.
+        try {
+            const rolesDecom = await prisma.user_roles.findMany({
+                where: { role_id: 23 },
+                include: { users: true }
+            })
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const decoms = rolesDecom.map(us => us.users.email)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const totalTransmis = listeTransmise.length || (detailsValidee.length + detailsNonValidee.length)
+
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
+
+            const subject = `SYSLIS - VALIDATION MAINTENANCE TPE DECOM`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>${detailsValidee.length} sur ${totalTransmis} des TPE transmis du lot ${id} ont été validés par la maintenance (${utilisateur.fullname}).</p>
+                <p>Le décommissionnement passe en vérification.</p>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez le décommissionnement à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir les deux rôles
+            const destinataires = [...new Set([...superviseurs, ...decoms].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
+        }
+
+        console.log(`Validation maintenance du décommissionnement ${id} effectuée avec succès par ${utilisateur.username}`)
+        res.status(201).json({
+            message: `Transmission du décommissionnement ${id} validée avec succès par la maintenance !`,
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la validation maintenance du décommissionnement :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
 }
@@ -1106,7 +1673,7 @@ const returnDecom = async (req, res) => {
 
         const dateAction = new Date()
 
-        const receptionDecom = await prisma.$transaction(async (tx) => {
+        const validationListeDecom = await prisma.$transaction(async (tx) => {
             const receptionForm = await tx.forms.create({
                 data: {
                     type: 'reception_decom',
@@ -1223,7 +1790,7 @@ const returnDecom = async (req, res) => {
         console.log('Liste de décom retournée avec succès !')
         res.status(201).json({
             message: 'Liste de décom retournée avec succès !',
-            data: receptionDecom,
+            data: validationListeDecom,
         });
 
     } catch (error) {
@@ -1288,7 +1855,8 @@ const verifyDecom = async (req, res) => {
             console.error('Erreur: décommissionnement introuvale !')
             return res.status(404).json({ message: "decom introuvable !" });
         }
-        if (decom.statut != 'recu') {
+        // La vérification technique n'est possible qu'après validation de la transmission par la maintenance
+        if (decom.statut != 'verification') {
             console.error('Statut de décommissionnement non conforme !')
             return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
         }
@@ -1619,7 +2187,8 @@ const regVerifyDecom = async (req, res) => {
             console.error('Erreur: décommissionnement introuvale !')
             return res.status(404).json({ message: "decom introuvable !" });
         }
-        if (decom.statut != 'recu') {
+        // La vérification technique n'est possible qu'après validation de la transmission par la maintenance
+        if (decom.statut != 'verification') {
             console.error('Statut de décommissionnement non conforme !')
             return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
         }
@@ -1826,6 +2395,261 @@ const regVerifyDecom = async (req, res) => {
 // à cloturerDemandeRebut, quand le statut vaut 'rebut'/'rebus').
 //
 // CONFIRM markers = à vérifier contre votre schéma Prisma.
+// Rôles utilisés par la confirmation / l'annulation du diagnostic
+const ROLE_VERIFICATION_DECOM = 25
+const ROLE_SUPERVISION_DECOM = 26
+const ROLE_CLOTURE_DECOM = 29
+
+// Vérifie qu'un utilisateur possède un rôle donné
+const hasRole = async (userId, roleId) => {
+    const role = await prisma.user_roles.findFirst({
+        where: { user_id: userId, role_id: roleId },
+    })
+    return Boolean(role)
+}
+
+// Envoie un mail (en CCI) aux utilisateurs des rôles donnés, sans faire échouer la requête en cas d'erreur
+const notifierRoles = async (roleIds, subject, html) => {
+    try {
+        const roles = await prisma.user_roles.findMany({
+            where: { role_id: { in: roleIds } },
+            include: { users: true },
+        })
+        const destinataires = [...new Set(roles.map((r) => r.users?.email).filter(Boolean))]
+        if (destinataires.length == 0) return
+        await sendMail({
+            to: configEmail,
+            bcc: destinataires,
+            subject,
+            html,
+        })
+    } catch (mailError) {
+        console.error("Erreur lors de l'envoi des mails :", mailError)
+    }
+}
+
+const confirmDiagnosticDecom = async (req, res) => {
+    try {
+        const { id } = req.params
+        const { userId, commentaire } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: { id: parseInt(id) },
+        })
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        if (decom.statut == 'complet') {
+            console.error('Diagnostic déjà confirmé !')
+            return res.status(400).json({ message: "Le diagnostic de ce décommissionnement est déjà confirmé !" });
+        }
+        if (decom.statut != 'verification') {
+            console.error('Statut de décommissionnement non conforme !')
+            return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: { id: decom.form_id }
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId) },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        if (!(await hasRole(utilisateur.id_user, ROLE_VERIFICATION_DECOM))) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à confirmer le diagnostic !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à confirmer ce diagnostic !" });
+        }
+
+        // Tous les TPE doivent avoir été diagnostiqués (aucun en 'checking')
+        const listeSn = await prisma.sn_decom.findMany({
+            where: { decom_id: decom.id, is_deleted: false },
+            select: { statut: true },
+        })
+        if (listeSn.length == 0) {
+            console.error('Aucun TPE à diagnostiquer !')
+            return res.status(400).json({ message: "Aucun TPE n'est rattaché à ce décommissionnement !" });
+        }
+        const restants = listeSn.filter((sn) => sn.statut == 'checking').length
+        if (restants > 0) {
+            console.error(`${restants} TPE(s) encore en checking !`)
+            return res.status(400).json({ message: `${restants} TPE(s) n'ont pas encore été vérifiés !` });
+        }
+
+        const dateAction = new Date()
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const diagnosticForm = await tx.forms.create({
+                data: {
+                    type: 'retour_decom',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                }
+            })
+            const diagnostic = await tx.retour_decom.create({
+                data: {
+                    form_id: diagnosticForm.id,
+                    decom_id: decom.id,
+                    type: 'confirmation_diagnostic',
+                }
+            })
+            await tx.form_decom.update({
+                where: { id: decom.id },
+                data: { statut: 'complet' },
+            })
+            return { diagnosticForm, diagnostic }
+        })
+
+        // Comptage par statut pour le mail
+        const compte = (statut) => listeSn.filter((sn) => sn.statut == statut).length
+        const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+        const link = `${GENERAL_URL}/decom-details/${decom.id}`;
+        const subject = `SYSLIS - DIAGNOSTIC DECOM CONFIRME`;
+        const html = `
+            <p>Bonjour,</p>
+            <p>Le diagnostic du décommissionnement ${decom.id} a été confirmé par ${utilisateur.fullname}. Le décommissionnement est prêt à être clôturé.</p>
+            <ul>
+            <li><strong>Nombre de TPE :</strong> ${listeSn.length}</li>
+            <li><strong>A réparer :</strong> ${compte('a_reparer')}</li>
+            <li><strong>Paramétrage :</strong> ${compte('parametrage')}</li>
+            <li><strong>Rebut :</strong> ${compte('rebus') + compte('rebut')}</li>
+            </ul>
+            <br>
+            <p>Commentaire : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez le décommissionnement à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        await notifierRoles([ROLE_CLOTURE_DECOM, ROLE_SUPERVISION_DECOM], subject, html)
+
+        console.log(`Diagnostic du décommissionnement ${decom.id} confirmé par ${utilisateur.username}`)
+        res.status(201).json({
+            message: "Diagnostic confirmé avec succès !",
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de la confirmation du diagnostic :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+const cancelDiagnosticDecom = async (req, res) => {
+    try {
+        const { id } = req.params
+        const { userId, commentaire } = req.body
+
+        const decom = await prisma.form_decom.findUnique({
+            where: { id: parseInt(id) },
+        })
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
+        if (decom.statut == 'clos') {
+            console.error('Décommissionnement déjà clôturé !')
+            return res.status(400).json({ message: "Décommissionnement déjà clôturé : le diagnostic ne peut plus être annulé !" });
+        }
+        if (decom.statut != 'complet') {
+            console.error('Statut de décommissionnement non conforme !')
+            return res.status(400).json({ message: "Aucun diagnostic confirmé à annuler !" });
+        }
+        const decomForm = await prisma.forms.findUnique({
+            where: { id: decom.form_id }
+        })
+        if (decomForm.is_deleted) {
+            console.error('Décommissionnement annulé !')
+            return res.status(400).json({ message: "Décommissionnement annulé !" });
+        }
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId) },
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur non enregistré !')
+            return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        if (!(await hasRole(utilisateur.id_user, ROLE_VERIFICATION_DECOM))) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à annuler le diagnostic !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à annuler ce diagnostic !" });
+        }
+
+        const dateAction = new Date()
+
+        const operation = await prisma.$transaction(async (tx) => {
+            const annulationForm = await tx.forms.create({
+                data: {
+                    type: 'retour_decom',
+                    created_by: utilisateur.id_user,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    nom_user: utilisateur.fullname,
+                    commentaire,
+                }
+            })
+            const annulation = await tx.retour_decom.create({
+                data: {
+                    form_id: annulationForm.id,
+                    decom_id: decom.id,
+                    type: 'annulation_diagnostic',
+                }
+            })
+            // Retour en vérification : la vérification technique est de nouveau possible
+            await tx.form_decom.update({
+                where: { id: decom.id },
+                data: { statut: 'verification' },
+            })
+            return { annulationForm, annulation }
+        })
+
+        const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+        const link = `${GENERAL_URL}/decom-details/${decom.id}`;
+        const subject = `SYSLIS - DIAGNOSTIC DECOM ANNULE`;
+        const html = `
+            <p>Bonjour,</p>
+            <p>Le diagnostic du décommissionnement ${decom.id} a été annulé par ${utilisateur.fullname}. Une nouvelle vérification technique va être effectuée : la clôture n'est plus possible pour le moment.</p>
+            <br>
+            <p>Motif : ${commentaire_mail}<p>
+            <br>
+            <p>Retrouvez le décommissionnement à ce lien : 
+            <span>
+            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+            </p>
+            <br><br>
+            <p>Green - Pay vous remercie.</p>
+        `;
+        await notifierRoles([ROLE_CLOTURE_DECOM, ROLE_SUPERVISION_DECOM], subject, html)
+
+        console.log(`Diagnostic du décommissionnement ${decom.id} annulé par ${utilisateur.username}`)
+        res.status(201).json({
+            message: "Diagnostic annulé : le décommissionnement est de nouveau en vérification.",
+            data: operation,
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'annulation du diagnostic :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
 const clotureDecom = async (req, res) => {
     try {
         const { id } = req.params;
@@ -1854,7 +2678,8 @@ const clotureDecom = async (req, res) => {
             console.error("Décommissionnement déjà clôturé !")
             return res.status(400).json({ message: "Décommissionnement déjà clôturé !" });
         }
-        if (decom.statut !== "recu") {
+        // La clôture n'est possible qu'après confirmation du diagnostic : statut 'complet' attendu
+        if (decom.statut !== "complet") {
             console.error("Statut de décommissionnement non conforme !")
             return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
         }
@@ -1877,6 +2702,11 @@ const clotureDecom = async (req, res) => {
         if (!utilisateur) {
             console.error("Utilisateur non enregistré !")
             return res.status(404).json({ message: "Utilisateur non enregistré !" });
+        }
+        // Seuls les utilisateurs ayant le rôle cloture_decom (id 29) peuvent clôturer un décom
+        if (!(await hasRole(utilisateur.id_user, ROLE_CLOTURE_DECOM))) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à clôturer le décommissionnement !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à clôturer ce décommissionnement !" });
         }
 
         const listeVerified =
@@ -2847,300 +3677,7 @@ const extractSnReparation = async (req, res) => {
     }
 }
 
-const reparerListeTpe = async (req, res) => {
-    try {
-        const {
-            userId,
-            listeSn,
-            commentaire,
-        } = req.body
-
-        const utilisateur = await prisma.users.findUnique({
-            where: {
-                id_user: parseInt(userId),
-            },
-        })
-        if (!utilisateur) {
-            console.error('Utilisateur non enregistré !')
-            return res.status(404).json({ message: "Utilisateur non enregistré !" });
-        }
-        const detailsListe =
-            typeof listeSn === "string" ? JSON.parse(listeSn) : listeSn;
-        if (!Array.isArray(detailsListe) || detailsListe.length === 0) {
-            console.error("Liste S/N vide ou invalide.")
-            return res.status(400).json({ message: "Liste S/N vide ou invalide." });
-        }
-
-        const dateAction = new Date()
-
-        const STATUT_REPARE_ID = 10
-        const terminaux = detailsListe.map((terminal) => {
-            const listePiece = Array.isArray(terminal.listePiece)
-                ? terminal.listePiece
-                : [];
-
-            const pieces = listePiece.map((item) => ({
-                piece_id: item.items.id_piece,
-                etat: "repare",
-                updated_by: utilisateur.id_user,
-                updated_at: dateAction,
-            }));
-
-            return { serial: terminal.sn, pieces };
-        });
-
-        const serials = terminaux.map((t) => t.serial);
-
-        const operation = await prisma.$transaction(async (tx) => {
-            // ---- Forms + reparation + livraison --------------------------
-            const reparationForm = await tx.forms.create({
-                data: {
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    created_by: utilisateur.id_user,
-                    nom_user: utilisateur.fullname,
-                    type: "reparation_tpe",
-                    commentaire,
-                },
-            });
-
-            const reparation = await tx.reparation_tpe.create({
-                data: {
-                    form_id: reparationForm.id,
-                    quantite: terminaux.length,
-                    liste_sn: JSON.stringify(detailsListe),
-                },
-            });
-
-            const livraisonForm = await tx.forms.create({
-                data: {
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    created_by: utilisateur.id_user,
-                    nom_user: utilisateur.fullname,
-                    type: "livraison_tpe_repare",
-                    commentaire,
-                },
-            });
-
-            const livraison = await tx.livraison_tpe_repare.create({
-                data: {
-                    form_id: livraisonForm.id,
-                    reparation_id: reparation.id,
-                    statut: "en_cours",
-                    quantite: terminaux.length,
-                    liste_sn: JSON.stringify(detailsListe),
-                },
-            });
-
-            // ---- parc_tpe: upsert-ish (create missing, then update all) --
-            await tx.parc_tpe.createMany({
-                data: serials.map((item) => ({
-                    serial_number: item,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: STATUT_REPARE_ID,
-                })),
-                skipDuplicates: true,
-            });
-
-            await tx.parc_tpe.updateMany({
-                where: { serial_number: { in: serials } },
-                data: {
-                    updated_by: utilisateur.id_user,
-                    updated_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: STATUT_REPARE_ID,
-                },
-            });
-
-            const allTpes = await tx.parc_tpe.findMany({
-                where: { serial_number: { in: serials } },
-                select: { id: true, serial_number: true },
-            });
-
-            // ---- history_tpe: one row per TPE ----------------------------
-            await tx.history_tpe.createMany({
-                data: allTpes.map((tpe) => ({
-                    id_tpe: tpe.id,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    statut_id: STATUT_REPARE_ID,
-                    form_id: reparationForm.id,
-                })),
-            });
-
-            // ============================================================
-            // FIX #3 (round-trips): fetch every tpe_a_reparer row ONCE
-            // before the loop instead of one findFirst per terminal.
-            // ============================================================
-            const tpeIds = allTpes.map((t) => t.id);
-
-            const aReparerRows = await tx.tpe_a_reparer.findMany({
-                where: {
-                    tpe_id: { in: tpeIds },
-                    is_deleted: false,
-                    etat: "defectueux",
-                },
-            });
-
-            // Map for O(1) lookup by tpe_id inside the loop.
-            const aReparerByTpeId = new Map(
-                aReparerRows.map((r) => [r.tpe_id, r])
-            );
-            // And a quick lookup from serial -> tpe row.
-            const tpeBySerial = new Map(
-                allTpes.map((t) => [t.serial_number, t])
-            );
-
-            // ============================================================
-            // FIX #1 (the actual P2028 cause): guard BEFORE any write, so
-            // we never call `update` with a non-existent id (which throws
-            // P2025 and aborts the whole transaction).
-            // FIX #3 cont.: collect ids + mouvements to flush in bulk.
-            // ============================================================
-            const tpeAreparerIdsToUpdate = [];
-            const mouvements = [];
-
-            for (const t of terminaux) {
-                const tpe = tpeBySerial.get(t.serial);
-                if (!tpe) continue;
-
-                const tpeAreparer = aReparerByTpeId.get(tpe.id);
-                if (!tpeAreparer) continue; // nothing to repair for this TPE
-
-                tpeAreparerIdsToUpdate.push(tpeAreparer.id);
-
-                if (t.pieces.length) {
-                    // Kept per-terminal: `where` is scoped to THIS terminal's
-                    // sn_id, so it can't be safely merged across terminals.
-                    await tx.pieces_a_reparer.updateMany({
-                        where: {
-                            sn_id: tpeAreparer.id,
-                            piece_id: { in: t.pieces.map((p) => p.piece_id) },
-                        },
-                        data: {
-                            etat: "repare",
-                            updated_by: utilisateur.id_user,
-                            updated_at: dateAction,
-                        },
-                    });
-
-                    for (const p of t.pieces) {
-                        mouvements.push({
-                            piece_id: p.piece_id,
-                            reparation_id: reparation.id,
-                            ancien_etat: "defectueux",
-                            nouvel_etat: "repare",
-                            created_at: dateAction,
-                            created_by: utilisateur.id_user,
-                        });
-                    }
-                }
-            }
-
-            // Single updateMany for all tpe_a_reparer rows (same data for all).
-            if (tpeAreparerIdsToUpdate.length) {
-                await tx.tpe_a_reparer.updateMany({
-                    where: { id: { in: tpeAreparerIdsToUpdate } },
-                    data: {
-                        reparation_id: reparation.id,
-                        updated_by: utilisateur.id_user,
-                        updated_at: dateAction,
-                        last_modified_at: dateAction,
-                        etat: "repare",
-                    },
-                });
-            }
-
-            // Single insert for all mouvement rows.
-            if (mouvements.length) {
-                await tx.mouvement_piece_a_reparer.createMany({
-                    data: mouvements,
-                });
-            }
-
-            return { allTpes, livraisonForm, livraison };
-        },
-            {
-                // FIX #2: the default interactive-transaction timeout is 5s,
-                // which a long liste_sn will blow past. Raise both limits.
-                maxWait: 10000, // max time to wait for a pooled connection
-                timeout: 30000, // max time the transaction may run
-            }
-        );
-
-        /************ GESTION MAIL  ************/
-        // FIX #4: mail sending is wrapped in its own try/catch. The transaction has
-        // already committed successfully at this point, so a mail failure must NOT
-        // turn into a 500 that makes the caller think the operation failed.
-        try {
-            const rolesSupervision = await prisma.user_roles.findMany({
-                where: { role_id: 37 },
-                include: { users: true }
-            })
-            const rolesReception = await prisma.user_roles.findMany({
-                where: { role_id: 36 },
-                include: { users: true }
-            })
-            // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
-            // never used. Re-add it here and include it in the mail loop if needed.
-
-            const superviseurs = rolesSupervision.map(us => us.users)
-            const demandeurs = rolesReception.map(us => us.users)
-
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-            const url = GENERAL_URL
-            const link = `${url}/livraison-reparation-details/${operation.livraison.id}`;
-
-            const subject = `SYSLIS - LIVRAISON TPE REPARE`;
-            // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
-            const html = `
-                <p>Bonjour,</p>
-                <p>Un lot de TPE réparés on été livrés par ${utilisateur.fullname}.</p>
-                <ul>
-                <li><strong>Nombre de TPE :</strong> ${terminaux.length}</li>
-                </ul>
-                <br>
-                <p>Commentaire : ${commentaire_mail}<p>
-                <br>
-                <p>Retrouvez la livraison à ce lien : 
-                <span>
-                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                    Cliquez ici !
-                </a>
-                </span>
-                </p>
-                <br><br>
-                <p>Green - Pay vous remercie.</p>
-            `;
-
-            const destinataires = [...superviseurs, ...demandeurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
-        } catch (mailError) {
-            // Log but do not fail the request — the repair/delivery already succeeded.
-            console.error("Erreur lors de l'envoi des mails :", mailError);
-        }
-
-        console.log('TPE réparés avec succès !')
-        res.status(201).json({
-            message: 'TPE réparés avec succès !',
-            data: operation,
-        });
-    } catch (error) {
-        console.error("Erreur lors de l'opération :", error);
-        res.status(500).json({ message: "Erreur interne", error });
-    }
-}
+// reparerListeTpe a été déplacé dans reparationTpeController.js (réparation par lots avec validation)
 
 const getAllLivraisonReparation = async (req, res) => {
     try {
@@ -3260,6 +3797,11 @@ const receptionLivraisonReparation = async (req, res) => {
             console.error('Utilisteur introuvable !')
             return res.status(404).json({ message: "Utilisateur introuvable !" });
         }
+        // Seuls les utilisateurs reception_reparation (id 36) réceptionnent les livraisons de TPE réparés
+        if (!(await hasRole(utilisateur.id_user, 36))) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à réceptionner une livraison de TPE réparés !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à réceptionner cette livraison !" });
+        }
 
         const details = typeof listeReparation === "string" ? JSON.parse(listeReparation) : listeReparation;
         const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
@@ -3302,6 +3844,10 @@ const receptionLivraisonReparation = async (req, res) => {
                     liste_sn: JSON.stringify(details),
                 }
             })
+
+            // Si la livraison provient d'un lot de réparation issu d'un décom,
+            // le décom passe en receptionne_decom_repare quand TOUS ses TPE ont été reçus
+            const decomStatut = await avancerDecomApresReceptionReparation(tx, livraison.reparation_id)
 
             if (files_content.length > 0) {
                 await tx.fichiers.createMany({
@@ -3447,6 +3993,11 @@ const cloturerLivraisonReparation = async (req, res) => {
         if (!utilisateur) {
             console.error("Utilisateur introuvable !")
             return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+        // Seuls les utilisateurs reception_reparation (id 36) clôturent les livraisons de TPE réparés
+        if (!(await hasRole(utilisateur.id_user, 36))) {
+            console.error(`Utilisateur ${utilisateur.username} non autorisé à clôturer une livraison de TPE réparés !`)
+            return res.status(403).json({ message: "Vous n'êtes pas autorisé à clôturer cette livraison !" });
         }
 
         // Date d'action
@@ -4585,7 +5136,7 @@ const getPieceDefectueuseListeTpe = async (req, res) => {
         // } = req.body
 
         const listeSerials = listeSn.split(',')
-        console.log("LISTE SN: ", typeof(listeSn))
+        console.log("LISTE SN: ", typeof (listeSn))
         if (!Array.isArray(listeSerials) || listeSerials.length === 0) {
             return res.status(400).json({ message: "Liste de terminaux vide ou invalide." });
         }
@@ -4665,7 +5216,7 @@ module.exports = {
     getOneDecom,
     modifyDecom,
     cancelDecom,
-    receptionDecom,
+    validationListeDecom,
     returnDecom,
     getSnDecom,
     verifyDecom,
@@ -4677,7 +5228,6 @@ module.exports = {
     getAllTpeRepare,
     // reparerTpe,
     extractSnReparation,
-    reparerListeTpe,
     getAllLivraisonReparation,
     getOneLivraisonReparation,
     receptionLivraisonReparation,
@@ -4690,4 +5240,9 @@ module.exports = {
     exportAllDecomToExcel,
     getPieceDefectueuseTpe,
     getPieceDefectueuseListeTpe,
+    receptionDecom,
+    transmisDecomMaintenance,
+    validationTransmissionDecom,
+    confirmDiagnosticDecom,
+    cancelDiagnosticDecom,
 }

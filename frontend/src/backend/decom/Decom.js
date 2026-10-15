@@ -55,9 +55,13 @@ export class Decom {
         }
     }
 
-    async receptionDecom(id, payload) {
+    async validationListeDecom(id, formData) {
         try {
-            const response = await axios.put(`${urlBase}/api/decom/receptionDecom/${id}`, payload)
+            const response = await axios.put(`${urlBase}/api/decom/validationListeDecom/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
             return response.data;
         } catch (error) {
             throw error.response.data;
@@ -327,6 +331,150 @@ export class Decom {
             return response.data;
         } catch (error) {
             throw error.response.data
+        }
+    }
+
+    async receptionDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/receptionDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async transmisDecomMaintenance(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/transmisDecomMaintenance/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async validationTransmissionDecom(id, formData) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/validationTransmissionDecom/${id}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async confirmDiagnosticDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/confirmDiagnosticDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async cancelDiagnosticDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/cancelDiagnosticDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    /*********  Livraisons des TPE en param maintenance  *********/
+
+    async getTpeParamMaintenance(decomId = null) {
+        try {
+            const query = decomId ? `?decomId=${decomId}` : ''
+            const response = await axios.get(`${urlBase}/api/decom/getTpeParamMaintenance${query}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async livrerParamDecom(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/decom/livrerParamDecom`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async getAllLivraisonParamDecom() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllLivraisonParamDecom`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async getOneLivraisonParamDecom(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getOneLivraisonParamDecom/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async receptionLivraisonParamDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/receptionLivraisonParamDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async cloturerLivraisonParamDecom(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/cloturerLivraisonParamDecom/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    /*********  Réparation des TPE par lots  *********/
+
+    async getAllReparationTpe() {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getAllReparationTpe`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async getOneReparationTpe(id) {
+        try {
+            const response = await axios.get(`${urlBase}/api/decom/getOneReparationTpe/${id}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async validerReparationTpe(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/validerReparationTpe/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
+        }
+    }
+
+    async livrerReparationTpe(id, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/decom/livrerReparationTpe/${id}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data;
         }
     }
 

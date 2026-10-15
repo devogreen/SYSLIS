@@ -91,6 +91,17 @@ export default function VerificationDecomInputs() {
             try {
                 setLoadingData(true)
                 const decom = await decomData.getOneDecom(idDecom)
+                if (decom.statut != 'verification') {
+                    Swal.fire({
+                        title: "Attention",
+                        text: "La vérification technique n'est possible qu'après validation de la transmission par la maintenance.",
+                        icon: "warning",
+                        confirmButtonColor: "#3085d6",
+                        confirmButtonText: "OK"
+                    });
+                    navigate(`/decom-details/${idDecom}`)
+                    return;
+                }
                 // const listeDecom = JSON.parse(decom.liste_decom)
                 const listeDecom = await decomData.getSnDecom(idDecom)
                 setQuantiteTotale(listeDecom.length)
