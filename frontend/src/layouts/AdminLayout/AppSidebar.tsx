@@ -455,7 +455,7 @@ const AppSidebar: React.FC = () => {
         </nav>
         <div className="text-center text-xs font-bold text-gray-500">
           <span>
-            v1.37.1
+            v1.37.2
           </span>
         </div>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
