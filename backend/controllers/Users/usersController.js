@@ -94,12 +94,18 @@ const register = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
     `
+        // Mail personnel (contient des informations propres à l'utilisateur) : envoyé directement à l'utilisateur, pas en CCI.
+        // Un échec d'envoi ne doit pas annuler l'opération.
         if (mailChecked) {
-            await sendMail({
-                to: newUser.email,
-                subject,
-                html,
-            })
+            try {
+                await sendMail({
+                    to: newUser.email,
+                    subject,
+                    html,
+                })
+            } catch (mailError) {
+                console.error("Erreur lors de l'envoi des mails :", mailError);
+            }
         }
 
         return res.status(201).json(newUser);
@@ -191,12 +197,18 @@ const updateUser = async (req, res) => {
             <br><br>
             <p>Green - Pay vous remercie.</p>
         `
+        // Mail personnel (contient des informations propres à l'utilisateur) : envoyé directement à l'utilisateur, pas en CCI.
+        // Un échec d'envoi ne doit pas annuler l'opération.
         if (mailChecked) {
-            await sendMail({
-                to: user.email,
-                subject,
-                html,
-            })
+            try {
+                await sendMail({
+                    to: user.email,
+                    subject,
+                    html,
+                })
+            } catch (mailError) {
+                console.error("Erreur lors de l'envoi des mails :", mailError);
+            }
         }
 
         res.status(200).json({ message: "Utilisateur mis à jour.", updatedUser });

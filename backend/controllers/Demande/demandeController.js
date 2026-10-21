@@ -9,6 +9,7 @@ const { get } = require("http");
 const { urlToHttpOptions } = require("url");
 const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
+const configEmail = process.env.NODEMAILER_USER
 
 
 // Fonction de format de date pour les fiches PDF. La date va apparaître avec l'heure.
@@ -519,55 +520,39 @@ const faireDemande = async (req, res) => {
       }
     })
 
-    /************************** GESTION DES MAILS ********************************/
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(serviceUser) }
+      })
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(serviceUser)
-      }
-    })
+      const nomService = service.nom_service.toUpperCase()
 
-    const nomService = service.nom_service.toUpperCase()
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(serviceUser) },
+        include: { users: true }
+      })
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(serviceUser)
-      },
-      include: {
-        users: true
-      }
-    })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 4 },
+        include: { users: true }
+      })
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 4,
-      },
-      include: {
-        users: true
-      }
-    })
-    // const mouvement = await prisma.type_mouvement_stock.findUnique({
-    //   where: {
-    //     id: details.typeMouvement
-    //   }
-    // })
+      const service_users = userService.map(us => us.users.email)
+      const validateurs = userRole.map(us => us.users.email)
 
-    const service_users = userService.map(us => us.users)
-    const validateurs = userRole.map(us => us.users)
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const quantiteDemande = quantite;
 
-    let quantiteDemande = quantite;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${nouvelleDemande.demande.id}`;
 
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${nouvelleDemande.demande.id}`;
-
-    const sendMail = require("../../utils/emailSender");
-
-    const subject = `SYSLIS - MOUVEMENT DE STOCK DE ${nomPiece}`;
-    let html = `
+      const subject = `SYSLIS - MOUVEMENT DE STOCK DE ${nomPiece}`;
+      const html = `
       <p>Bonjour,</p>
       <p>Une nouvelle demande a été enregistrée.</p>
       <ul>
@@ -592,24 +577,17 @@ const faireDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-    }
 
-    if ((validateurs && validateurs.length > 0)) {
-      for (const validateur of validateurs) {
-        await sendMail({
-          to: validateur.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...validateurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Succès ! ")
@@ -798,64 +776,48 @@ const validateDemande = async (req, res) => {
       }
     })
 
-    /************************************     GESTION MAILS     **************************************/
-
-    let stockOwners = []
-    if (owners && owners.length > 0) {
-      ownersList = new Array(owners).map((item) => {
-        return parseInt(item)
-      })
-      if (ownersList && ownersList.length > 0) {
-        stockOwners = await prisma.users.findMany({
-          where: {
-            id_user: {
-              in: ownersList,
-            }
-          }
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      let stockOwners = []
+      if (owners && owners.length > 0) {
+        const ownersList = new Array(owners).map((item) => {
+          return parseInt(item)
         })
+        if (ownersList && ownersList.length > 0) {
+          stockOwners = await prisma.users.findMany({
+            where: { id_user: { in: ownersList } }
+          })
+        }
       }
-    }
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: parseInt(demande.item_id)
-      }
-    });
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: parseInt(demande.item_id) }
+      });
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(demande.service_demandeur) }
+      })
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(demande.service_demandeur)
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(demande.service_demandeur) },
+        include: { users: true }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const demandeur = await prisma.users.findUnique({
-      where: {
-        id_user: demande.user_id
-      }
-    })
+      const proprietaires = stockOwners.map(us => us.email)
+      const service_users = userService.map(us => us.users.email)
 
-    let motif = demande.motif_demande
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const motif = demande.motif_demande
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    let nomServiceDemandeur = service.nom_service.toUpperCase();
+      const nomServiceDemandeur = service.nom_service.toUpperCase();
 
-    let quantite = quantiteValidee;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
-    const subject = `SYSLIS - VALIDATION DEMANDE DE ${nomPiece}`;
-    const html = `
+      const quantite = quantiteValidee;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${demande.id}`;
+      const subject = `SYSLIS - VALIDATION DEMANDE DE ${nomPiece}`;
+      const html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été validée.</p>
       <ul>
@@ -879,7 +841,7 @@ const validateDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-    const html2 = `
+      const html2 = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été validée.</p>
       <p><strong>Vous êtes propiétaire d'un stock de cette catégorie.</strong></p>
@@ -905,23 +867,26 @@ const validateDemande = async (req, res) => {
       <p>Green - Pay vous remercie.</p>
       `;
 
-    if (stockOwners && stockOwners.length > 0) {
-      for (const stockOwner of stockOwners) {
+      // Contenu différent : les propriétaires de stock reçoivent html2, les utilisateurs du service html
+      const destinatairesProprietaires = [...new Set(proprietaires.filter(Boolean))];
+      if (destinatairesProprietaires.length > 0) {
         await sendMail({
-          to: stockOwner.email,
+          to: configEmail,
+          bcc: destinatairesProprietaires,
           subject,
           html: html2,
         });
       }
-    }
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+
+      const destinataires = [...new Set(service_users.filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Demande validée avec succès !")
@@ -2061,41 +2026,29 @@ const livraisonDemande = async (req, res) => {
       });
     }
 
-    /************************************     GESTION MAILS     **************************************/
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(demande.service_demandeur) },
+        include: { users: true }
+      })
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(demande.service_demandeur)
-      },
-      include: {
-        users: true
-      }
-    })
+      const mouvement = await prisma.type_mouvement_stock.findUnique({
+        where: { id: detailsMouvement.typeMouvement }
+      })
 
-    const mouvement = await prisma.type_mouvement_stock.findUnique({
-      where: {
-        id: detailsMouvement.typeMouvement
-      }
-    })
+      const service_users = userService.map(us => us.users.email)
 
-    const service_users = userService.map(us => us.users)
-    const demandeur = await prisma.users.findUnique({
-      where: {
-        id_user: demande.user_id
-      }
-    })
+      const motif = demande.motif_demande
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    let motif = demande.motif_demande
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const nomServiceDemandeur = service.nom_service.toUpperCase();
 
-    let nomServiceDemandeur = service.nom_service.toUpperCase();
-
-    let quantite = stock;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
-    if ((service_users && service_users.length > 0) || demandeur) {
+      const quantite = stock;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${demande.id}`;
       const subject = `SYSLIS - LIVRAISON STOCK DE ${nomPiece}`;
       const html = `
         <p>Bonjour,</p>
@@ -2122,18 +2075,17 @@ const livraisonDemande = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
         `;
-      // await sendMail({
-      //   to: demandeur.email,
-      //   subject,
-      //   html,
-      // });
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+
+      // Le demandeur n'était déjà plus destinataire (envoi commenté) : seuls les utilisateurs du service le reçoivent.
+      const destinataires = [...new Set(service_users.filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log('Livraison de stock éffectuée avec succès !')
@@ -2453,7 +2405,6 @@ const returnDemande = async (req, res) => {
     let commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)';
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
       const subject = `SYSLIS - DEMANDE RETOURNÉE`;
       const html = `
@@ -2593,7 +2544,6 @@ const cancelDemande = async (req, res) => {
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
     // const demandeLink = `https://livraisons.greenpayci.com/formulaire-recu/${nouvelleLivraison.id_demande}`
-    const sendMail = require("../../utils/emailSender");
     if ((service_users && service_users.length > 0) || demandeur) {
       const subject = `SYSLIS - DEMANDE REFUSÉE`;
       const html = `
@@ -2783,57 +2733,39 @@ const updateDemande = async (req, res) => {
         updatedDemande,
       }
     })
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(serviceUser) }
+      })
 
+      const nomService = service.nom_service.toUpperCase()
 
-    /************************** GESTION DES MAILS ********************************/
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(serviceUser) },
+        include: { users: true }
+      })
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(serviceUser)
-      }
-    })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 4 },
+        include: { users: true }
+      })
 
-    const nomService = service.nom_service.toUpperCase()
+      const service_users = userService.map(us => us.users.email)
+      const validateurs = userRole.map(us => us.users.email)
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(serviceUser)
-      },
-      include: {
-        users: true
-      }
-    })
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 4,
-      },
-      include: {
-        users: true
-      }
-    })
-    // const mouvement = await prisma.type_mouvement_stock.findUnique({
-    //   where: {
-    //     id: details.typeMouvement
-    //   }
-    // })
+      const quantiteDemande = quantite;
 
-    const service_users = userService.map(us => us.users)
-    const validateurs = userRole.map(us => us.users)
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${demande.id}`;
 
-    let quantiteDemande = quantite;
-
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${demande.id}`;
-
-    const sendMail = require("../../utils/emailSender");
-
-    const subject = `SYSLIS - MODIFICATION DEMANDE POUR ${motif}`;
-    let html = `
+      const subject = `SYSLIS - MODIFICATION DEMANDE POUR ${motif}`;
+      const html = `
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été modifiée.</p>
       <ul>
@@ -2859,24 +2791,16 @@ const updateDemande = async (req, res) => {
       <p>Green - Pay vous remercie.</p>
       `;
 
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-    }
-
-    if ((validateurs && validateurs.length > 0)) {
-      for (const validateur of validateurs) {
-        await sendMail({
-          to: validateur.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...validateurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Demande de stock modifiée avec succès !");
@@ -2982,67 +2906,45 @@ const receivePiece = async (req, res) => {
       }
     })
 
-    // *********** GESTION DES MAILS ************
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonPiece = await prisma.livraison_piece.findFirst({
+        where: { demande_id: demande.id },
+        include: { forms: true },
+      })
 
-    const livraisonPiece = await prisma.livraison_piece.findFirst({
-      where: {
-        demande_id: demande.id,
-      },
-      include: {
-        forms: true
-      },
-    })
-
-    if (!livraisonPiece || !livraisonPiece.forms) {
-      console.error("Livraison liée à la demande introuvable ou formulaire de livraison manquant.");
-      return res.status(404).json({ message: "Livraison liée à la demande introuvable ou formulaire de livraison manquant." });
-    }
-
-    const livreurId = livraisonPiece.forms.created_by
-    const livreur = await prisma.users.findUnique({
-      where: {
-        id_user: livreurId
+      // La réception est déjà enregistrée : sans livraison liée, on n'envoie simplement pas de mail.
+      if (!livraisonPiece || !livraisonPiece.forms) {
+        throw new Error("Livraison liée à la demande introuvable ou formulaire de livraison manquant.");
       }
-    })
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
+      const livreurId = livraisonPiece.forms.created_by
+      const livreur = await prisma.users.findUnique({
+        where: { id_user: livreurId }
+      })
 
-    const serviceReception = service.nom_service
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(demande.service_demandeur) }
+      })
 
-    // const userRole = await prisma.user_roles.findMany({
-    //   where: {
-    //     role_id: 3
-    //   },
-    //   include: {
-    //     users: true
-    //   }
-    // })
+      const serviceReception = service.nom_service
 
-    const typeMouvement = await prisma.type_mouvement_stock.findUnique({
-      where: {
-        id: demande.type_demande
-      }
-    })
+      const typeMouvement = await prisma.type_mouvement_stock.findUnique({
+        where: { id: demande.type_demande }
+      })
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: demande.item_id
-      }
-    })
-    // let demandeurs = userRole.map(us => us.users)
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: demande.item_id }
+      })
 
-    let quantiteProduits = demande.qte_total_demande
-    let commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
+      const quantiteProduits = demande.qte_total_demande
+      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
 
-    const url = GENERAL_URL
-    const deliveryLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
-    const subject = `SYSLIS - RECEPTION DE STOCK`;
-    const html = `
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/demande-details/${demande.id}`;
+      const subject = `SYSLIS - RECEPTION DE STOCK`;
+      const html = `
       <p>Bonjour,</p>
       <p>La demande de stock ${demande.id} a été réceptionnée.</p>
       <ul>
@@ -3064,12 +2966,15 @@ const receivePiece = async (req, res) => {
       <p>Green - Pay vous remercie.</p>
     `;
 
-    if (livreur?.email) {
+      const destinataires = [...new Set([livreur?.email].filter(Boolean))];
       await sendMail({
-        to: livreur.email,
+        to: configEmail,
+        bcc: destinataires,
         subject,
         html,
       });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log('Stock réceptionné avec succès !')
@@ -3539,55 +3444,39 @@ const regularisationDemande = async (req, res) => {
       }
     });
 
-    /************************** GESTION DES MAILS ********************************/
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(serviceUser)
-      }
-    })
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(serviceUser) }
+      })
 
-    const nomService = service.nom_service.toUpperCase()
+      const nomService = service.nom_service.toUpperCase()
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(serviceUser)
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(serviceUser) },
+        include: { users: true }
+      })
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 4,
-      },
-      include: {
-        users: true
-      }
-    })
-    // const mouvement = await prisma.type_mouvement_stock.findUnique({
-    //   where: {
-    //     id: details.typeMouvement
-    //   }
-    // })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 4 },
+        include: { users: true }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const validateurs = userRole.map(us => us.users)
+      const service_users = userService.map(us => us.users.email)
+      const validateurs = userRole.map(us => us.users.email)
 
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    let quantiteDemande = quantite;
+      const quantiteDemande = quantite;
 
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${newRegularisation.nouvelleDemande.id}`;
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${newRegularisation.nouvelleDemande.id}`;
 
-    const sendMail = require("../../utils/emailSender");
-
-    if ((service_users && service_users.length > 0) || (validateurs && validateurs.length > 0)) {
       const subject = `SYSLIS - REGULARISATION MOUVEMENT DE STOCK DE ${nomPiece}`;
-      let html = `
+      const html = `
         <p>Bonjour,</p>
         <p>Une nouvelle demande a été enregistrée.</p>
         <ul>
@@ -3612,20 +3501,17 @@ const regularisationDemande = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
         `;
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-      for (const validateur of validateurs) {
-        await sendMail({
-          to: validateur.email,
-          subject,
-          html,
-        });
-      }
+
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...validateurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Régularisation de demande de stock enregistrée avec succès")
@@ -3733,62 +3619,46 @@ const regValidateDemande = async (req, res) => {
       }
     })
 
-    /************************************     GESTION MAILS     **************************************/
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: parseInt(demande.item_id) }
+      });
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: parseInt(demande.item_id)
-      }
-    });
-
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(demande.service_demandeur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    ownersList = new Array(owners).map((item) => {
-      return parseInt(item)
-    })
-    let stockOwners = []
-    if (ownersList && ownersList.length > 0) {
-      stockOwners = await prisma.users.findMany({
-        where: {
-          id_user: {
-            in: ownersList,
-          }
-        }
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(demande.service_demandeur) }
       })
-    }
 
-    const service_users = userService.map(us => us.users)
-    const demandeur = await prisma.users.findUnique({
-      where: {
-        id_user: demande.user_id
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(demande.service_demandeur) },
+        include: { users: true }
+      })
+
+      const ownersList = new Array(owners).map((item) => {
+        return parseInt(item)
+      })
+      let stockOwners = []
+      if (ownersList && ownersList.length > 0) {
+        stockOwners = await prisma.users.findMany({
+          where: { id_user: { in: ownersList } }
+        })
       }
-    })
 
-    let motif = demande.motif_demande
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const proprietaires = stockOwners.map(us => us.email)
+      const service_users = userService.map(us => us.users.email)
 
-    let nomServiceDemandeur = service.nom_service.toUpperCase();
+      const motif = demande.motif_demande
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    let quantite = quantiteValidee;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
-    const subject = `SYSLIS - REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
-    const html = `
+      const nomServiceDemandeur = service.nom_service.toUpperCase();
+
+      const quantite = quantiteValidee;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${demande.id}`;
+      const subject = `SYSLIS - REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
+      const html = `
       <p>Bonjour,</p>
       <p>La régularisation de la validation de la demande ${demande.id} a été éffectuée.</p>
       <ul>
@@ -3812,23 +3682,17 @@ const regValidateDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-    if (stockOwners && stockOwners.length > 0) {
-      for (const stockOwner of stockOwners) {
-        await sendMail({
-          to: stockOwner.email,
-          subject,
-          html,
-        });
-      }
-    }
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...proprietaires, ...service_users].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Validation régularisée avec succès !")
@@ -4796,54 +4660,38 @@ const regLivraisonDemande = async (req, res) => {
       // }
     })
 
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: parseInt(demande.item_id) }
+      });
 
-    /************************************     GESTION MAILS     **************************************/
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(demande.service_demandeur) }
+      })
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: parseInt(demande.item_id)
-      }
-    });
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(demande.service_demandeur) },
+        include: { users: true }
+      })
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
+      const mouvement = await prisma.type_mouvement_stock.findUnique({
+        where: { id: detailsMouvement.typeMouvement }
+      })
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(demande.service_demandeur)
-      },
-      include: {
-        users: true
-      }
-    })
+      const service_users = userService.map(us => us.users.email)
 
-    const mouvement = await prisma.type_mouvement_stock.findUnique({
-      where: {
-        id: detailsMouvement.typeMouvement
-      }
-    })
+      const motif = demande.motif_demande
+      const nomPiece = piece.nom_piece.toUpperCase()
 
-    const service_users = userService.map(us => us.users)
-    const demandeur = await prisma.users.findUnique({
-      where: {
-        id_user: demande.user_id
-      }
-    })
+      const nomServiceDemandeur = service.nom_service.toUpperCase();
 
-    let motif = demande.motif_demande
-    let nomPiece = piece.nom_piece.toUpperCase()
+      const quantite = stock;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const url = GENERAL_URL
+      const demandeLink = `${url}/demande-details/${demande.id}`;
 
-    let nomServiceDemandeur = service.nom_service.toUpperCase();
-
-    let quantite = stock;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-    const url = GENERAL_URL
-    let demandeLink = `${url}/demande-details/${demande.id}`;
-    const sendMail = require("../../utils/emailSender");
-    if ((service_users && service_users.length > 0) || demandeur) {
       const subject = `SYSLIS - REGULARISATION LIVRAISON STOCK DE ${nomPiece}`;
       const html = `
         <p>Bonjour,</p>
@@ -4870,18 +4718,17 @@ const regLivraisonDemande = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
         `;
-      // await sendMail({
-      //   to: demandeur.email,
-      //   subject,
-      //   html,
-      // });
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+
+      // Le demandeur n'était déjà plus destinataire (envoi commenté) : seuls les utilisateurs du service le reçoivent.
+      const destinataires = [...new Set(service_users.filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log('Livraison de stock éffectuée avec succès !')
@@ -4987,52 +4834,39 @@ const regReceptionDemande = async (req, res) => {
       }
     })
 
-    // *********** GESTION DES MAILS ************
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonPiece = await prisma.livraison_piece.findFirst({
+        where: { demande_id: demande.id },
+        include: { forms: true },
+      })
 
-    const livraisonPiece = await prisma.livraison_piece.findFirst({
-      where: {
-        demande_id: demande.id,
-      },
-      include: {
-        forms: true
-      },
-    })
+      const livreurId = livraisonPiece.forms.created_by
+      const livreur = await prisma.users.findUnique({
+        where: { id_user: livreurId }
+      })
 
-    const livreurId = livraisonPiece.forms.created_by
-    const livreur = prisma.users.findUnique({
-      where: {
-        id_user: livreurId
-      }
-    })
+      const typeMouvement = await prisma.type_mouvement_stock.findUnique({
+        where: { id: demande.type_demande }
+      })
 
-    const typeMouvement = await prisma.type_mouvement_stock.findUnique({
-      where: {
-        id: demande.type_demande
-      }
-    })
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(demande.service_demandeur) }
+      })
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
+      const serviceReception = service.nom_service
 
-    const serviceReception = service.nom_service
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: demande.item_id }
+      })
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: demande.item_id
-      }
-    })
-    // let demandeurs = userRole.map(us => us.users)
+      const quantiteProduits = demande.qte_total_demande
+      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
 
-    let quantiteProduits = demande.qte_total_demande
-    let commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/demande-details/${demande.id}`;
 
-    const url = GENERAL_URL
-    const deliveryLink = `${url}/demande-details/${demande.id}`;
-
-    if (livreur) {
       const subject = `SYSLIS - REGULARISATION RECEPTION DE STOCK`;
       const html = `
         <p>Bonjour,</p>
@@ -5055,11 +4889,16 @@ const regReceptionDemande = async (req, res) => {
         <br><br>
         <p>Green - Pay vous remercie.</p>
       `;
+
+      const destinataires = [...new Set([livreur?.email].filter(Boolean))];
       await sendMail({
-        to: livreur.email,
+        to: configEmail,
+        bcc: destinataires,
         subject,
         html,
       });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log('Stock réceptionné avec succès !')

@@ -238,90 +238,78 @@ const faireDecom = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            const rolesReception = await prisma.user_roles.findMany({
+                where: { role_id: 24 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesReception = await prisma.user_roles.findMany({
-            where: {
-                role_id: 24,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const receveurs = rolesReception.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const receveurs = rolesReception.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.nouveauDecom.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.nouveauDecom.id}`;
 
-        let subject = `SYSLIS - NOUVEAU DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Un nouveau décommissionnement a été soumis.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (isReg) {
-            subject = `SYSLIS - RÉGULARISATION DECOMMISSIONNEMENT`;
-            html = `
-            <p>Bonjour,</p>
-            <p>Une régularisation de décommissionnement a été soumise.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        }
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
+            let subject = `SYSLIS - NOUVEAU DECOMMISSIONNEMENT`;
+            let html = `
+                <p>Bonjour,</p>
+                <p>Un nouveau décommissionnement a été soumis.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+            if (isReg) {
+                subject = `SYSLIS - RÉGULARISATION DECOMMISSIONNEMENT`;
+                html = `
+                <p>Bonjour,</p>
+                <p>Une régularisation de décommissionnement a été soumise.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
             }
-        }
-        if (receveurs && receveurs.length > 0) {
-            for (const receveur of receveurs) {
-                await sendMail({
-                    to: receveur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...receveurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Décommissionnement enregistré avec succès ! ")
@@ -569,69 +557,57 @@ const modifyDecom = async (req, res) => {
             }
         })
 
-        /*****************          GESTION MAIL             *****************/
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            const rolesReception = await prisma.user_roles.findMany({
+                where: { role_id: 24 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesReception = await prisma.user_roles.findMany({
-            where: {
-                role_id: 24,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const receveurs = rolesReception.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const receveurs = rolesReception.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${updatedDecom.decom.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${updatedDecom.decom.id}`;
 
-        const subject = `SYSLIS - MODIFICATION DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Le décommissionnement ${updatedDecom.decom.id} a été modifié.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (receveurs && receveurs.length > 0) {
-            for (const receveur of receveurs) {
-                await sendMail({
-                    to: receveur.email,
-                    subject,
-                    html,
-                });
-            }
+            const subject = `SYSLIS - MODIFICATION DECOMMISSIONNEMENT`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>Le décommissionnement ${updatedDecom.decom.id} a été modifié.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...receveurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Décommissionnement modifié avec succès ! ")
@@ -701,59 +677,45 @@ const cancelDecom = async (req, res) => {
             }
         })
 
-        /*****************          GESTION MAIL             *****************/
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            const rolesReception = await prisma.user_roles.findMany({
+                where: { role_id: 24 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesReception = await prisma.user_roles.findMany({
-            where: {
-                role_id: 24,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const receveurs = rolesReception.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const receveurs = rolesReception.map(us => us.users.email)
 
-        // let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${canceledDecom.decom.id}`;
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${canceledDecom.decom.id}`;
+            const subject = `SYSLIS - ANNULATION DECOMMISSIONNEMENT`;
+            const html = `
+                <p>Bonjour,</p>
+                    <p>Le décommissionnement ${canceledDecom.decom.id} a été annulé.</p>
+                    <p><strong>Plus d'actions ne seront menées sur cette demande</strong</p>
+                    <br>
+                    <br>
+                    <br>
+                    <p>Green - Pay vous remercie.</p>
+            `;
 
-        const subject = `SYSLIS - ANNULATION DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-                <p>Le décommissionnement ${canceledDecom.decom.id} a été annulé.</p>
-                <p><strong>Plus d'actions ne seront menées sur cette demande</strong</p>
-                <br>
-                <br>
-                <br>
-                <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (receveurs && receveurs.length > 0) {
-            for (const receveur of receveurs) {
-                await sendMail({
-                    to: receveur.email,
-                    subject,
-                    html,
-                });
-            }
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...receveurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log(`Décommissionnement annulé avec succès par : ${userId}! `)
@@ -902,6 +864,8 @@ const receptionDecom = async (req, res) => {
             }
         })
 
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const rolesDecom = await prisma.user_roles.findMany({
                 where: { role_id: 23 },
@@ -944,7 +908,8 @@ const receptionDecom = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...superviseurs, ...decoms];
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...decoms].filter(Boolean))];
             await sendMail({
                 to: configEmail,
                 bcc: destinataires,
@@ -952,7 +917,6 @@ const receptionDecom = async (req, res) => {
                 html,
             });
         } catch (mailError) {
-            // Log but do not fail the request — the repair/delivery already succeeded.
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
@@ -1117,7 +1081,7 @@ const transmisDecomMaintenance = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            // Dédoublonnage : un utilisateur peut avoir les deux rôles
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
             const destinataires = [...new Set([...maintenance, ...superviseurs].filter(Boolean))];
             await sendMail({
                 to: configEmail,
@@ -1321,7 +1285,7 @@ const validationListeDecom = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const rolesDecom = await prisma.user_roles.findMany({
                 where: { role_id: 23 },
@@ -1360,7 +1324,8 @@ const validationListeDecom = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...superviseurs, ...decoms];
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...decoms].filter(Boolean))];
             await sendMail({
                 to: configEmail,
                 bcc: destinataires,
@@ -1368,7 +1333,6 @@ const validationListeDecom = async (req, res) => {
                 html,
             });
         } catch (mailError) {
-            // Log but do not fail the request — the repair/delivery already succeeded.
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
@@ -1605,7 +1569,7 @@ const validationTransmissionDecom = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            // Dédoublonnage : un utilisateur peut avoir les deux rôles
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
             const destinataires = [...new Set([...superviseurs, ...decoms].filter(Boolean))];
             await sendMail({
                 to: configEmail,
@@ -1705,86 +1669,57 @@ const returnDecom = async (req, res) => {
             }
         })
 
-        /************** GESTION DES MAILS  **************/
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            const rolesDecom = await prisma.user_roles.findMany({
+                where: { role_id: 23 },
+                include: { users: true }
+            })
+            // Vérificateurs (rôle 25) non notifiés (l'envoi était déjà commenté).
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const demandeurs = rolesDecom.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `SYSLIS - RETOUR DE DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Le décommissionnement ${decom.id} a été retourné pour modification ou annulation.</p>
-            <ul>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        // if (verificateurs && verificateurs.length > 0) {
-        //     for (const verificateur of verificateurs) {
-        //         await sendMail({
-        //             to: verificateur.email,
-        //             subject,
-        //             html,
-        //         });
-        //     }
-        // }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
+            const subject = `SYSLIS - RETOUR DE DECOMMISSIONNEMENT`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>Le décommissionnement ${decom.id} a été retourné pour modification ou annulation.</p>
+                <ul>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...demandeurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log('Liste de décom retournée avec succès !')
@@ -2078,79 +2013,59 @@ const verifyDecom = async (req, res) => {
         //     })
         // });
 
-        /************** GESTION DES MAILS  **************/
-
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
-
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
-
-        const subject = `SYSLIS - NOUVELLE VERIFICATION DE DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${listeVerified.length}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         if (checkMail) {
-            if (superviseurs && superviseurs.length > 0) {
-                for (const superviseur of superviseurs) {
-                    await sendMail({
-                        to: superviseur.email,
-                        subject,
-                        html,
-                    });
-                }
-            }
-            if (demandeurs && demandeurs.length > 0) {
-                for (const demandeur of demandeurs) {
-                    await sendMail({
-                        to: demandeur.email,
-                        subject,
-                        html,
-                    });
-                }
+            try {
+                const rolesSupervision = await prisma.user_roles.findMany({
+                    where: { role_id: 26 },
+                    include: { users: true }
+                })
+                const rolesDecom = await prisma.user_roles.findMany({
+                    where: { role_id: 23 },
+                    include: { users: true }
+                })
+                // Vérificateurs (rôle 25) non notifiés : la requête était faite mais jamais utilisée.
+
+                const superviseurs = rolesSupervision.map(us => us.users.email)
+                const demandeurs = rolesDecom.map(us => us.users.email)
+
+                const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+                const url = GENERAL_URL
+                const link = `${url}/decom-details/${decom.id}`;
+
+                const subject = `SYSLIS - NOUVELLE VERIFICATION DE DECOMMISSIONNEMENT`;
+                const html = `
+                    <p>Bonjour,</p>
+                    <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${listeVerified.length}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
+
+                // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+                const destinataires = [...new Set([...superviseurs, ...demandeurs].filter(Boolean))];
+                await sendMail({
+                    to: configEmail,
+                    bcc: destinataires,
+                    subject,
+                    html,
+                });
+            } catch (mailError) {
+                console.error("Erreur lors de l'envoi des mails :", mailError);
             }
         }
 
@@ -2300,79 +2215,59 @@ const regVerifyDecom = async (req, res) => {
             }
         })
 
-        /************** GESTION DES MAILS  **************/
-
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
-
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
-
-        const subject = `SYSLIS - REGULARISATION DE VERIFICATION DE DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${listeVerified.length}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         if (checkMail) {
-            if (superviseurs && superviseurs.length > 0) {
-                for (const superviseur of superviseurs) {
-                    await sendMail({
-                        to: superviseur.email,
-                        subject,
-                        html,
-                    });
-                }
-            }
-            if (demandeurs && demandeurs.length > 0) {
-                for (const demandeur of demandeurs) {
-                    await sendMail({
-                        to: demandeur.email,
-                        subject,
-                        html,
-                    });
-                }
+            try {
+                const rolesSupervision = await prisma.user_roles.findMany({
+                    where: { role_id: 26 },
+                    include: { users: true }
+                })
+                const rolesDecom = await prisma.user_roles.findMany({
+                    where: { role_id: 23 },
+                    include: { users: true }
+                })
+                // Vérificateurs (rôle 25) non notifiés : la requête était faite mais jamais utilisée.
+
+                const superviseurs = rolesSupervision.map(us => us.users.email)
+                const demandeurs = rolesDecom.map(us => us.users.email)
+
+                const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+
+                const url = GENERAL_URL
+                const link = `${url}/decom-details/${decom.id}`;
+
+                const subject = `SYSLIS - REGULARISATION DE VERIFICATION DE DECOMMISSIONNEMENT`;
+                const html = `
+                    <p>Bonjour,</p>
+                    <p>Des vérifications ont été faites sur le décommissionnement ${decom.id}.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${listeVerified.length}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
+
+                // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+                const destinataires = [...new Set([...superviseurs, ...demandeurs].filter(Boolean))];
+                await sendMail({
+                    to: configEmail,
+                    bcc: destinataires,
+                    subject,
+                    html,
+                });
+            } catch (mailError) {
+                console.error("Erreur lors de l'envoi des mails :", mailError);
             }
         }
 
@@ -2970,78 +2865,58 @@ const clotureDecom = async (req, res) => {
             timeout: 20000,
         });
 
-        /************ GESTION MAIL  ************/
+        /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 26 },
+                include: { users: true }
+            })
+            const rolesDecom = await prisma.user_roles.findMany({
+                where: { role_id: 23 },
+                include: { users: true }
+            })
+            // Vérificateurs (rôle 25) non notifiés : la requête était faite mais jamais utilisée.
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 26,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesVerification = await prisma.user_roles.findMany({
-            where: {
-                role_id: 25,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDecom = await prisma.user_roles.findMany({
-            where: {
-                role_id: 23,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const verificateurs = rolesVerification.map(us => us.users)
-        const demandeurs = rolesDecom.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const demandeurs = rolesDecom.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/decom-details/${decom.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/decom-details/${decom.id}`;
 
-        const subject = `SYSLIS - CLOTURE DE DECOMMISSIONNEMENT`;
-        let html = `
-            <p>Bonjour,</p>
-            <p>Le décommissionnement ${decom.id} a été clôturé.</p>
-            <ul>
-            <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
-            </ul>
-            <br>
-            <p>Commentaire : ${commentaire_mail}<p>
-            <br>
-            <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-            </p>
-            <br><br>
-            <p>Green - Pay vous remercie.</p>
-        `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
+            const subject = `SYSLIS - CLOTURE DE DECOMMISSIONNEMENT`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>Le décommissionnement ${decom.id} a été clôturé.</p>
+                <ul>
+                <li><strong>Nombre de TPE :</strong> ${decom.quantite}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...demandeurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log(`Décommissionnement clôturé avec succès par ${utilisateur.username}`)
@@ -3874,7 +3749,7 @@ const receptionLivraisonReparation = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const rolesSupervision = await prisma.user_roles.findMany({
                 where: { role_id: 37 },
@@ -3887,13 +3762,13 @@ const receptionLivraisonReparation = async (req, res) => {
             // NOTE: removed the role_id 25 (verificateurs) query — it was fetched but
             // never used. Re-add it here and include it in the mail loop if needed.
 
-            const superviseurs = rolesSupervision.map(us => us.users)
-            const livreurs = rolesLivraison.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const livreurs = rolesLivraison.map(us => us.users.email)
 
             const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
             const url = GENERAL_URL
-            const link = `${url}/livraison-tpe-repare/${operation.livraison.id}`;
+            const link = `${url}/livraison-tpe-repare/${livraison.id}`;
 
             const subject = `SYSLIS - RECEPTION TPE REPARE`;
             // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
@@ -3917,17 +3792,15 @@ const receptionLivraisonReparation = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...superviseurs, ...livreurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...livreurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
         } catch (mailError) {
-            // Log but do not fail the request — the repair/delivery already succeeded.
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 

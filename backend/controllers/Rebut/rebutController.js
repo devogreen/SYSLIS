@@ -12,6 +12,8 @@ const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
 
+const configEmail = process.env.NODEMAILER_USER
+
 const formatDate = (isoDate) => {
     const date = new Date(isoDate);
     return date.toLocaleString("fr-FR", {
@@ -373,90 +375,78 @@ const demandeRebut = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 33 },
+                include: { users: true }
+            })
+            const rolesValidation = await prisma.user_roles.findMany({
+                where: { role_id: 31 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 33,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesValidation = await prisma.user_roles.findMany({
-            where: {
-                role_id: 31,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const validateurs = rolesValidation.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const validateurs = rolesValidation.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-rebut/${nouveauRebut.rebut.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-rebut/${nouveauRebut.rebut.id}`;
 
-        let subject = `SYSLIS - MISE AU REBUT`;
-        let html = `
-                <p>Bonjour,</p>
-                <p>Une nouvelle demande de mise au rebut a été soumise.</p>
-                <ul>
-                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-                </ul>
-                <br>
-                <p>Commentaire : ${commentaire_mail}<p>
-                <br>
-                <p>Retrouvez la demande à ce lien : 
-                <span>
-                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                    Cliquez ici !
-                </a>
-                </span>
-                </p>
-                <br><br>
-                <p>Green - Pay vous remercie.</p>
-            `;
-        if (reg) {
-            subject = `SYSLIS - REGULARISATION MISE AU REBUT`;
-            html = `
-                <p>Bonjour,</p>
-                <p>Une régularisation de mise au rebut a été soumise.</p>
-                <ul>
-                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-                </ul>
-                <br>
-                <p>Commentaire : ${commentaire_mail}<p>
-                <br>
-                <p>Retrouvez la demande à ce lien : 
-                <span>
-                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                    Cliquez ici !
-                </a>
-                </span>
-                </p>
-                <br><br>
-                <p>Green - Pay vous remercie.</p>
-            `;
-        }
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
+            let subject = `SYSLIS - MISE AU REBUT`;
+            let html = `
+                    <p>Bonjour,</p>
+                    <p>Une nouvelle demande de mise au rebut a été soumise.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
+            if (reg) {
+                subject = `SYSLIS - REGULARISATION MISE AU REBUT`;
+                html = `
+                    <p>Bonjour,</p>
+                    <p>Une régularisation de mise au rebut a été soumise.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
             }
-        }
-        if (validateurs && validateurs.length > 0) {
-            for (const validateur of validateurs) {
-                await sendMail({
-                    to: validateur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...validateurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log(`Demande de mise au rebut enregistrée avec succès par ${utilisateur.username}`)
@@ -1123,68 +1113,56 @@ const updateDemandeRebut = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 33 },
+                include: { users: true }
+            })
+            const rolesValidation = await prisma.user_roles.findMany({
+                where: { role_id: 31 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 33,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesValidation = await prisma.user_roles.findMany({
-            where: {
-                role_id: 31,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const validateurs = rolesValidation.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const validateurs = rolesValidation.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-rebut/${updateRebut.rebut.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-rebut/${updateRebut.rebut.id}`;
 
-        let subject = `SYSLIS - MODIFICATION DE MISE AU REBUT`;
-        let html = `
-                <p>Bonjour,</p>
-                <p>La demande de mise au rebut #${id} a été modifiée.</p>
-                <ul>
-                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-                </ul>
-                <br>
-                <p>Commentaire : ${commentaire_mail}<p>
-                <br>
-                <p>Retrouvez la demande à ce lien : 
-                <span>
-                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                    Cliquez ici !
-                </a>
-                </span>
-                </p>
-                <br><br>
-                <p>Green - Pay vous remercie.</p>
-            `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (validateurs && validateurs.length > 0) {
-            for (const validateur of validateurs) {
-                await sendMail({
-                    to: validateur.email,
-                    subject,
-                    html,
-                });
-            }
+            const subject = `SYSLIS - MODIFICATION DE MISE AU REBUT`;
+            const html = `
+                    <p>Bonjour,</p>
+                    <p>La demande de mise au rebut #${id} a été modifiée.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...validateurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log(`Demande de mise au rebut ${id} modifiée avec succès par ${utilisateur.username}`)
@@ -1329,68 +1307,56 @@ const validateDemandeRebut = async (req, res) => {
         })
 
         /****************    GESTION DES MAILS     *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const rolesSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 33 },
+                include: { users: true }
+            })
+            const rolesDemandeur = await prisma.user_roles.findMany({
+                where: { role_id: 30 },
+                include: { users: true }
+            })
 
-        const rolesSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 33,
-            },
-            include: {
-                users: true
-            }
-        })
-        const rolesDemandeur = await prisma.user_roles.findMany({
-            where: {
-                role_id: 30,
-            },
-            include: {
-                users: true
-            }
-        })
-        const superviseurs = rolesSupervision.map(us => us.users)
-        const demandeurs = rolesDemandeur.map(us => us.users)
+            const superviseurs = rolesSupervision.map(us => us.users.email)
+            const demandeurs = rolesDemandeur.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-rebut/${validationRebut.rebut.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-rebut/${validationRebut.rebut.id}`;
 
-        let subject = `SYSLIS - VALIDATION DE MISE AU REBUT`;
-        let html = `
-                <p>Bonjour,</p>
-                <p>La demande de mise au rebut #${id} a été validée.</p>
-                <ul>
-                <li><strong>Nombre de TPE :</strong> ${quantite}</li>
-                </ul>
-                <br>
-                <p>Commentaire : ${commentaire_mail}<p>
-                <br>
-                <p>Retrouvez la demande à ce lien : 
-                <span>
-                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                    Cliquez ici !
-                </a>
-                </span>
-                </p>
-                <br><br>
-                <p>Green - Pay vous remercie.</p>
-            `;
-        if (superviseurs && superviseurs.length > 0) {
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
-        }
-        if (demandeurs && demandeurs.length > 0) {
-            for (const demandeur of demandeurs) {
-                await sendMail({
-                    to: demandeur.email,
-                    subject,
-                    html,
-                });
-            }
+            const subject = `SYSLIS - VALIDATION DE MISE AU REBUT`;
+            const html = `
+                    <p>Bonjour,</p>
+                    <p>La demande de mise au rebut #${id} a été validée.</p>
+                    <ul>
+                    <li><strong>Nombre de TPE :</strong> ${quantite}</li>
+                    </ul>
+                    <br>
+                    <p>Commentaire : ${commentaire_mail}<p>
+                    <br>
+                    <p>Retrouvez la demande à ce lien : 
+                    <span>
+                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                        Cliquez ici !
+                    </a>
+                    </span>
+                    </p>
+                    <br><br>
+                    <p>Green - Pay vous remercie.</p>
+                `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...superviseurs, ...demandeurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log(`Demande de mise au rebut ${id} validée avec succès par ${utilisateur.username}`)

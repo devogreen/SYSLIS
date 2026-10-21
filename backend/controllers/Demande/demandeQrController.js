@@ -9,6 +9,7 @@ const { get } = require("http");
 const { urlToHttpOptions } = require("url");
 const { type } = require("os");
 const sendMail = require("../../utils/emailSender");
+const configEmail = process.env.NODEMAILER_USER
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
 
@@ -318,67 +319,58 @@ const regularisationDemandeQrV2 = async (req, res) => {
                 demande,
             }
         })
-        if (newRegularisation) {
+
+        /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
             const roleLivraison = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 18,
-                },
-                include: {
-                    users: true,
-                }
+                where: { role_id: 18 },
+                include: { users: true }
             })
             const roleSupervision = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 22,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 22 },
+                include: { users: true }
             })
-            const livreurs = roleLivraison.map(us => us.users)
-            const superviseurs = roleSupervision.map(us => us.users)
 
-            let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const livreurs = roleLivraison.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
+
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
             const url = GENERAL_URL
-            let link = `${url}/demande-qr-details/${newRegularisation.demande.id}`;
+            const link = `${url}/demande-qr-details/${newRegularisation.demande.id}`;
 
-            if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
-                const subject = `SYSLIS - REGULARISATION DEMANDE QR CODE(S)`;
-                let html = `
-                    <p>Bonjour,</p>
-                    <p>Une demande régularisée de QR Code a été soumise.</p>
-                    <ul>
-                    <li><strong>Nombre de QR Code :</strong> ${newRegularisation.demande.quantite_qr}</li>
-                    </ul>
-                    <br>
-                    <p>Commentaire : ${commentaire_mail}<p>
-                    <br>
-                    <p>Retrouvez la demande à ce lien : 
-                    <span>
-                    <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                        Cliquez ici !
-                    </a>
-                    </span>
-                    </p>
-                    <br><br>
-                    <p>Green - Pay vous remercie.</p>
-                `;
-                for (const livreur of livreurs) {
-                    await sendMail({
-                        to: livreur.email,
-                        subject,
-                        html,
-                    });
-                }
-                for (const superviseur of superviseurs) {
-                    await sendMail({
-                        to: superviseur.email,
-                        subject,
-                        html,
-                    });
-                }
-            }
+            const subject = `SYSLIS - REGULARISATION DEMANDE QR CODE(S)`;
+            const html = `
+                <p>Bonjour,</p>
+                <p>Une demande régularisée de QR Code a été soumise.</p>
+                <ul>
+                <li><strong>Nombre de QR Code :</strong> ${newRegularisation.demande.quantite_qr}</li>
+                </ul>
+                <br>
+                <p>Commentaire : ${commentaire_mail}<p>
+                <br>
+                <p>Retrouvez la demande à ce lien : 
+                <span>
+                <a href="${link}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                    Cliquez ici !
+                </a>
+                </span>
+                </p>
+                <br><br>
+                <p>Green - Pay vous remercie.</p>
+            `;
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Régularisation de demande enregistrée avec succès ! ")
@@ -484,7 +476,7 @@ const faireDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const totalTypes = details.reduce((acc, item) => {
                 acc[item.typeQr] = (acc[item.typeQr] || 0) + 1
@@ -496,43 +488,29 @@ const faireDemandeQr = async (req, res) => {
                 .join(", ");
 
             const roleGenerateur = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 16,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 16 },
+                include: { users: true }
             })
-
             const roleImpression = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 17,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 17 },
+                include: { users: true }
             })
-
             const roleSupervision = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 22,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 22 },
+                include: { users: true }
             })
 
-            const generateurs = roleGenerateur.map(us => us.users)
-            const imprimeurs = roleImpression.map(us => us.users)
-            const superviseurs = roleSupervision.map(us => us.users)
+            const generateurs = roleGenerateur.map(us => us.users.email)
+            const imprimeurs = roleImpression.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-            let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
             const url = GENERAL_URL
-            let link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
+            const link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
 
             const subject = `SYSLIS - NOUVELLE DEMANDE DE QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Une nouvelle demande de QR code(s) a été enregistrée par ${utilisateur.fullname}.</p>
                 <ul>
@@ -554,16 +532,14 @@ const faireDemandeQr = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...superviseurs, ...imprimeurs, ...generateurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
-
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...generateurs, ...imprimeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
         } catch (mailError) {
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
@@ -785,43 +761,28 @@ const uploadDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleImpression = await prisma.user_roles.findMany({
+                where: { role_id: 17 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
+            // NOTE: les livreurs (role 18) ne sont pas notifiés de la génération.
 
-        const roleImpression = await prisma.user_roles.findMany({
-            where: {
-                role_id: 17,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleLivraison = await prisma.user_roles.findMany({
-            where: {
-                role_id: 18,
-            },
-            include: {
-                users: true,
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const imprimeurs = roleImpression.map(us => us.users)
-        const livreurs = roleLivraison.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const imprimeurs = roleImpression.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - QR CODE(S) GÉNÉNÉRÉ(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Les QR Codes de la demande ${demande.id} ont été générés par ${utilisateur.fullname}.</p>
                 <ul>
@@ -841,27 +802,17 @@ const uploadDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            // for (const livreur of livreurs) {
-            //     await sendMail({
-            //         to: livreur.email,
-            //         subject,
-            //         html,
-            //     });
-            // }
-            for (const imprimeur of imprimeurs) {
-                await sendMail({
-                    to: imprimeur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...imprimeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Génération QR Code éffectué avec succès ! ")
@@ -991,43 +942,32 @@ const impressionDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleLivraison = await prisma.user_roles.findMany({
+                where: { role_id: 18 },
+                include: { users: true }
+            })
+            const roleGenerateur = await prisma.user_roles.findMany({
+                where: { role_id: 16 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleGenerateur = await prisma.user_roles.findMany({
-            where: {
-                role_id: 16,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleLivraison = await prisma.user_roles.findMany({
-            where: {
-                role_id: 18,
-            },
-            include: {
-                users: true,
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const generateurs = roleGenerateur.map(us => us.users)
-        const livreurs = roleLivraison.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const livreurs = roleLivraison.map(us => us.users.email)
+            const generateurs = roleGenerateur.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((livreurs && livreurs.length > 0) || (generateurs && generateurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - IMPRESSION QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Les QR Codes de la demande ${demande.id} ont été imprimés par ${utilisateur.fullname}.</p>
                 <ul>
@@ -1046,27 +986,17 @@ const impressionDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const livreur of livreurs) {
-                await sendMail({
-                    to: livreur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const generateur of generateurs) {
-                await sendMail({
-                    to: generateur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...livreurs, ...generateurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Impression QR Code éffectuée avec succès ! ")
@@ -1158,34 +1088,27 @@ const livraisonDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleReception = await prisma.user_roles.findMany({
+                where: { role_id: 19 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleReception = await prisma.user_roles.findMany({
-            where: {
-                role_id: 19,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const recepteurs = roleReception.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const recepteurs = roleReception.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((recepteurs && recepteurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - LIVRAISON QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Les QR Codes de la demande ${demande.id} ont été livrés par ${utilisateur.fullname}.</p>
                 <ul>
@@ -1204,20 +1127,17 @@ const livraisonDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const recepteur of recepteurs) {
-                await sendMail({
-                    to: recepteur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...recepteurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Livraison QR Code éffectuée avec succès ! ")
@@ -1339,34 +1259,27 @@ const receptionDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleLivraison = await prisma.user_roles.findMany({
+                where: { role_id: 18 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleLivraison = await prisma.user_roles.findMany({
-            where: {
-                role_id: 18,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const livreurs = roleLivraison.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const livreurs = roleLivraison.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - RECEPTION QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Les QR Codes de la demande ${demande.id} ont été réceptionnés par ${utilisateur.fullname}.</p>
                 <ul>
@@ -1385,20 +1298,17 @@ const receptionDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const livreur of livreurs) {
-                await sendMail({
-                    to: livreur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("QR Codes réceptionnés avec succès ! ")
@@ -1558,46 +1468,32 @@ const modifyDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleGenerateur = await prisma.user_roles.findMany({
+                where: { role_id: 16 },
+                include: { users: true }
+            })
+            const roleImpression = await prisma.user_roles.findMany({
+                where: { role_id: 17 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleGenerateur = await prisma.user_roles.findMany({
-            where: {
-                role_id: 16,
-            },
-            include: {
-                users: true
-            }
-        })
+            const generateurs = roleGenerateur.map(us => us.users.email)
+            const imprimeurs = roleImpression.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        const roleImpression = await prisma.user_roles.findMany({
-            where: {
-                role_id: 17,
-            },
-            include: {
-                users: true
-            }
-        })
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${updatedDemandeQr.demande.id}`;
 
-        const generateurs = roleGenerateur.map(us => us.users)
-        const imprimeurs = roleImpression.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
-
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${updatedDemandeQr.demande.id}`;
-
-        if ((generateurs && generateurs.length > 0) || (imprimeurs && imprimeurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - MODIFICATION DEMANDE DE QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>la demande de QR code(s) ${updatedDemandeQr.demande.id} a été modifiée.</p>
                 <ul>
@@ -1617,27 +1513,17 @@ const modifyDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const generateur of generateurs) {
-                await sendMail({
-                    to: generateur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const imprimeur of imprimeurs) {
-                await sendMail({
-                    to: imprimeur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...generateurs, ...imprimeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Demande modifiée avec succès ! ")
@@ -1739,41 +1625,27 @@ const cancelDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const roleGenerateur = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 16,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 16 },
+                include: { users: true }
             })
-
             const roleImpression = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 17,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 17 },
+                include: { users: true }
             })
-
             const roleSupervision = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 22,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 22 },
+                include: { users: true }
             })
 
-            const generateurs = roleGenerateur.map(us => us.users)
-            const imprimeurs = roleImpression.map(us => us.users)
-            const superviseurs = roleSupervision.map(us => us.users)
+            const generateurs = roleGenerateur.map(us => us.users.email)
+            const imprimeurs = roleImpression.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
             const subject = `SYSLIS - ANNULATION DEMANDE DE QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
                 <p>Commentaire : <strong>${messageCancel}</strong</p>
@@ -1783,16 +1655,14 @@ const cancelDemandeQr = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...generateurs, ...imprimeurs, ...superviseurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
-
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...generateurs, ...imprimeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
         } catch (mailError) {
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
@@ -1889,34 +1759,27 @@ const regularisationLivraisonDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleReception = await prisma.user_roles.findMany({
+                where: { role_id: 19 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleReception = await prisma.user_roles.findMany({
-            where: {
-                role_id: 19,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const recepteurs = roleReception.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const recepteurs = roleReception.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((recepteurs && recepteurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - REGULARISATION LIVRAISON QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Une livraison régularisée pour la demande ${demande.id} de QR Code(s) a été faite.</p>
                 <ul>
@@ -1935,20 +1798,17 @@ const regularisationLivraisonDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const recepteur of recepteurs) {
-                await sendMail({
-                    to: recepteur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...recepteurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Livraison régularisée de QR Code éffectuée avec succès ! ")
@@ -2073,34 +1933,27 @@ const regularisationReceptionDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+        try {
+            const roleLivraison = await prisma.user_roles.findMany({
+                where: { role_id: 18 },
+                include: { users: true }
+            })
+            const roleSupervision = await prisma.user_roles.findMany({
+                where: { role_id: 22 },
+                include: { users: true }
+            })
 
-        const roleLivraison = await prisma.user_roles.findMany({
-            where: {
-                role_id: 18,
-            },
-            include: {
-                users: true
-            }
-        })
-        const roleSupervision = await prisma.user_roles.findMany({
-            where: {
-                role_id: 22,
-            },
-            include: {
-                users: true
-            }
-        })
-        const livreurs = roleLivraison.map(us => us.users)
-        const superviseurs = roleSupervision.map(us => us.users)
+            const livreurs = roleLivraison.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
-        let commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
 
-        const url = GENERAL_URL
-        let link = `${url}/demande-qr-details/${demande.id}`;
+            const url = GENERAL_URL
+            const link = `${url}/demande-qr-details/${demande.id}`;
 
-        if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length > 0)) {
             const subject = `SYSLIS - REGULARISATION RECEPTION QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>Une réception régularisée de la demande ${demande.id} de QR CODE(S) a été faite.</p>
                 <ul>
@@ -2119,20 +1972,17 @@ const regularisationReceptionDemandeQr = async (req, res) => {
                 <br><br>
                 <p>Green - Pay vous remercie.</p>
             `;
-            for (const livreur of livreurs) {
-                await sendMail({
-                    to: livreur.email,
-                    subject,
-                    html,
-                });
-            }
-            for (const superviseur of superviseurs) {
-                await sendMail({
-                    to: superviseur.email,
-                    subject,
-                    html,
-                });
-            }
+
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi des mails :", mailError);
         }
 
         console.log("Réception régularisée de QR Codes effectuée avec succès !")
@@ -3020,31 +2870,22 @@ const suspendreDemandeQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const roleDemandeur = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 15,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 15 },
+                include: { users: true }
             })
-
             const roleSupervision = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 22,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 22 },
+                include: { users: true }
             })
 
-            const demandeurs = roleDemandeur.map(us => us.users)
-            const superviseurs = roleSupervision.map(us => us.users)
+            const demandeurs = roleDemandeur.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
             const subject = `SYSLIS - SUSPENSION DEMANDE DE QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>La demande de QR code(s) ${demande.id} a été suspendue par ${utilisateur.fullname}.</p>
                 <p>Commentaire : <strong>${messageSuspension}</strong></p>
@@ -3053,16 +2894,14 @@ const suspendreDemandeQr = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...demandeurs, ...superviseurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
-
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...demandeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
         } catch (mailError) {
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }
@@ -3146,31 +2985,22 @@ const annulationSuspensionQr = async (req, res) => {
         })
 
         /*****************          GESTION MAIL             *****************/
-
+        // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
         try {
             const roleDemandeur = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 15,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 15 },
+                include: { users: true }
             })
-
             const roleSupervision = await prisma.user_roles.findMany({
-                where: {
-                    role_id: 22,
-                },
-                include: {
-                    users: true
-                }
+                where: { role_id: 22 },
+                include: { users: true }
             })
 
-            const demandeurs = roleDemandeur.map(us => us.users)
-            const superviseurs = roleSupervision.map(us => us.users)
+            const demandeurs = roleDemandeur.map(us => us.users.email)
+            const superviseurs = roleSupervision.map(us => us.users.email)
 
             const subject = `SYSLIS - ANNULATION SUSPENSION DEMANDE DE QR CODE(S)`;
-            let html = `
+            const html = `
                 <p>Bonjour,</p>
                 <p>La suspension de la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
                 <p><strong>La demande reprend son statut initial.</strong></p>
@@ -3179,16 +3009,14 @@ const annulationSuspensionQr = async (req, res) => {
                 <p>Green - Pay vous remercie.</p>
             `;
 
-            const destinataires = [...demandeurs, ...superviseurs];
-            for (const destinataire of destinataires) {
-                if (!destinataire?.email) continue;
-                await sendMail({
-                    to: destinataire.email,
-                    subject,
-                    html,
-                });
-            }
-
+            // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+            const destinataires = [...new Set([...demandeurs, ...superviseurs].filter(Boolean))];
+            await sendMail({
+                to: configEmail,
+                bcc: destinataires,
+                subject,
+                html,
+            });
         } catch (mailError) {
             console.error("Erreur lors de l'envoi des mails :", mailError);
         }

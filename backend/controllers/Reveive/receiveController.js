@@ -1,6 +1,9 @@
 const TEST_ENV = require("../../utils/consts")
 const prisma = require('../../prisma/client');
 const cloudinary = require("../../config/clouddinaryConifg");
+const sendMail = require("../../utils/emailSender");
+
+const configEmail = process.env.NODEMAILER_USER
 
 // baseUrl est l'addresse du site de livraison
 const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";
@@ -187,33 +190,23 @@ const createValidation = async (req, res) => {
     })
 
     /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
+      const roleLivraison = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
+      const superviseurs = supervisionRole.map(us => us.users.email)
+      const livreurs = roleLivraison.map(us => us.users.email)
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
-    const superviseurs = supervisionRole.map(us => us.users)
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    const roleLivraison = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    const livreurs = roleLivraison.map(us => us.users)
-
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    const sendMail = require("../../utils/emailSender");
-
-    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
       const subject = `SYSLIS - RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
@@ -236,22 +229,16 @@ const createValidation = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Réception effectuée avec succès !")
@@ -422,48 +409,36 @@ const returnDelivery = async (req, res) => {
 
 
     /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      let produitsLivre = livraison.produitsLivre
 
+      const produits = typeof produitsLivre === "string"
+        ? JSON.parse(produitsLivre)
+        : produitsLivre;
 
+      const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
+        where: {
+          id_type_livraison: livraison.type_livraison_id
+        }
+      })
+      let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-    let produitsLivre = livraison.produitsLivre
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
+      const roleLivraison = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
+      const superviseurs = supervisionRole.map(us => us.users.email)
+      const livreurs = roleLivraison.map(us => us.users.email)
 
-    const produits = typeof produitsLivre === "string"
-      ? JSON.parse(produitsLivre)
-      : produitsLivre;
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
+      const commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
 
-    const typeLivraison = await prisma.type_livraison_commerciale.findUnique({
-      where: {
-        id_type_livraison: livraison.type_livraison_id
-      }
-    })
-    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
-
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
-    const superviseurs = supervisionRole.map(us => us.users)
-
-    const roleLivraison = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    const livreurs = roleLivraison.map(us => us.users)
-
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-    let commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
-    const sendMail = require("../../utils/emailSender");
-
-    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
       const subject = `SYSLIS - RETOUR DE LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
@@ -486,22 +461,16 @@ const returnDelivery = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json({
@@ -782,40 +751,41 @@ const returnDemandeDelivery = async (req, res) => {
       data: { demande_livree: false },
     })
 
-    const livraisonProduits = await prisma.livraison.findUnique({
-      where: {
-        id_livraison: parseInt(livraison_id)
+    /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonProduits = await prisma.livraison.findUnique({
+        where: {
+          id_livraison: parseInt(livraison_id)
+        }
+      });
+
+      const produits = typeof livraisonProduits.produitsLivre === "string"
+        ? JSON.parse(livraisonProduits.produitsLivre)
+        : livraisonProduits.produitsLivre;
+
+      let livraisonTypeName = ''
+      switch (type_livraison_id) {
+        case 8:
+          livraisonTypeName = 'CHARGEUR (TPE décommissionné RI NOK)';
+          break;
       }
-    });
 
-    const produits = typeof livraisonProduits.produitsLivre === "string"
-      ? JSON.parse(livraisonProduits.produitsLivre)
-      : livraisonProduits.produitsLivre;
+      // const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";
+      // const localUrl = "http://localhost:5173"
+      const url = GENERAL_URL
+      let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
+      if (type_livraison_id == 8) {
+        deliveryLink = `${url}/formulaire-chargeur-decom/${livraison.id_livraison}`;
+      }
 
-    let livraisonTypeName = ''
-    switch (type_livraison_id) {
-      case 8:
-        livraisonTypeName = 'CHARGEUR (TPE décommissionné RI NOK)';
-        break;
-    }
+      const livreursUsers = await prisma.users.findMany({
+        where: {
+          role_id: livraison_role,
+        },
+      });
+      const livreurs = livreursUsers.map(us => us.email)
 
-    // const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";
-    // const localUrl = "http://localhost:5173"
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-    if (type_livraison_id == 8) {
-      deliveryLink = `${url}/formulaire-chargeur-decom/${livraison.id_livraison}`;
-    }
-
-    // Fonction de génération de mail
-    const sendMail = require("../../utils/emailSender");
-    const livreurs = await prisma.users.findMany({
-      where: {
-        role_id: livraison_role,
-      },
-    });
-    if (livreurs && livreurs.length > 0) {
-      // 2. Prepare email content
       const subject = `SYSLIS - LIVRAISON RETOURNÉE ${livraisonTypeName}`;
       const html = `
       <p>Bonjour,</p>
@@ -837,15 +807,16 @@ const returnDemandeDelivery = async (req, res) => {
       <p>Green - Pay vous remercie.</p>
     `;
 
-      // 3. Send email to each receiver
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json({ message: "Livraison retournée avec succès." });;

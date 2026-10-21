@@ -7,6 +7,7 @@ const cloudinary = require("../../config/clouddinaryConifg");
 const { type } = require("os");
 const { sign } = require("crypto");
 const sendMail = require("../../utils/emailSender");
+const configEmail = process.env.NODEMAILER_USER
 const JSZip = require("jszip");
 const ExcelJS = require("exceljs");
 const { allowedNodeEnvironmentFlags } = require("process");
@@ -193,39 +194,30 @@ const regReception = async (req, res) => {
     })
 
     /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const produitsLivre = livraison.produitsLivre
+      const produits = typeof produitsLivre === "string"
+        ? JSON.parse(produitsLivre)
+        : produitsLivre;
 
-    let produitsLivre = livraison.produitsLivre
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
+      const roleLivraison = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
 
-    const produits = typeof produitsLivre === "string"
-      ? JSON.parse(produitsLivre)
-      : produitsLivre;
+      const superviseurs = supervisionRole.map(us => us.users.email)
+      const livreurs = roleLivraison.map(us => us.users.email)
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
-    const superviseurs = supervisionRole.map(us => us.users)
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    const roleLivraison = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    const livreurs = roleLivraison.map(us => us.users)
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    const sendMail = require("../../utils/emailSender");
-
-    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
       const subject = `SYSLIS - REGULARISATION RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
@@ -248,22 +240,16 @@ const regReception = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log('Réception effectuée avec succès !')
@@ -460,66 +446,30 @@ const deliver = async (req, res) => {
     })
 
     /******************************** GESTION DES MAILS  ***********************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
-
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(service_recepteur)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      // NOTE: les requêtes "recepteurs" (role_recepteur / rôle 2) et "service" ont été retirées :
+      // elles n'étaient utilisées que par l'envoi commenté ci-dessous. Les ré-ajouter ici si besoin.
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const service_users = userService.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    let serviceDemandeur = service.nom_service.toUpperCase();
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `SYSLIS - NOUVELLE LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
@@ -542,22 +492,14 @@ const deliver = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
 
       // for (const recepteur of recepteurs) {
       //   await sendMail({
@@ -566,6 +508,8 @@ const deliver = async (req, res) => {
       //     html,
       //   });
       // }
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     res.status(201).json({
@@ -706,104 +650,61 @@ const regLivraison = async (req, res) => {
     })
 
     /******************************** GESTION DES MAILS  ***********************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
-
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(service_recepteur)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
+      // NOTE: les requêtes "recepteurs" (role_recepteur / rôle 2) et "service" ont été retirées :
+      // elles étaient récupérées mais jamais utilisées dans l'envoi. Les ré-ajouter ici si besoin.
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      const service_users = userService.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    let serviceDemandeur = service.nom_service.toUpperCase();
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
+      const subject = `SYSLIS - REGULARISATION LIVRAISON (${livraisonTypeName})`;
+      const html = `
+        <p>Bonjour,</p>
+        <p>Une régularisation de livraison a été enregistrée.</p>
+        <ul>
+          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Nombre de produits:</strong> ${produits.length}</li>
+        </ul>
+        <br>
+          <p>Commentaire : ${commentaire_mail}<p>
+        <br>
+        <p>Retrouvez la livraison à ce lien : 
+          <span>
+            <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+              Cliquez ici !
+            </a>
+          </span>
+        </p>
+        <br><br>
+        <p>Green - Pay vous remercie.</p>
+      `;
 
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    const subject = `SYSLIS - REGULARISATION LIVRAISON (${livraisonTypeName})`;
-    const html = `
-      <p>Bonjour,</p>
-      <p>Une régularisation de livraison a été enregistrée.</p>
-      <ul>
-        <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
-        <li><strong>Nombre de produits:</strong> ${produits.length}</li>
-      </ul>
-      <br>
-        <p>Commentaire : ${commentaire_mail}<p>
-      <br>
-      <p>Retrouvez la livraison à ce lien : 
-        <span>
-          <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-            Cliquez ici !
-          </a>
-        </span>
-      </p>
-      <br><br>
-      <p>Green - Pay vous remercie.</p>
-    `;
-
-    if (service_users && service_users.length > 0) {
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-    }
-    if (superviseurs && superviseurs.length > 0) {
-      for (const superviseur of superviseurs) {
-        await sendMail({
-          to: superviseur.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Livraison enregistrée avec succès")
@@ -1020,68 +921,30 @@ const updateLivraison = async (req, res) => {
     })
 
 
-    /********************************       GESTION DES MAILS       ***********************************/
+    /******************************** GESTION DES MAILS  ***********************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
 
-
-    let livraisonTypeName = typeLivraison.nom_type_livraison.toUpperCase();
-
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(service_recepteur)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
+      // NOTE: les requêtes "recepteurs" (role_recepteur / rôle 2) et "service" ont été retirées :
+      // elles étaient récupérées mais jamais utilisées dans l'envoi. Les ré-ajouter ici si besoin.
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      const service_users = userService.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    let serviceDemandeur = service.nom_service.toUpperCase();
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/formulaire/${livraison.updated.id_livraison}`;
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/formulaire/${livraison.updated.id_livraison}`;
-
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `SYSLIS - MODIFICATION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
@@ -1104,13 +967,15 @@ const updateLivraison = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+
       // for (const recepteur of recepteurs) {
       //   await sendMail({
       //     to: recepteur.email,
@@ -1118,15 +983,8 @@ const updateLivraison = async (req, res) => {
       //     html,
       //   });
       // }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(200).json({
@@ -1374,48 +1232,34 @@ const deliverStock = async (req, res) => {
 
 
     // *********** GESTION DES MAILS ************
+    // NOTE: les envois de ce bloc sont actuellement désactivés (commentés).
+    // Le bloc est tout de même isolé : une erreur ici ne doit pas annuler la livraison déjà enregistrée.
+    try {
+      const piece = await prisma.items.findUnique({
+        where: { id_piece: parseInt(type_livraison_id) }
+      });
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(service_reception) }
+      })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_reception) },
+        include: { users: true }
+      })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 12 },
+        include: { users: true }
+      })
+      const recepteurs = userRole.map(us => us.users)
+      const service_users = userService.map(us => us.users)
 
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: parseInt(type_livraison_id)
-      }
-    });
+      const livraisonTypeName = piece.nom_piece.toUpperCase();
+      const serviceReception = service.nom_service.toUpperCase();
+      const quantiteProduits = quantite
+      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(service_reception)
-      }
-    })
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/demande-details/${demande_id}`;
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_reception)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 12
-      },
-      include: {
-        users: true
-      }
-    })
-    let recepteurs = userRole.map(us => us.users)
-    const service_users = userService.map(us => us.users)
-
-    let livraisonTypeName = piece.nom_piece.toUpperCase();
-    let serviceReception = service.nom_service.toUpperCase();
-    let quantiteProduits = quantite
-    let commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
-    const url = GENERAL_URL
-    const deliveryLink = `${url}/demande-details/${demande_id}`;
-
-    if ((recepteurs && recepteurs.length > 0) || (service_users && service_users.length > 0)) {
       const subject = `SYSLIS - NOUVELLE LIVRAISON ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
@@ -1453,6 +1297,8 @@ const deliverStock = async (req, res) => {
       //     html,
       //   });
       // }
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     res.status(201).json({
@@ -1599,33 +1445,26 @@ const receiveStock = async (req, res) => {
 
 
     // *********** GESTION DES MAILS ************
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(livraison.Livraisons.service_id) }
+      })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
 
+      const livreurs = userRole.map(us => us.users.email)
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(livraison.Livraisons.service_id)
-      }
-    })
+      const livraisonTypeName = piece.nom_piece.toUpperCase();
+      const quantiteProduits = livraison.Livraisons.quantite_livraison
+      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
+      const serviceReception = service.nom_service.toUpperCase();
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    let livreurs = userRole.map(us => us.users)
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/demande-details/${livraison.demande_id}`;
 
-    let livraisonTypeName = piece.nom_piece.toUpperCase();
-    let quantiteProduits = livraison.Livraisons.quantite_livraison
-    let commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-    let serviceReception = service.nom_service.toUpperCase();
-
-    const url = GENERAL_URL
-    const deliveryLink = `${url}/demande-details/${livraison.demande_id}`;
-
-    if ((livreurs && livreurs.length > 0)) {
       const subject = `SYSLIS - RECEPTION STOCK ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
@@ -1649,13 +1488,16 @@ const receiveStock = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json(newReception);
@@ -1881,48 +1723,34 @@ const updateDeliveryStock = async (req, res) => {
 
 
     // *********** GESTION DES MAILS ************
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const piece = await prisma.stock_dt.findUnique({
+        where: { id_piece: parseInt(type_livraison_id) }
+      });
+      const service = await prisma.services.findUnique({
+        where: { id: parseInt(service_reception) }
+      })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_reception) },
+        include: { users: true }
+      })
+      const userRole = await prisma.user_roles.findMany({
+        where: { role_id: 12 },
+        include: { users: true }
+      })
 
-    const piece = await prisma.stock_dt.findUnique({
-      where: {
-        id_piece: parseInt(type_livraison_id)
-      }
-    });
+      const recepteurs = userRole.map(us => us.users.email)
+      const service_users = userService.map(us => us.users.email)
 
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(service_reception)
-      }
-    })
+      const livraisonTypeName = piece.nom_piece.toUpperCase();
+      const serviceReception = service.nom_service.toUpperCase();
+      const quantiteProduits = quantite
+      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
 
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_reception)
-      },
-      include: {
-        users: true
-      }
-    })
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/demande-details/${updated.demande_id}`;
 
-    const userRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 12
-      },
-      include: {
-        users: true
-      }
-    })
-    let recepteurs = userRole.map(us => us.users)
-    const service_users = userService.map(us => us.users)
-
-    let livraisonTypeName = piece.nom_piece.toUpperCase();
-    let serviceReception = service.nom_service.toUpperCase();
-    let quantiteProduits = quantite
-    let commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
-    const url = GENERAL_URL
-    const deliveryLink = `${url}/demande-details/${updated.demande_id}`;
-
-    if ((recepteurs && recepteurs.length > 0) || (service_users && service_users.length > 0)) {
       const subject = `SYSLIS - MODIFICATION LIVRAISON ${livraisonTypeName}`;
       const html = `
         <p>Bonjour,</p>
@@ -1946,20 +1774,16 @@ const updateDeliveryStock = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const recepteur of recepteurs) {
-        await sendMail({
-          to: recepteur.email,
-          subject,
-          html,
-        });
-      }
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...recepteurs, ...service_users].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(200).json(updated);
@@ -2462,68 +2286,37 @@ const makeRemplacement = async (req, res) => {
     })
 
     /******************************** GESTION DES MAILS  ***********************************/
-
-    const ancienModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(ancien_model)
-      }
-    })
-    const nouveModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(nouveau_model)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const ancienModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(ancien_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const nouveModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(nouveau_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
+      })
+      const recepteursRole = await prisma.user_roles.findMany({
+        where: { role_id: role_recepteur ? parseInt(role_recepteur) : 2 },
+        include: { users: true }
+      })
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const service_users = userService.map(us => us.users.email)
+      const recepteurs = recepteursRole.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
 
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `SYSLIS - NOUVEAU REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
@@ -2547,29 +2340,16 @@ const makeRemplacement = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-      for (const recepteur of recepteurs) {
-        await sendMail({
-          to: recepteur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...recepteurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     res.status(201).json({
@@ -2734,50 +2514,37 @@ const validateRemplacement = async (req, res) => {
     })
 
     /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const ancienModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(remplacement.old_model_id) }
+      })
+      const nouveModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(remplacement.new_model_id) }
+      })
 
-    const ancienModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(remplacement.old_model_id)
-      }
-    })
-    const nouveModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(remplacement.new_model_id)
-      }
-    })
+      const produitsLivre = remplacement.details_remplacement
+      const produits = typeof produitsLivre === "string"
+        ? JSON.parse(produitsLivre)
+        : produitsLivre;
 
-    let produitsLivre = remplacement.details_remplacement
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
+      const roleLivraison = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
 
-    const produits = typeof produitsLivre === "string"
-      ? JSON.parse(produitsLivre)
-      : produitsLivre;
+      const superviseurs = supervisionRole.map(us => us.users.email)
+      const livreurs = roleLivraison.map(us => us.users.email)
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
-    const superviseurs = supervisionRole.map(us => us.users)
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
-    const roleLivraison = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    const livreurs = roleLivraison.map(us => us.users)
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
-    let commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    const sendMail = require("../../utils/emailSender");
-
-    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
       const subject = `SYSLIS - VALIDATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
@@ -2801,22 +2568,16 @@ const validateRemplacement = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Remplacement validé avec succès !")
@@ -3472,68 +3233,37 @@ const updateRemplacement = async (req, res) => {
     })
 
     /******************************** GESTION DES MAILS  ***********************************/
-
-    const ancienModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(ancien_model)
-      }
-    })
-    const nouveModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(nouveau_model)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const ancienModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(ancien_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const nouveModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(nouveau_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
+      })
+      const recepteursRole = await prisma.user_roles.findMany({
+        where: { role_id: role_recepteur ? parseInt(role_recepteur) : 2 },
+        include: { users: true }
+      })
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const service_users = userService.map(us => us.users.email)
+      const recepteurs = recepteursRole.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${newRemplacement.nouveauRemplacement.id}`;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/remplacement-details/${newRemplacement.nouveauRemplacement.id}`;
 
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `SYSLIS - MODIFICATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
@@ -3557,29 +3287,16 @@ const updateRemplacement = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-      for (const recepteur of recepteurs) {
-        await sendMail({
-          to: recepteur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...recepteurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     console.log("Remplacement modifié avec succès")
@@ -3642,51 +3359,33 @@ const returnRemplacement = async (req, res) => {
     });
 
     /******************************* GESTION DES MAILS  *******************************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const ancienModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(remplacement.old_model_id) }
+      })
+      const nouveModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(remplacement.new_model_id) }
+      })
+      // NOTE: le parsing de "produitsLivre" a été retiré : il n'était pas utilisé dans le mail (quantité = remplacement.quantite).
 
-    const ancienModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(remplacement.old_model_id)
-      }
-    })
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
+      const roleLivraison = await prisma.user_roles.findMany({
+        where: { role_id: 1 },
+        include: { users: true }
+      })
 
-    const nouveModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(remplacement.new_model_id)
-      }
-    })
+      const superviseurs = supervisionRole.map(us => us.users.email)
+      const livreurs = roleLivraison.map(us => us.users.email)
 
-    let produitsLivre = remplacement.produitsLivre
+      const commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
 
-    const produits = typeof produitsLivre === "string"
-      ? JSON.parse(produitsLivre)
-      : produitsLivre;
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
-    const superviseurs = supervisionRole.map(us => us.users)
-
-    const roleLivraison = await prisma.user_roles.findMany({
-      where: {
-        role_id: 1
-      },
-      include: {
-        users: true
-      }
-    })
-    const livreurs = roleLivraison.map(us => us.users)
-
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
-    let commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
-    const sendMail = require("../../utils/emailSender");
-
-    if ((livreurs && livreurs.length > 0) || (superviseurs && superviseurs.length)) {
       const subject = `SYSLIS - RETOUR DE REMPLACEMENT`;
       const html = `
         <p>Bonjour,</p>
@@ -3710,22 +3409,16 @@ const returnRemplacement = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const livreur of livreurs) {
-        await sendMail({
-          to: livreur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...livreurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json({
@@ -4147,68 +3840,37 @@ const regRemplacement = async (req, res) => {
     })
 
     /******************************** GESTION DES MAILS  ***********************************/
-
-    const ancienModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(ancien_model)
-      }
-    })
-    const nouveModel = await prisma.model_piece.findUnique({
-      where: {
-        id_model: parseInt(nouveau_model)
-      }
-    })
-
-    const userService = await prisma.user_services.findMany({
-      where: {
-        service_id: parseInt(service_recepteur)
-      },
-      include: {
-        users: true
-      }
-    })
-
-    let recepteurs
-    if (role_recepteur) {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: parseInt(role_recepteur)
-        },
-        include: {
-          users: true
-        }
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const ancienModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(ancien_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    } else {
-      const userRole = await prisma.user_roles.findMany({
-        where: {
-          role_id: 2
-        },
-        include: {
-          users: true
-        }
+      const nouveModel = await prisma.model_piece.findUnique({
+        where: { id_model: parseInt(nouveau_model) }
       })
-      recepteurs = userRole.map(us => us.users)
-    }
 
-    const supervisionRole = await prisma.user_roles.findMany({
-      where: {
-        role_id: 13
-      },
-      include: {
-        users: true
-      }
-    })
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: parseInt(service_recepteur) },
+        include: { users: true }
+      })
+      const recepteursRole = await prisma.user_roles.findMany({
+        where: { role_id: role_recepteur ? parseInt(role_recepteur) : 2 },
+        include: { users: true }
+      })
+      const supervisionRole = await prisma.user_roles.findMany({
+        where: { role_id: 13 },
+        include: { users: true }
+      })
 
-    const service_users = userService.map(us => us.users)
-    const superviseurs = supervisionRole.map(us => us.users)
+      const service_users = userService.map(us => us.users.email)
+      const recepteurs = recepteursRole.map(us => us.users.email)
+      const superviseurs = supervisionRole.map(us => us.users.email)
 
-    const url = GENERAL_URL
-    let deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
 
+      const url = GENERAL_URL
+      const deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
 
-    const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-    if ((service_users && service_users.length > 0) || (recepteurs && recepteurs.length > 0)) {
       const subject = `SYSLIS - REGULARISATION REMPLACEMENT TPE`;
       const html = `
         <p>Bonjour,</p>
@@ -4232,29 +3894,16 @@ const regRemplacement = async (req, res) => {
         <p>Green - Pay vous remercie.</p>
       `;
 
-      for (const service_user of service_users) {
-        await sendMail({
-          to: service_user.email,
-          subject,
-          html,
-        });
-      }
-      for (const recepteur of recepteurs) {
-        await sendMail({
-          to: recepteur.email,
-          subject,
-          html,
-        });
-      }
-      if (superviseurs) {
-        for (const superviseur of superviseurs) {
-          await sendMail({
-            to: superviseur.email,
-            subject,
-            html,
-          });
-        }
-      }
+      // Dédoublonnage : un utilisateur peut avoir plusieurs rôles
+      const destinataires = [...new Set([...service_users, ...recepteurs, ...superviseurs].filter(Boolean))];
+      await sendMail({
+        to: configEmail,
+        bcc: destinataires,
+        subject,
+        html,
+      });
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     res.status(201).json({
