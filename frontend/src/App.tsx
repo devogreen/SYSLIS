@@ -282,6 +282,9 @@ import LiaisonTpePiecesForm from "./pages/Forms/MaintenanceTpeForms/LiaisonTpePi
 // @ts-ignore
 import DashboardChargeurs from "./pages/Dashboards/DashboardChargeurs"
 
+// @ts-ignore
+import DashboardParcTpe from "./pages/Dashboards/DashboardParcTpe"
+
 export default function App() {
   return (
     <>
@@ -299,6 +302,7 @@ export default function App() {
               <Route path="/sous-dashboard-qrcode" element={<SousDashboardQRcode />} />
               <Route path="/sous-dashboard-mvt-stock" element={<SousDashboardStocks />} />
               <Route path="/sous-dashboard-chargeurs" element={<DashboardChargeurs />} />
+              <Route path="/dashboard-parc-tpe" element={<DashboardParcTpe />} />
               {/* Others Page */}
               <Route path="/profile" element={<UserProfiles />} />
               <Route path="/calendar" element={<Calendar />} />
