@@ -129,9 +129,9 @@ export class Decom {
         }
     }
 
-    async downloadTemplateDecom() {
+    async downloadTemplateDecom(payload) {
         try {
-            const response = await axios.get(`${urlBase}/api/decom/downloadTemplateDecom`, {
+            const response = await axios.get(`${urlBase}/api/decom/downloadTemplateDecom`,{payload}, {
                 responseType: "blob",
             })
             return response;

@@ -3088,13 +3088,66 @@ const extractDecom = async (req, res) => {
 // Fonction pour télécharger le template de décommissionnement au format Excel.
 const downloadTemplateDecom = async (req, res) => {
     try {
-        const templateFile = 'template_decommissionnement.xlsx';
-        const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
-        return res.download(filePath);
+        const {
+            userId
+        } = req.body
 
-        console.log('Template de décommissionnement téléchargé avec succès !');
+        const utilisateur = await prisma.users.findUnique({
+            where: {
+                id_user: parseInt(userId),
+            },
+            select: {
+                id_user: true,
+                username: true,
+            },
+        })
+
+        const workbook = new ExcelJS.Workbook();
+
+        const decomSheet = workbook.addWorksheet('Décommissionnement');
+        const decomHeaders = [
+            "Point Marchand",
+            "Caisse",
+            "S/N",
+            "Chargeur",
+            "Carte SIM",
+            "Carton",   
+            "Etat",
+            "RI",
+            "Banque",
+            "TID GIM",
+            "TID ECOBANK",
+            "Commercial",
+            "Commentaire",
+        ];
+        const decomHeaderRow = decomSheet.addRow(decomHeaders);
+        decomHeaderRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=decom_template.xlsx`
+        );
+        res.send(buffer);
+
+        console.log(`Template de décommissionnement téléchargé avec succès par ${utilisateur.username} ID ${utilisateur.id_user} !`);
+
     } catch (error) {
-        console.error('Erreur downloadTemplateDecom:', error);
+        console.error('Erreur de téléchargement du template de décommissionnement:', error);
         return res.status(500).json({ message: 'Erreur serveur' });
     }
 }

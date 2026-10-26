@@ -21,6 +21,7 @@ import JSZip from "jszip";
 import { Decom } from "../../../backend/decom/decom.js";
 import { useParams, Link, useNavigate } from "react-router";
 import { GestionTpe } from "../../../backend/gestionTpe/GestionTpe.js";
+import { Stock } from "../../../backend/stock/Stock.js";
 
 export default function DecomInputs() {
 
@@ -28,6 +29,7 @@ export default function DecomInputs() {
     const userId = localStorage.getItem('id');
     const decomData = new Decom()
     const gestionTpeData = new GestionTpe()
+    const stockData = new Stock()
     const navigate = useNavigate()
 
     const LISTE_KEY = "listeDecom";
@@ -91,6 +93,13 @@ export default function DecomInputs() {
 
     const [loadingExtract, setLoadindExtract] = useState(false)
 
+    const [hasCarteSim, setHasCarteSim] = useState(false)
+
+    const [modelList, setModelList] = useState([])
+    const [optionsModels, setOptionsModels] = useState([])
+    const [selectedModel, setSelectedModel] = useState(null)
+    const [nomModel, setNomModel] = useState('')
+    const [hasModel, setHasModel] = useState(false)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -98,6 +107,14 @@ export default function DecomInputs() {
                 setLoadingData(true)
                 const merchants = await merchantsData.findMerchant()
                 setMerchantList(merchants)
+
+                const models = await stockData.getAllModels()
+                setModelList(models)
+                const optionsModels = models.map((model) => ({
+                    value: model.id,
+                    label: model.nom_model,
+                }))
+                setOptionsModels(optionsModels)
 
             } catch (error) {
                 console.error('Error fetching data ', error)
@@ -124,6 +141,9 @@ export default function DecomInputs() {
         setTerminalCaisse('')
         setStatutTpe('')
         setTerminalSN(value)
+        setSelectedModel(null)
+        setNomModel('')
+        setHasModel(false)
         try {
             const pointMarchand = merchantList.find((terminal) => {
                 return terminal.SERIAL_NUMBER == value
@@ -143,6 +163,11 @@ export default function DecomInputs() {
                     const statutTpe = tpeData.statut_tpe.statut
                     setStatutTpe(statutTpe)
                     setIdStatutTpe(tpeData.statut_tpe.id)
+                    if (tpeData.model_id) {
+                        setSelectedModel(tpeData.model_id)
+                        setHasModel(true)
+                        setNomModel(tpeData.model_piece.nom_model)
+                    }
                 } else {
                     setStatutTpe('non enregistré')
                 }
@@ -151,6 +176,16 @@ export default function DecomInputs() {
             console.log('Error fetching data ', error)
         } finally {
             setLoadingFunction(false)
+        }
+    }
+
+    const handleSelectModel = (value) => {
+        setSelectedModel(value)
+        const model = modelList.find((item) => {
+            return item.id == value
+        })
+        if (model) {
+            setNomModel(model.nom_model)
         }
     }
 
@@ -241,7 +276,10 @@ export default function DecomInputs() {
     const handleDownloadTemplate = async () => {
         setLoadingDownloadTemplate(true)
         try {
-            const response = await decomData.downloadTemplateDecom();
+            const payload = {
+                userId: Number(userId)
+            }
+            const response = await decomData.downloadTemplateDecom(payload);
 
             const url = window.URL.createObjectURL(response.data);
 
@@ -328,6 +366,10 @@ export default function DecomInputs() {
             setErrorAjout("S/N invalide !")
             return false
         }
+        if (!selectedModel) {
+            setErrorAjout("Modèle du terminal invalide !")
+            return false
+        }
         const isDuplicate = listeDecom.some(item => {
             return item.terminalSN == terminalSN
         });
@@ -390,6 +432,7 @@ export default function DecomInputs() {
         const newElement = {
             pointMarchand: terminalName,
             terminalSN,
+            modele: selectedModel,
             caisse: terminalCaisse,
             banque: terminalBanque,
             idGim,
@@ -399,6 +442,9 @@ export default function DecomInputs() {
             nomCommercial,
             commentaire,
             ancienStatut: Number(idStatutTpe),
+            hasChargeur,
+            hasCarton,
+            hasCarteSim,
         }
         setListeDecom((prev) => [...prev, newElement]);
         setQuantiteTotale((prev) => prev + 1);
@@ -605,6 +651,41 @@ export default function DecomInputs() {
                                                                         }
                                                                     }} />
                                                                 </div>
+                                                                {loadingFunction ? (
+                                                                    <>
+                                                                        <div>
+                                                                            <ProgressSpinner style={{ width: '10px', height: '10px' }} strokeWidth="8" animationDuration=".5s" />
+                                                                        </div>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        {hasModel ? (
+                                                                            <>
+                                                                                <div>
+                                                                                    <Label className="text-gray-400">Modèle <span className="text-gray-700">*</span></Label>
+                                                                                    <Input
+                                                                                        type="text"
+                                                                                        value={nomModel}
+                                                                                        disabled
+                                                                                        className="dark:bg-dark-900"
+                                                                                    />
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div>
+                                                                                    <Label>Modèle <span className="text-red-700">*</span></Label>
+                                                                                    <Select
+                                                                                        options={optionsModels}
+                                                                                        placeholder="Choisir une option"
+                                                                                        onChange={handleSelectModel}
+                                                                                        className="dark:bg-dark-900"
+                                                                                    />
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </>
+                                                                )}
                                                                 <div>
                                                                     <Label>Point Marchand <span className="text-red-700">*</span></Label>
                                                                     <Input type="text" id="input"
@@ -719,6 +800,18 @@ export default function DecomInputs() {
                                                                                             }
                                                                                         }}
                                                                                         label="Chargeur" />
+                                                                                </div>
+                                                                                <div className="flex items-center gap-3 my-2">
+                                                                                    <Checkbox
+                                                                                        checked={hasCarteSim}
+                                                                                        onChange={(e) => {
+                                                                                            if (hasCarteSim) {
+                                                                                                setHasCarteSim(false)
+                                                                                            } else {
+                                                                                                setHasCarteSim(true)
+                                                                                            }
+                                                                                        }}
+                                                                                        label="Carte SIM" />
                                                                                 </div>
                                                                             </div>
                                                                             <div>

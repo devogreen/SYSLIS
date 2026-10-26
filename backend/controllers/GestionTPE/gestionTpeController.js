@@ -431,6 +431,7 @@ const getTpe = async (req, res) => {
                 users_create_tpe: true,
                 users_update_tpe: true,
                 statut_tpe: true,
+                model_piece: true,
                 history_tpe: {
                     include: {
                         users: true,
@@ -532,6 +533,7 @@ const exportTpeToExcel = async (req, res) => {
         res.status(500).json({ message: "Erreur lors de l'exportation des TPE vers Excel", error });
     }
 }
+
 module.exports = {
     getParcTpe,
     getAllStatut,

@@ -215,6 +215,7 @@ model model_piece {
   stock_piece                                           stock_piece[]
   stocks                                                stocks[]
   parc_tpe                                              parc_tpe[]
+  sn_decom                                              sn_decom[]
 }
 
 model mouvement_stock {
@@ -832,34 +833,34 @@ model type_paiement {
 }
 
 model form_decom {
-  id               Int                @id @default(autoincrement())
-  form_id          Int
-  statut           forms_decom_statut
-  quantite         Int?
-  liste_decom      String?            @db.LongText
-  is_remplacement   Boolean            @default(false)
-  forms            forms              @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
-  reception_decom  reception_decom[]
-  sn_decom         sn_decom[]
-  retour_technique retour_technique[]
-  retour_decom     retour_decom[]
-  sn_rebut         sn_rebut[]
-  tpe_a_reparer    tpe_a_reparer[]
+  id                    Int                     @id @default(autoincrement())
+  form_id               Int
+  statut                forms_decom_statut
+  quantite              Int?
+  liste_decom           String?                 @db.LongText
+  is_remplacement       Boolean                 @default(false)
+  forms                 forms                   @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "form_decom_ibfk_1")
+  reception_decom       reception_decom[]
+  sn_decom              sn_decom[]
+  retour_technique      retour_technique[]
+  retour_decom          retour_decom[]
+  sn_rebut              sn_rebut[]
+  tpe_a_reparer         tpe_a_reparer[]
   livraison_param_decom livraison_param_decom[]
-  reparation_tpe   reparation_tpe[]
+  reparation_tpe        reparation_tpe[]
 
   @@index([form_id], map: "form_id")
 }
 
 model reception_decom {
-  id         Int                  @id @default(autoincrement())
-  form_id    Int
-  decom_id   Int
-  type       reception_decom_type
-  quantite   Int?
-  liste_decom   String?              @db.LongText
-  forms      forms                @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_1")
-  form_decom form_decom           @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_2")
+  id          Int                  @id @default(autoincrement())
+  form_id     Int
+  decom_id    Int
+  type        reception_decom_type
+  quantite    Int?
+  liste_decom String?              @db.LongText
+  forms       forms                @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_1")
+  form_decom  form_decom           @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "reception_decom_ibfk_2")
 
   @@index([form_id], map: "form_id")
   @@index([decom_id], map: "decom_id")
@@ -868,6 +869,7 @@ model reception_decom {
 model sn_decom {
   id                  Int                @id @default(autoincrement())
   serial_number       String             @db.VarChar(255)
+  model_id            Int?
   point_marchand      String?            @db.VarChar(255)
   tid_gim             String?            @db.VarChar(255)
   tid_ecobank         String?            @db.VarChar(255)
@@ -876,6 +878,9 @@ model sn_decom {
   ri                  String?            @db.VarChar(255)
   commercial          String?            @db.VarChar(255)
   commentaire         String?            @db.VarChar(255)
+  has_carte_sim       Boolean            @default(false)
+  has_chargeur        Boolean            @default(false)
+  has_carton          Boolean            @default(false)
   created_at          DateTime           @default(now()) @db.DateTime(0)
   is_deleted          Boolean            @default(false)
   decom_id            Int
@@ -887,10 +892,12 @@ model sn_decom {
   is_ok               Boolean            @default(true)
   statut              sn_decom_statut    @default(checking)
   form_decom          form_decom         @relation(fields: [decom_id], references: [id], onDelete: Restrict, map: "sn_decom_ibfk_1")
+  model_piece         model_piece?       @relation(fields: [model_id], references: [id_model], onDelete: Restrict, map: "sn_decom_ibfk_2")
   retour_technique    retour_technique[]
 
   @@index([serial_number], map: "serial_number")
   @@index([decom_id], map: "decom_id")
+  @@index([model_id], map: "model_id")
 }
 
 model retour_technique {
@@ -930,22 +937,22 @@ model retour_decom {
 }
 
 model forms {
-  id                            Int                       @id @default(autoincrement())
+  id                            Int                         @id @default(autoincrement())
   type                          forms_type
   created_by                    Int
   updated_by                    Int?
-  created_at                    DateTime                  @default(now()) @db.DateTime(0)
-  updated_at                    DateTime?                 @db.DateTime(0)
-  last_modified_at              DateTime                  @default(now()) @db.DateTime(0)
-  nom_user                      String?                   @db.VarChar(255)
-  commentaire                   String?                   @db.LongText
-  is_deleted                    Boolean                   @default(false)
-  is_reg                        Boolean                   @default(false)
+  created_at                    DateTime                    @default(now()) @db.DateTime(0)
+  updated_at                    DateTime?                   @db.DateTime(0)
+  last_modified_at              DateTime                    @default(now()) @db.DateTime(0)
+  nom_user                      String?                     @db.VarChar(255)
+  commentaire                   String?                     @db.LongText
+  is_deleted                    Boolean                     @default(false)
+  is_reg                        Boolean                     @default(false)
   demande_qr                    demande_qr[]
   demandes                      demandes[]
   form_signatures               form_signatures[]
-  users_forms_created_byTousers users                     @relation("forms_created_byTousers", fields: [created_by], references: [id_user], map: "forms_ibfk_1")
-  users_forms_updated_byTousers users?                    @relation("forms_updated_byTousers", fields: [updated_by], references: [id_user], onUpdate: Restrict, map: "forms_ibfk_2")
+  users_forms_created_byTousers users                       @relation("forms_created_byTousers", fields: [created_by], references: [id_user], map: "forms_ibfk_1")
+  users_forms_updated_byTousers users?                      @relation("forms_updated_byTousers", fields: [updated_by], references: [id_user], onUpdate: Restrict, map: "forms_ibfk_2")
   generation_qr                 generation_qr[]
   impression_qr                 impression_qr[]
   livraison                     livraison[]
