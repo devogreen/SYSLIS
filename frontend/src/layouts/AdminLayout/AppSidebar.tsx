@@ -113,7 +113,7 @@ const navItems: NavItem[] = [
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
       { name: "Livraison TPE param", path: "/livraison-param-decom", roles: [25], pro: false },
       { name: "Livraisons TPE param", path: "/livraisons-param-decom", roles: [25, 26, 36], pro: false },
-      // { name: "Tableau de bord", path: "/decom-dashboard", roles: [23, 24, 25, 26, 36], pro: false },
+      { name: "Tableau de bord", path: "/decom-dashboard", roles: [23, 24, 25, 26, 36], pro: false },
     ],
   },
   {

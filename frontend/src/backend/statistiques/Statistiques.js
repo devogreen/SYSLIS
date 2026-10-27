@@ -95,6 +95,16 @@ export class Statistiques {
         }
     }
 
+    // ----- Tableau de bord décom -----
+    async getEntonnoirDecom(params) {
+        try {
+            const response = await axios.get(`${urlBase}/api/stats/decom/entonnoir`, { params })
+            return response.data;
+        } catch (error) {
+            throw error.response?.data ?? error
+        }
+    }
+
     async getModelesParcTpe() {
         try {
             const response = await axios.get(`${urlBase}/api/stats/parc-tpe/modeles`)

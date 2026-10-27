@@ -10,6 +10,7 @@ const {
     getRepartitionParcTpe, getFluxParcTpe, getTpesParStatut,
     getDureesParcTpe, getTimelineTpe, getModelesParcTpe, getParcoursTpe,
 } = require("../controllers/Stats/parcTpeStatsController")
+const { getEntonnoirDecom } = require("../controllers/Stats/decomStatsController")
 
 router.get("/nbdeliverycharger/:id", nbdeliverycharger)
 router.get("/nbexitcharger/:id", nbexitcharger)
@@ -33,5 +34,8 @@ router.get("/parc-tpe/durees", getDureesParcTpe);
 router.get("/parc-tpe/timeline/:sn", getTimelineTpe);
 router.get("/parc-tpe/modeles", getModelesParcTpe);
 router.get("/parc-tpe/parcours", getParcoursTpe);
+
+// Tableau de bord des décommissionnements
+router.get("/decom/entonnoir", getEntonnoirDecom);
 
 module.exports = router
