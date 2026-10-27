@@ -285,6 +285,9 @@ import DashboardChargeurs from "./pages/Dashboards/DashboardChargeurs"
 // @ts-ignore
 import DashboardParcTpe from "./pages/Dashboards/DashboardParcTpe"
 
+// @ts-ignore
+import DecomDashboard from "./pages/DecomPages/DecomDashboard"
+
 export default function App() {
   return (
     <>
@@ -372,6 +375,7 @@ export default function App() {
               <Route path="/validation-transmission-decom/:id" element={<ValidationTransmissionDecomForm />} />
               <Route path="/regularisation-decom" element={<RegDecomForm />} />
               <Route path="/reg-verification-decom/:id" element={<RegVerificationForm />} />
+              <Route path="/decom-dashboard" element={<DecomDashboard />} />
 
               {/* Gestion des rebuts */}
               <Route path="/nouveau-rebut" element={<RebutForm />} />
