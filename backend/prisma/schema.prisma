@@ -1036,6 +1036,8 @@ model history_tpe {
   @@index([stock_id], map: "stock_id")
   @@index([id_tpe], map: "id_tpe")
   @@index([statut_id], map: "statut_id")
+  @@index([statut_id, created_at], map: "history_tpe_statut_date_idx")
+  @@index([id_tpe, created_at], map: "history_tpe_tpe_date_idx")
 }
 
 model statut_tpe {

@@ -37,11 +37,12 @@ const navItems: NavItem[] = [
     name: "Dashboard",
     subItems: [
       { name: "Semaine en cours", path: "/", pro: false },
-      { name: " Livraison TPE", path: "/sous-dashboard-livraison", roles: [1], pro: false },
-      { name: " Remplacement TPE", path: "/sous-dashboard-remplacement", roles: [1], pro: false },
-      { name: " QRcode", path: "/sous-dashboard-qrcode", pro: false },
-      { name: " Mouvement Stock", path: "/sous-dashboard-mvt-stock", pro: false },
+      { name: "Livraison TPE", path: "/sous-dashboard-livraison", roles: [1], pro: false },
+      { name: "Remplacement TPE", path: "/sous-dashboard-remplacement", roles: [1], pro: false },
+      { name: "QRcode", path: "/sous-dashboard-qrcode", pro: false },
+      { name: "Mouvement Stock", path: "/sous-dashboard-mvt-stock", pro: false },
       { name: "Sorties Chargeurs", path: "/sous-dashboard-chargeurs", roles: [1], pro: false },
+      { name: "Statistiques Parc TPE", path: "/dashboard-parc-tpe", pro: false },
       // { name: " Dashboard Stock", path: "/sous-dashboard-stock", pro: false },
       // { name: "Données Générales", path:"/donnees-generales", pro: false},
       // { name: "Statistiques livraisons", path: "/statistiques-livraisons", pro: false },
@@ -112,6 +113,7 @@ const navItems: NavItem[] = [
       { name: "Tous les décomm", path: "/tous-les-decommissionnements", roles: [23, 24, 25, 26], pro: false },
       { name: "Livraison TPE param", path: "/livraison-param-decom", roles: [25], pro: false },
       { name: "Livraisons TPE param", path: "/livraisons-param-decom", roles: [25, 26, 36], pro: false },
+      { name: "Tableau de bord", path: "/decom-dashboard", roles: [23, 24, 25, 26, 36], pro: false },
     ],
   },
   {
@@ -455,7 +457,7 @@ const AppSidebar: React.FC = () => {
         </nav>
         <div className="text-center text-xs font-bold text-gray-500">
           <span>
-            v1.37.2
+            v1.39.0
           </span>
         </div>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}

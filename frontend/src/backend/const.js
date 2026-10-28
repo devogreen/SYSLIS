@@ -6,5 +6,4 @@ const urlServer = '/api'
 
 const urlBase = urlLocal
 
-
 export default urlBase
