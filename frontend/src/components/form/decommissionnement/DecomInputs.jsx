@@ -279,7 +279,7 @@ export default function DecomInputs() {
             const payload = {
                 userId: Number(userId)
             }
-            const response = await decomData.downloadTemplateDecom(payload);
+            const response = await decomData.downloadTemplateDecom(userId);
 
             const url = window.URL.createObjectURL(response.data);
 

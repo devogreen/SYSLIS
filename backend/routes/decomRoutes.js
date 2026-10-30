@@ -40,7 +40,7 @@ router.put('/verifyDecom/:id', verifyDecom);
 router.put('/clotureDecom/:id', clotureDecom);
 router.put('/regVerifyDecom/:id', regVerifyDecom);
 router.post('/extractDecom', uploadExcel.single('file'), extractDecom);
-router.get('/downloadTemplateDecom', downloadTemplateDecom);
+router.post('/downloadTemplateDecom', downloadTemplateDecom);
 router.get('/exportOneDecomToExcel/:id', exportOneDecomToExcel);
 router.get('/getAllTpeRepare', getAllTpeRepare);
 // router.put('/reparerTpe/:sn', reparerTpe);
