@@ -74,6 +74,15 @@ export class GestionTpe {
             throw error.response.data
         }
     }
+    // Vérifie une liste de S/N : existence dans le parc + statut actuel
+    async checkSerials(serials) {
+        try {
+            const response = await axios.post(`${urlBase}/api/gestion-tpe/checkSerials`, { serials })
+            return response.data.data;
+        } catch (error) {
+            throw error.response?.data || { message: "Erreur lors de la vérification des S/N" };
+        }
+    }
     async exportTpeToExcel(payload) {
         try {
             const response = await axios.post(`${urlBase}/api/gestion-tpe/exportTpeToExcel`, payload, {

@@ -532,7 +532,69 @@ const exportTpeToExcel = async (req, res) => {
         res.status(500).json({ message: "Erreur lors de l'exportation des TPE vers Excel", error });
     }
 }
+// POST /api/gestion-tpe/checkSerials
+// Body : { serials: ["3210040373", ...] }
+// Vérification générique d'une liste de S/N contre le parc : existence + statut actuel.
+// Réutilisable par toute page qui importe une liste de S/N (livraisons, rebuts, réparations...).
+const MAX_CHECK_SERIALS = 5000
+const checkSerials = async (req, res) => {
+    try {
+        const { serials } = req.body
+        const liste = typeof serials === "string" ? JSON.parse(serials) : serials
+
+        if (!Array.isArray(liste) || liste.length === 0) {
+            return res.status(400).json({ message: "Liste de S/N vide ou invalide." });
+        }
+
+        // Normalisation + dédoublonnage (insensible à la casse / aux espaces)
+        const parCle = new Map()
+        liste.forEach((item) => {
+            const sn = normalize(item)?.replace(/\s+/g, '')
+            if (sn) parCle.set(sn.toUpperCase(), sn)
+        })
+        const serialsUniques = [...parCle.values()]
+
+        if (serialsUniques.length > MAX_CHECK_SERIALS) {
+            return res.status(400).json({ message: `Maximum ${MAX_CHECK_SERIALS} S/N par vérification.` });
+        }
+
+        const tpes = await prisma.parc_tpe.findMany({
+            where: { serial_number: { in: serialsUniques } },
+            select: {
+                id: true,
+                serial_number: true,
+                statut_id: true,
+                is_deleted: true,
+                statut_tpe: { select: { statut: true } },
+                model_piece: { select: { nom_model: true } },
+            },
+        })
+        const tpeParCle = new Map(tpes.map((t) => [String(t.serial_number).toUpperCase(), t]))
+
+        const resultat = serialsUniques.map((sn) => {
+            const tpe = tpeParCle.get(sn.toUpperCase())
+            if (!tpe || tpe.is_deleted) {
+                return { sn, exists: false, tpe_id: null, statut_id: null, statut: null, modele: null }
+            }
+            return {
+                sn: tpe.serial_number,
+                exists: true,
+                tpe_id: tpe.id,
+                statut_id: tpe.statut_id,
+                statut: tpe.statut_tpe?.statut || null,
+                modele: tpe.model_piece?.nom_model || null,
+            }
+        })
+
+        return res.status(200).json({ message: "Vérification effectuée", data: resultat });
+    } catch (error) {
+        console.error("Erreur lors de la vérification des S/N :", error);
+        return res.status(500).json({ message: "Erreur lors de la vérification des S/N", error });
+    }
+}
+
 module.exports = {
+    checkSerials,
     getParcTpe,
     getAllStatut,
     getTpeHistory,
