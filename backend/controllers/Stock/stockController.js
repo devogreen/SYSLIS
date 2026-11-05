@@ -6,6 +6,12 @@ const cloudinary = require("../../config/clouddinaryConifg");
 const multer = require("multer")
 const upload = multer({ storage: multer.memoryStorage() });
 const ExcelJS = require("exceljs");
+const {
+  verifierModelesExistants,
+  getTpesParc,
+  trouverConflitsModele,
+  creerTpesEtCompleterModeles,
+} = require("../../utils/parcTpeModele");
 const { text } = require("stream/consumers");
 
 // baseUrl est l'addresse du site de livraison
@@ -1617,6 +1623,22 @@ const setStockSn = async (req, res) => {
 
     const serials = [...serialSet];
 
+    // Terminaux : modèle obligatoire, existant, et identique à celui déjà enregistré au parc (vérifié AVANT la création du stock)
+    if (piece && piece.type.toUpperCase() == "TERMINAL") {
+      const itemsModele = serials.map((serial) => ({ serial, modelId: model_id }))
+      const erreurModele = await verifierModelesExistants(prisma, itemsModele, { obligatoire: true })
+      if (erreurModele) {
+        console.error(erreurModele)
+        return res.status(400).json({ message: erreurModele });
+      }
+      const conflits = trouverConflitsModele(itemsModele, await getTpesParc(prisma, serials))
+      if (conflits.length > 0) {
+        const message = `Le modèle choisi ne correspond pas au modèle enregistré au parc pour : ${conflits.map((c) => `${c.serial} (${String(c.nomModeleParc || c.modeleParc).toUpperCase()})`).join(", ")}`
+        console.error(message)
+        return res.status(400).json({ message });
+      }
+    }
+
     const dateAction = new Date();
 
     // const creationStock = await prisma.$transaction(async (tx) => {
@@ -1949,16 +1971,12 @@ const setStockSn = async (req, res) => {
     let allTpes = null
     if (piece.type.toUpperCase() == "TERMINAL") {
 
-      // 1. Create only missing ones
-      await prisma.parc_tpe.createMany({
-        data: serials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 1,
-        })),
-        skipDuplicates: true
+      // 1. Créer les TPE manquants avec le modèle du stock, compléter le modèle des TPE existants sans modèle
+      await creerTpesEtCompleterModeles(prisma, serials.map((serial) => ({ serial, modelId: model_id })), {
+        created_by: utilisateur.id_user,
+        created_at: dateAction,
+        last_modified_at: dateAction,
+        statut_id: 1,
       });
 
       // 2. Update ALL (existing + newly created)

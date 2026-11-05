@@ -4,6 +4,7 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
+const { toModelId, creerTpesEtCompleterModeles } = require("../../utils/parcTpeModele");
 const cloudinary = require("../../config/clouddinaryConifg");
 const { get } = require("http");
 const { urlToHttpOptions } = require("url");
@@ -1973,57 +1974,61 @@ const livraisonDemande = async (req, res) => {
     }
 
     /*****************      GESTION PARC TPE       *****************/
-    let = allTpes = null
+    let allTpes = null
     if (piece.type.toUpperCase() == 'TERMINAL' && (typeMouvement == 1 || typeMouvement == 2 || typeMouvement == 4) && detailsMouvement.listeSn && detailsMouvement.listeSn.length > 0) {
       // Récupérer les SN de la liste
       const serials = mouvementStock.serialNumbers.map(item => item.serial_number);
 
-      // 1. Create only missing ones
-      await prisma.parc_tpe.createMany({
-        data: serials.map(item => ({
-          serial_number: item,
+      // Écritures du parc regroupées dans une transaction (statut + modèle + historique)
+      allTpes = await prisma.$transaction(async (tx) => {
+        // 1. Créer les TPE manquants avec le modèle du stock (serial_numbers.model_id, sinon celui de la demande)
+        //    et compléter le modèle des TPE existants sans modèle
+        await creerTpesEtCompleterModeles(tx, mouvementStock.serialNumbers.map((item) => ({
+          serial: item.serial_number,
+          modelId: toModelId(item.model_id) || toModelId(modelPiece),
+        })), {
           created_by: user.id_user,
           created_at: dateAction,
           last_modified_at: dateAction,
           statut_id: 4,
-        })),
-        skipDuplicates: true
-      });
+        });
 
-      // 2. Update ALL (existing + newly created)
-      await prisma.parc_tpe.updateMany({
-        where: {
-          serial_number: { in: serials }
-        },
-        data: {
-          updated_by: user.id_user,
-          updated_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 4,
-        }
-      });
+        // 2. Update ALL (existing + newly created)
+        await tx.parc_tpe.updateMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          data: {
+            updated_by: user.id_user,
+            updated_at: dateAction,
+            last_modified_at: dateAction,
+            statut_id: 4,
+          }
+        });
 
-      // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-      allTpes = await prisma.parc_tpe.findMany({
-        where: {
-          serial_number: { in: serials }
-        },
-        select: {
-          id: true,
-          serial_number: true
-        }
-      });
+        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
+        const tpes = await tx.parc_tpe.findMany({
+          where: {
+            serial_number: { in: serials }
+          },
+          select: {
+            id: true,
+            serial_number: true
+          }
+        });
 
-      // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-      await prisma.history_tpe.createMany({
-        data: allTpes.map(tpe => ({
-          id_tpe: tpe.id,
-          created_by: user.id_user,
-          created_at: dateAction,
-          statut_id: 4,
-          form_id: mouvementStock.livraisonForm.id,
-        }))
-      });
+        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
+        await tx.history_tpe.createMany({
+          data: tpes.map(tpe => ({
+            id_tpe: tpe.id,
+            created_by: user.id_user,
+            created_at: dateAction,
+            statut_id: 4,
+            form_id: mouvementStock.livraisonForm.id,
+          }))
+        });
+        return tpes
+      })
     }
 
     /****************    GESTION DES MAILS     *****************/

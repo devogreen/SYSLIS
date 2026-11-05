@@ -8,6 +8,7 @@ const {
     downloadTemplateRebut, extractRebut, demandeRebut, getAllDemandesRebut, getAllTpeRebuts,
     getTpeRebutDetails, changeLotPiece, recupPieceFonc, getAllPiecesRebut, getOneDemandeRebut,
     updateDemandeRebut, validateDemandeRebut, cloturerDemandeRebut,
+    getStocksPourRebut, createStockFromRebut,
 } = require("../controllers/Rebut/rebutController")
 
 router.post('/downloadTemplateRebut', downloadTemplateRebut);
@@ -21,6 +22,8 @@ router.get('/getTpeRebutDetails/:id', getTpeRebutDetails);
 router.put('/changeLotPiece/:id', changeLotPiece)
 router.put('/recupPieceFonc/:id', recupPieceFonc)
 router.get('/getAllPiecesRebut', getAllPiecesRebut);
+router.get('/getStocksPourRebut/:pieceId/:modelId/:userId', getStocksPourRebut);
+router.post('/createStockFromRebut', createStockFromRebut);
 router.get('/getOneDemandeRebut/:id', getOneDemandeRebut);
 router.put('/updateDemandeRebut/:id', uploadAll.fields([
     { name: 'files' },

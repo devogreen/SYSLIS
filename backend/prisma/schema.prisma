@@ -249,6 +249,7 @@ model mouvement_stock {
   type_mouvement_stock                                   type_mouvement_stock? @relation(fields: [mouvement], references: [id], onDelete: Restrict, map: "mouvement_stock_ibfk_7")
   stocks                                                 stocks?               @relation(fields: [stock_id], references: [id], map: "mouvement_stock_ibfk_8")
   users                                                  users?                @relation(fields: [created_by], references: [id_user], map: "mouvement_stock_ibfk_9")
+  mouvement_piece_rebut                                  mouvement_piece_rebut[]
 
   @@index([demande_id], map: "demande_id")
   @@index([formulaire_id], map: "formulaire_id")
@@ -1154,24 +1155,27 @@ model history_piece_rebut {
 }
 
 model mouvement_piece_rebut {
-  id          Int                          @id @default(autoincrement())
-  rebut_id    Int
-  piece_id    Int
-  snap_id     Int
-  mouvement   type_mouvement_piece_rebut
-  ancien_etat etat_piece_rebut?
-  nouvel_etat etat_piece_rebut
-  created_at  DateTime                     @default(now()) @db.DateTime(0)
-  created_by  Int
-  sn_rebut    sn_rebut                     @relation(fields: [rebut_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
-  items       items                        @relation(fields: [piece_id], references: [id_piece], map: "mouvement_piece_rebut_ibfk_2")
-  users       users                        @relation(fields: [created_by], references: [id_user], map: "mouvement_piece_rebut_ibfk_3")
-  snap        history_snapshot_piece_rebut @relation(fields: [snap_id], references: [id], map: "mouvement_piece_rebut_ibfk_4")
+  id                 Int                          @id @default(autoincrement())
+  rebut_id           Int
+  piece_id           Int
+  snap_id            Int
+  mouvement          type_mouvement_piece_rebut
+  ancien_etat        etat_piece_rebut?
+  nouvel_etat        etat_piece_rebut
+  created_at         DateTime                     @default(now()) @db.DateTime(0)
+  created_by         Int
+  mouvement_stock_id Int?
+  sn_rebut           sn_rebut                     @relation(fields: [rebut_id], references: [id], map: "mouvement_piece_rebut_ibfk_1")
+  items              items                        @relation(fields: [piece_id], references: [id_piece], map: "mouvement_piece_rebut_ibfk_2")
+  users              users                        @relation(fields: [created_by], references: [id_user], map: "mouvement_piece_rebut_ibfk_3")
+  snap               history_snapshot_piece_rebut @relation(fields: [snap_id], references: [id], map: "mouvement_piece_rebut_ibfk_4")
+  mouvement_stock    mouvement_stock?             @relation(fields: [mouvement_stock_id], references: [id], onDelete: SetNull, map: "mouvement_piece_rebut_ibfk_5")
 
   @@index([rebut_id], map: "rebut_id")
   @@index([piece_id], map: "piece_id")
   @@index([created_by], map: "created_by")
   @@index([snap_id], map: "snap_id")
+  @@index([mouvement_stock_id], map: "mouvement_stock_id")
 }
 
 model tpe_a_reparer {
@@ -1576,6 +1580,7 @@ enum etat_piece_rebut {
   fonctionnel
   defectueux
   utilise
+  en_stock
 }
 
 enum type_mouvement_piece_rebut {

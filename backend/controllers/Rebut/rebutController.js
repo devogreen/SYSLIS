@@ -4,6 +4,7 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
+const { toModelId, verifierModelesExistants, creerTpesEtCompleterModeles } = require("../../utils/parcTpeModele");
 const cloudinary = require("../../config/clouddinaryConifg");
 const { get } = require("http");
 const { urlToHttpOptions } = require("url");
@@ -30,6 +31,116 @@ const formatDate = (isoDate) => {
 const baseUrl = process.env.FRONTEND_BASE_URL || "https://livraisons.greenpayci.com";
 // localUrl est l'addresse en local pour les tests
 const localUrl = "http://localhost:5173"
+
+// États d'une pièce qui a quitté le lot du terminal (plus disponible au rebut)
+const ETAT_EN_STOCK = 'en_stock'
+const ETATS_PIECE_RETIREE = ['utilise', ETAT_EN_STOCK]
+
+// Erreur métier avec code HTTP, levée dans une transaction pour la faire échouer proprement
+class HttpError extends Error {
+    constructor(status, message) {
+        super(message)
+        this.status = status
+    }
+}
+
+/**
+ * Enregistre l'historique d'un changement d'état de pièces au rebut, terminal par terminal :
+ * session sn_rebut (créée si absente), snapshot de l'état complet du terminal, et mouvement_piece_rebut.
+ * À appeler dans une transaction, APRÈS la mise à jour de pieces_rebut.
+ */
+const enregistrerMouvementPiecesRebut = async (tx, {
+    snIds,
+    pieceId,
+    ancienEtat,
+    nouvelEtat,
+    typeMouvement = 'retrait',
+    userId,
+    dateAction,
+    mouvementStockId = null,
+}) => {
+    const uniqueSnIds = [...new Set(snIds)]
+    if (!uniqueSnIds.length) return []
+
+    // Dernière session rebut de chaque terminal
+    const sessions = await tx.sn_rebut.findMany({
+        where: { sn_id: { in: uniqueSnIds } },
+        orderBy: { created_at: 'desc' },
+    })
+    const sessionParSn = new Map()
+    for (const session of sessions) {
+        if (!sessionParSn.has(session.sn_id)) sessionParSn.set(session.sn_id, session)
+    }
+
+    for (const snId of uniqueSnIds) {
+        if (!sessionParSn.has(snId)) {
+            const session = await tx.sn_rebut.create({
+                data: {
+                    sn_id: snId,
+                    created_at: dateAction,
+                    last_modified_at: dateAction,
+                    created_by: userId,
+                }
+            })
+            sessionParSn.set(snId, session)
+        }
+    }
+
+    await tx.sn_rebut.updateMany({
+        where: { id: { in: [...sessionParSn.values()].map((s) => s.id) } },
+        data: {
+            last_modified_at: dateAction,
+            updated_at: dateAction,
+            updated_by: userId,
+        }
+    })
+
+    // État complet (après modification) de chaque terminal concerné
+    const piecesActuelles = await tx.pieces_rebut.findMany({
+        where: { sn_id: { in: uniqueSnIds } },
+    })
+
+    const historyData = []
+    const mouvementData = []
+    const snapshots = []
+
+    for (const snId of uniqueSnIds) {
+        const session = sessionParSn.get(snId)
+        const snapshot = await tx.history_snapshot_piece_rebut.create({
+            data: {
+                rebut_id: session.id,
+                created_by: userId,
+                created_at: dateAction,
+            }
+        })
+        snapshots.push(snapshot)
+
+        piecesActuelles
+            .filter((p) => p.sn_id === snId)
+            .forEach((p) => {
+                historyData.push({ snap_id: snapshot.id, piece_id: p.piece_id, etat: p.etat })
+            })
+
+        mouvementData.push({
+            rebut_id: session.id,
+            snap_id: snapshot.id,
+            piece_id: pieceId,
+            mouvement: typeMouvement,
+            ancien_etat: ancienEtat,
+            nouvel_etat: nouvelEtat,
+            created_by: userId,
+            created_at: dateAction,
+            mouvement_stock_id: mouvementStockId,
+        })
+    }
+
+    if (historyData.length) {
+        await tx.history_piece_rebut.createMany({ data: historyData })
+    }
+    await tx.mouvement_piece_rebut.createMany({ data: mouvementData })
+
+    return snapshots
+}
 // GENERAL_URL va être utilisée dans les mails envoyés pour pouvoir rediriger correctement l'utilisateur vers la page avec le bon lien
 // En test GENERAL_URL doit avoir la valeur de localUrl et celle de baseUrl lors du deploiement.
 let GENERAL_URL = baseUrl
@@ -613,6 +724,25 @@ const changeLotPiece = async (req, res) => {
             });
         }
 
+        // Les pièces déjà retirées du lot (utilisées ou mises en stock) ne sont plus modifiables :
+        // elles sont conservées telles quelles et ne peuvent pas redevenir fonctionnelles/défectueuses.
+        const piecesVerrouillees = await prisma.pieces_rebut.findMany({
+            where: {
+                sn_id: terminal.id,
+                etat: { in: ETATS_PIECE_RETIREE },
+            },
+        })
+        const idsVerrouilles = piecesVerrouillees.map((p) => p.piece_id)
+        const conflits = [...(piecesFonc || []), ...(pieceDef || [])].filter((pieceId) =>
+            idsVerrouilles.includes(Number(pieceId))
+        )
+        if (conflits.length) {
+            console.log("Modification impossible : pièce(s) déjà utilisée(s) ou mise(s) en stock :", conflits)
+            return res.status(400).json({
+                message: "Certaines pièces ont déjà été utilisées ou mises en stock et ne peuvent plus être modifiées."
+            });
+        }
+
         const dateAction = new Date()
 
         let rebut_session = await prisma.sn_rebut.findFirst({
@@ -687,9 +817,21 @@ const changeLotPiece = async (req, res) => {
                 })
             }
 
+            // On ne supprime que les pièces encore dans le lot (fonctionnelles / défectueuses)
             await tx.pieces_rebut.deleteMany({
-                where: { sn_id: terminal.id }
+                where: {
+                    sn_id: terminal.id,
+                    etat: { in: ['fonctionnel', 'defectueux'] },
+                }
             })
+
+            // L'historique doit refléter l'état complet du terminal, pièces verrouillées comprises
+            historyData.push(
+                ...piecesVerrouillees.map((p) => ({
+                    piece_id: p.piece_id,
+                    etat: p.etat,
+                }))
+            )
 
             if (data.length) {
 
@@ -856,6 +998,7 @@ const recupPieceFonc = async (req, res) => {
                         where: {
                             sn_id: terminal.id,
                             piece_id: piece.piece_id,
+                            etat: 'fonctionnel',
                         },
                         data: {
                             etat: piece.etat,
@@ -901,6 +1044,317 @@ const recupPieceFonc = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces fonctionnelles :", error);
+        res.status(500).json({ message: "Erreur interne", error });
+    }
+}
+
+// Fonction pour récupérer les stocks (non supprimés) d'une pièce / d'un modèle dont l'utilisateur est propriétaire ou co-propriétaire
+const getStocksPourRebut = async (req, res) => {
+    try {
+        const {
+            pieceId,
+            modelId,
+            userId,
+        } = req.params
+
+        const stocks = await prisma.stocks.findMany({
+            where: {
+                piece_id: parseInt(pieceId),
+                model_id: parseInt(modelId),
+                is_deleted: false,
+                OR: [
+                    { owner: parseInt(userId) },
+                    { stock_owners: { some: { user_id: parseInt(userId) } } },
+                ],
+            },
+            include: {
+                services: true,
+                model_piece: true,
+                items: true,
+            },
+            orderBy: { id: 'desc' },
+        })
+
+        res.status(200).json(stocks)
+    } catch (error) {
+        console.error("Erreur lors de la récupération des stocks pour le rebut :", error)
+        res.status(500).json({ message: "Erreur lors de la récupération des stocks", error })
+    }
+}
+
+// Fonction pour créer un stock (ou alimenter un stock existant) à partir des pièces fonctionnelles au rebut.
+// Les pièces sont prélevées sur les terminaux du modèle choisi (les plus anciennes d'abord) et passent à l'état 'en_stock'.
+const createStockFromRebut = async (req, res) => {
+    try {
+        const {
+            pieceId,
+            modelId,
+            quantite,
+            mode,
+            stockId,
+            serviceId,
+            codeStock,
+            motif,
+            commentaire,
+            userId,
+        } = req.body
+
+        const utilisateur = await prisma.users.findUnique({
+            where: { id_user: parseInt(userId) }
+        })
+        if (!utilisateur) {
+            console.error('Utilisateur introuvable !')
+            return res.status(404).json({ message: "Utilisateur introuvable !" });
+        }
+
+        const piece = await prisma.items.findUnique({
+            where: { id_piece: parseInt(pieceId) }
+        })
+        if (!piece || piece.is_deleted) {
+            console.error('Pièce introuvable !')
+            return res.status(404).json({ message: "Pièce introuvable !" });
+        }
+
+        const model = await prisma.model_piece.findUnique({
+            where: { id_model: parseInt(modelId) }
+        })
+        if (!model) {
+            console.error('Modèle introuvable !')
+            return res.status(404).json({ message: "Modèle introuvable !" });
+        }
+
+        const nombre = Number(quantite)
+        if (!Number.isInteger(nombre) || nombre < 1) {
+            return res.status(400).json({ message: "Quantité invalide !" });
+        }
+
+        if (!['nouveau', 'existant'].includes(mode)) {
+            return res.status(400).json({ message: "Mode invalide : choisir un nouveau stock ou un stock existant." });
+        }
+
+        if (!motif || !String(motif).trim()) {
+            return res.status(400).json({ message: "Vous devez préciser le motif !" });
+        }
+
+        const code = codeStock ? String(codeStock).trim() : ''
+        if (mode === 'nouveau') {
+            if (!serviceId) {
+                return res.status(400).json({ message: "Vous devez choisir le service !" });
+            }
+            if (!code) {
+                return res.status(400).json({ message: "Vous devez déterminer un code au stock !" });
+            }
+            const memeCode = await prisma.stocks.findFirst({
+                where: { code_stock: code, is_deleted: false }
+            })
+            if (memeCode) {
+                return res.status(400).json({ message: "Un stock du même code existe déjà !" });
+            }
+        } else if (!stockId) {
+            return res.status(400).json({ message: "Vous devez choisir le stock à alimenter !" });
+        }
+
+        const idPiece = piece.id_piece
+        const idModel = model.id_model
+        const dateAction = new Date()
+
+        const resultat = await prisma.$transaction(async (tx) => {
+            // 1. Pièces fonctionnelles disponibles pour ce modèle (FIFO)
+            const disponibles = await tx.pieces_rebut.findMany({
+                where: {
+                    piece_id: idPiece,
+                    etat: 'fonctionnel',
+                    parc_tpe: { model_id: idModel, is_deleted: false },
+                },
+                include: {
+                    parc_tpe: { select: { id: true, serial_number: true } },
+                },
+                orderBy: [{ created_at: 'asc' }, { sn_id: 'asc' }],
+                take: nombre,
+            })
+
+            if (disponibles.length < nombre) {
+                throw new HttpError(409, `Seulement ${disponibles.length} pièce(s) fonctionnelle(s) disponible(s) pour ce modèle.`)
+            }
+
+            const snIds = disponibles.map((p) => p.sn_id)
+
+            // 2. Déduction : fonctionnel -> en_stock (le filtre sur l'état empêche une double consommation)
+            const maj = await tx.pieces_rebut.updateMany({
+                where: {
+                    piece_id: idPiece,
+                    etat: 'fonctionnel',
+                    sn_id: { in: snIds },
+                },
+                data: {
+                    etat: ETAT_EN_STOCK,
+                    updated_by: utilisateur.id_user,
+                    updated_at: dateAction,
+                }
+            })
+            if (maj.count !== nombre) {
+                throw new HttpError(409, "Les pièces disponibles ont changé entre-temps, veuillez réessayer.")
+            }
+
+            const detailsBase = {
+                typeMouvement: 5,
+                quantiteMouvement: nombre,
+                source: 'rebut',
+                mode,
+                pieces: disponibles.map((p) => ({
+                    snId: p.sn_id,
+                    serialNumber: p.parc_tpe?.serial_number,
+                })),
+            }
+
+            // 3. Stock : création ou alimentation
+            let stock = null
+            let mouvement = null
+
+            if (mode === 'nouveau') {
+                stock = await tx.stocks.create({
+                    data: {
+                        code_stock: code,
+                        piece_id: idPiece,
+                        model_id: idModel,
+                        service_id: parseInt(serviceId),
+                        quantite_lot: 0,
+                        quantite_carton: 0,
+                        quantite_piece: nombre,
+                        created_at: dateAction,
+                        created_by: utilisateur.id_user,
+                        last_update: dateAction,
+                        updated_by: utilisateur.id_user,
+                        owner: utilisateur.id_user,
+                    }
+                })
+
+                await tx.stock_owners.create({
+                    data: {
+                        user_id: utilisateur.id_user,
+                        stock_id: stock.id,
+                        type: 'owner',
+                    }
+                })
+
+                const details = { ...detailsBase, stockInitialPiece: 0, stockFinalPiece: nombre }
+
+                mouvement = await tx.mouvement_stock.create({
+                    data: {
+                        type: 'entree',
+                        mouvement: 5,
+                        created_at: dateAction,
+                        stock_id: stock.id,
+                        piece_id: idPiece,
+                        service_origine: null,
+                        service_destination: stock.service_id,
+                        origine: 'Rebut',
+                        model_id: idModel,
+                        stock_initial: 0,
+                        quantite: nombre,
+                        stock_final: nombre,
+                        quantite_totale_piece: nombre,
+                        motif,
+                        commentaire,
+                        details_mouvement: JSON.stringify(details),
+                        created_by: utilisateur.id_user,
+                    }
+                })
+            } else {
+                const stockExistant = await tx.stocks.findUnique({
+                    where: { id: parseInt(stockId) },
+                    include: { stock_owners: true },
+                })
+
+                if (!stockExistant || stockExistant.is_deleted) {
+                    throw new HttpError(404, "Stock introuvable ou supprimé !")
+                }
+                if (stockExistant.piece_id !== idPiece || stockExistant.model_id !== idModel) {
+                    throw new HttpError(400, "Le stock choisi ne correspond pas à la pièce et au modèle sélectionnés.")
+                }
+                const estProprietaire = stockExistant.owner === utilisateur.id_user ||
+                    stockExistant.stock_owners.some((o) => o.user_id === utilisateur.id_user)
+                if (!estProprietaire) {
+                    throw new HttpError(403, "Vous n'êtes ni propriétaire ni co-propriétaire de ce stock.")
+                }
+
+                if (stockExistant.quantite_piece == null) {
+                    await tx.stocks.update({
+                        where: { id: stockExistant.id },
+                        data: { quantite_piece: 0 },
+                    })
+                }
+
+                // Incrément atomique : la quantité finale ne dépend pas d'une valeur lue avant la transaction
+                stock = await tx.stocks.update({
+                    where: { id: stockExistant.id },
+                    data: {
+                        quantite_piece: { increment: nombre },
+                        last_update: dateAction,
+                        updated_by: utilisateur.id_user,
+                    }
+                })
+
+                const stockFinal = stock.quantite_piece
+                const stockInitial = stockFinal - nombre
+                const details = { ...detailsBase, stockInitialPiece: stockInitial, stockFinalPiece: stockFinal }
+
+                mouvement = await tx.mouvement_stock.create({
+                    data: {
+                        type: 'entree',
+                        mouvement: 5,
+                        created_at: dateAction,
+                        stock_id: stock.id,
+                        piece_id: idPiece,
+                        service_origine: null,
+                        service_destination: stock.service_id,
+                        origine: 'Rebut',
+                        model_id: idModel,
+                        stock_initial: stockInitial,
+                        quantite: nombre,
+                        stock_final: stockFinal,
+                        quantite_totale_piece: stockFinal,
+                        motif,
+                        commentaire,
+                        details_mouvement: JSON.stringify(details),
+                        created_by: utilisateur.id_user,
+                    }
+                })
+            }
+
+            // 4. Historique des pièces au rebut, terminal par terminal, lié au mouvement de stock
+            await enregistrerMouvementPiecesRebut(tx, {
+                snIds,
+                pieceId: idPiece,
+                ancienEtat: 'fonctionnel',
+                nouvelEtat: ETAT_EN_STOCK,
+                userId: utilisateur.id_user,
+                dateAction,
+                mouvementStockId: mouvement.id,
+            })
+
+            return {
+                stock,
+                mouvement,
+                terminaux: detailsBase.pieces,
+            }
+        }, { maxWait: 10000, timeout: 60000 })
+
+        const message = mode === 'nouveau'
+            ? `Stock ${resultat.stock.code_stock} créé avec ${nombre} pièce(s) issues du rebut par ${utilisateur.username}`
+            : `${nombre} pièce(s) issues du rebut ajoutée(s) au stock ${resultat.stock.code_stock} par ${utilisateur.username}`
+
+        console.log(message)
+        res.status(201).json({
+            message,
+            data: resultat,
+        });
+    } catch (error) {
+        if (error instanceof HttpError) {
+            console.error(error.message)
+            return res.status(error.status).json({ message: error.message });
+        }
+        console.error("Erreur lors de la création du stock depuis le rebut :", error);
         res.status(500).json({ message: "Erreur interne", error });
     }
 }
@@ -1704,6 +2158,31 @@ const cloturerDemandeRebut = async (req, res) => {
 
         const serials = terminaux.map((t) => t.serial);
 
+        // Modèle de chaque TPE : listes enregistrées côté serveur (validation, puis demande), sinon celui du formulaire.
+        // Il est vérifié avant écriture ; un modèle déjà enregistré au parc n'est jamais écrasé.
+        const derniereValidation = await prisma.validation_rebut.findFirst({
+            where: { demande_id: demandeId, type: 'validation' },
+            orderBy: { id: 'desc' },
+            select: { liste_rebut: true },
+        });
+        const modelesEnregistres = new Map();
+        for (const liste of [derniereValidation?.liste_rebut, demandeRebut.liste_rebut]) {
+            if (!liste) continue;
+            for (const item of JSON.parse(liste)) {
+                const sn = String(item.terminalSN);
+                if (!modelesEnregistres.get(sn) && toModelId(item.modele)) modelesEnregistres.set(sn, toModelId(item.modele));
+            }
+        }
+        const terminauxModele = detailsValidee.map((terminal) => ({
+            serial: String(terminal.terminalSN),
+            modelId: modelesEnregistres.get(String(terminal.terminalSN)) || toModelId(terminal.modele),
+        }));
+        const erreurModele = await verifierModelesExistants(prisma, terminauxModele);
+        if (erreurModele) {
+            console.error(erreurModele);
+            return res.status(400).json({ message: erreurModele });
+        }
+
         // 3. Toutes les écritures dans UNE transaction, en séquentiel
         const result = await prisma.$transaction(async (tx) => {
 
@@ -1727,16 +2206,12 @@ const cloturerDemandeRebut = async (req, res) => {
                 }
             })
             
-            // Créer uniquement les parc_tpe manquants
-            await tx.parc_tpe.createMany({
-                data: serials.map((serial) => ({
-                    serial_number: serial,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: REBUT_STATUT_ID,
-                })),
-                skipDuplicates: true,
+            // Créer les parc_tpe manquants avec leur modèle, compléter le modèle des TPE existants sans modèle
+            await creerTpesEtCompleterModeles(tx, terminauxModele, {
+                created_by: utilisateur.id_user,
+                created_at: dateAction,
+                last_modified_at: dateAction,
+                statut_id: REBUT_STATUT_ID,
             });
 
             // Mettre TOUS les TPE (existants + nouveaux) au statut rebut
@@ -1848,6 +2323,8 @@ module.exports = {
     changeLotPiece,
     recupPieceFonc,
     getAllPiecesRebut,
+    getStocksPourRebut,
+    createStockFromRebut,
     getOneDemandeRebut,
     updateDemandeRebut,
     validateDemandeRebut,

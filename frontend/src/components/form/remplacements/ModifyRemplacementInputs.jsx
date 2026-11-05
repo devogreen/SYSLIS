@@ -84,9 +84,9 @@ export default function ModifyRemplacementInputs() {
 
   const [optionsModels, setOptionsModels] = useState([])
   const [listModels, setListModels] = useState([])
-  const [newModel, setNewModel] = useState(2)
+  const [newModel, setNewModel] = useState(null)
   const [nomNouveauModel, setNomNouveauModel] = useState('')
-  const [oldModel, setOldModel] = useState(1)
+  const [oldModel, setOldModel] = useState(null)
   const [nomAncienModel, setNomAncienModel] = useState('')
   const [ancienSN, setAncienSN] = useState('')
 
@@ -100,6 +100,11 @@ export default function ModifyRemplacementInputs() {
 
   const [statutTpeOld, setStatutTpeOld] = useState('')
   const [statutTpeNew, setStatutTpeNew] = useState('')
+  // Modèle enregistré au parc (il fait foi) : SN en cours de saisie, et SN ajoutés à la liste
+  const [modeleParcNew, setModeleParcNew] = useState(null)
+  const [modeleParcOld, setModeleParcOld] = useState(null)
+  const [modelesParcNouveaux, setModelesParcNouveaux] = useState({})
+  const [modelesParcAnciens, setModelesParcAnciens] = useState({})
 
   const banques = {
     '00343': 'BACI',
@@ -231,7 +236,27 @@ export default function ModifyRemplacementInputs() {
     terminals.filter((terminal) =>
       terminal.SERIAL_NUMBER.includes(terminalSN)) : [];
 
+  // Message d'erreur si le modèle enregistré au parc diffère du modèle choisi
+  const conflitModele = (modeleParc, modelId, libelle) => (
+    modeleParc && modelId && Number(modeleParc.id) !== Number(modelId)
+      ? `Le ${libelle} est enregistré au parc en tant que ${String(modeleParc.nom).toUpperCase()} : le modèle choisi ne correspond pas.`
+      : null
+  )
+  // SN de la liste dont le modèle au parc diffère du modèle choisi (cle = 'nouvelSN' ou 'ancienSN')
+  const snEnConflit = (modeles, cle, modelId) => Object.entries(modeles)
+    .filter(([sn, modeleParc]) => produitsLivre.some((p) => p[cle] === sn) && conflitModele(modeleParc, modelId, 'TPE'))
+    .map(([sn, modeleParc]) => `${sn} (${String(modeleParc.nom).toUpperCase()})`)
+  const messageConflits = (modeleNouveau, modeleAncien) => {
+    const nouveaux = snEnConflit(modelesParcNouveaux, 'nouvelSN', modeleNouveau)
+    const anciens = snEnConflit(modelesParcAnciens, 'ancienSN', modeleAncien)
+    const messages = []
+    if (nouveaux.length > 0) messages.push(`TPE remplaçants : ${nouveaux.join(', ')}`)
+    if (anciens.length > 0) messages.push(`TPE remplacés : ${anciens.join(', ')}`)
+    return messages.length > 0 ? `Le modèle choisi ne correspond pas au modèle enregistré au parc pour les ${messages.join(' ; ')}` : ''
+  }
+
   const ChangeNewModel = (value) => {
+    setErrorAjout(messageConflits(value, oldModel))
     console.log("Selected new value (model) : ", value)
     setNewModel(value)
     const model = listModels.find((item) => {
@@ -243,6 +268,7 @@ export default function ModifyRemplacementInputs() {
   }
 
   const ChangeOldModel = (value) => {
+    setErrorAjout(messageConflits(newModel, value))
     console.log("Selected old value (model) : ", value)
     setOldModel(value)
     const model = listModels.find((item) => {
@@ -306,6 +332,7 @@ export default function ModifyRemplacementInputs() {
   }
 
   const handleChangeSn = async (value) => {
+    setModeleParcNew(null)
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
@@ -368,6 +395,7 @@ export default function ModifyRemplacementInputs() {
         if (tpeData) {
           const statutTpe = tpeData.statut_tpe.statut
           setStatutTpeNew(statutTpe)
+          setModeleParcNew(tpeData.model_id ? { id: tpeData.model_id, nom: tpeData.model_piece?.nom_model || '' } : null)
         } else {
           setStatutTpeNew('non enregistré')
         }
@@ -378,6 +406,7 @@ export default function ModifyRemplacementInputs() {
   }
 
   const handleChangeOldSn = async (value) => {
+    setModeleParcOld(null)
     setStatutTpeOld('')
     setAncienSN(value)
     try {
@@ -386,6 +415,7 @@ export default function ModifyRemplacementInputs() {
         if (tpeData) {
           const statutTpe = tpeData.statut_tpe.statut
           setStatutTpeOld(statutTpe)
+          setModeleParcOld(tpeData.model_id ? { id: tpeData.model_id, nom: tpeData.model_piece?.nom_model || '' } : null)
         } else {
           setStatutTpeOld('non enregistré')
         }
@@ -434,6 +464,13 @@ export default function ModifyRemplacementInputs() {
 
     if (!parametrageTPE) {
       setErrorAjout("Vous devez choisir le paramétrage du TPE !")
+      return
+    }
+
+    const erreurModele = conflitModele(modeleParcNew, newModel, 'TPE remplaçant')
+      || conflitModele(modeleParcOld, oldModel, 'TPE remplacé')
+    if (erreurModele) {
+      setErrorAjout(erreurModele)
       return
     }
 
@@ -494,6 +531,15 @@ export default function ModifyRemplacementInputs() {
     setMOOVChecked(false);
     setRneChecked(false);
     setMobileMoney([]);
+
+    if (modeleParcNew) {
+      setModelesParcNouveaux((prev) => ({ ...prev, [terminalSN]: modeleParcNew }))
+    }
+    if (modeleParcOld) {
+      setModelesParcAnciens((prev) => ({ ...prev, [ancienSN]: modeleParcOld }))
+    }
+    setModeleParcNew(null)
+    setModeleParcOld(null)
 
     setErrorAjout('')
     setIsConfirmModalOpen(false)
@@ -556,20 +602,19 @@ export default function ModifyRemplacementInputs() {
         text: "Formulaire modifié avec succès",
         icon: "success"
       });
+      setProduitsLivres([])
+      setProduitsLivresTable([])
       navigate('/tous-les-remplacements');
     } catch (error) {
-      setLoadingDelivery(false)
-      console.log('error')
+      // Le formulaire est conservé pour permettre la correction (ex. modèle différent de celui du parc)
+      console.log('error', error)
       setError('Erreur lors de la génération du formulaire');
       Swal.fire({
         title: "Attention",
-        text: "Une erreur s'est produite lors de la génération du formulaire.",
+        text: error?.message || "Une erreur s'est produite lors de la génération du formulaire.",
         icon: "warning"
       });
-      navigate('/tous-les-remplacements');
     } finally {
-      setProduitsLivres([])
-      setProduitsLivresTable([])
       setLoadingDelivery(false)
     }
   }
@@ -595,6 +640,15 @@ export default function ModifyRemplacementInputs() {
   };
 
   const handleValidate = () => {
+    const conflits = messageConflits(newModel, oldModel)
+    if (conflits) {
+      Swal.fire({
+        title: "Modèle incorrect",
+        text: conflits,
+        icon: "error"
+      });
+      return;
+    }
     if (produitsLivre.length == 0) {
       Swal.fire({
         title: "Error",
@@ -652,7 +706,7 @@ export default function ModifyRemplacementInputs() {
                       <Select
                         options={optionsModels}
                         placeholder="Choisir une option"
-                        defaultValue={oldModel}
+                        defaultValue={oldModel ?? ''}
                         onChange={ChangeOldModel}
                         className="dark:bg-dark-900"
                       />
@@ -660,6 +714,9 @@ export default function ModifyRemplacementInputs() {
                     <div>
                       <Label htmlFor="input">Ancien S/N <span className="text-red-700">*</span></Label>
                       <span className="text-xs text-blue-500 text-center">{statutTpeOld}</span>
+                      {modeleParcOld && (
+                        <span className="text-xs text-gray-500 text-center ml-2">Modèle au parc : {String(modeleParcOld.nom).toUpperCase()}</span>
+                      )}
                       <Input type="text" id="input" value={ancienSN} onChange={(e) => {
                         const value = e.target.value
                         if (/^\d*$/.test(value)) {
@@ -673,7 +730,7 @@ export default function ModifyRemplacementInputs() {
                       <Label>Nouveau Model TPE <span className="text-red-700">*</span></Label>
                       <Select
                         options={optionsModels}
-                        defaultValue={newModel}
+                        defaultValue={newModel ?? ''}
                         placeholder="Choisir une option"
                         onChange={ChangeNewModel}
                         className="dark:bg-dark-900"
@@ -682,6 +739,9 @@ export default function ModifyRemplacementInputs() {
                     <div>
                       <Label htmlFor="input">Nouvel S/N <span className="text-red-700">*</span></Label>
                       <span className="text-xs text-blue-500 text-center">{statutTpeNew}</span>
+                      {modeleParcNew && (
+                        <span className="text-xs text-gray-500 text-center ml-2">Modèle au parc : {String(modeleParcNew.nom).toUpperCase()}</span>
+                      )}
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits

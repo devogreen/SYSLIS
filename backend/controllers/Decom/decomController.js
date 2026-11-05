@@ -12,6 +12,12 @@ const sendMail = require("../../utils/emailSender");
 const archiver = require("archiver");
 const ExcelJS = require("exceljs");
 const { avancerDecomApresReceptionReparation } = require("./reparationTpeController");
+const {
+    toModelId,
+    verifierModelesExistants,
+    getTpesParc,
+    creerTpesEtCompleterModeles,
+} = require("../../utils/parcTpeModele");
 
 const configEmail = process.env.NODEMAILER_USER
 
@@ -48,6 +54,30 @@ const STATUT_ATTENTE_DECOM = 8
 const STATUT_DECOM_REMPLACEMENT = 16
 const getStatutEntreeDecom = (isRemplacement) => isRemplacement ? STATUT_DECOM_REMPLACEMENT : STATUT_ATTENTE_DECOM
 
+// Vérifie que chaque TPE de la liste a un modèle existant (model_piece) et normalise item.modele en nombre.
+// Retourne un message d'erreur, ou null si tout est correct.
+const verifierModelesDecom = async (details) => {
+    if (!Array.isArray(details) || details.length === 0) {
+        return "Liste de décommissionnement vide ou invalide !"
+    }
+    const sansModele = details.find((item) => !Number(item.modele))
+    if (sansModele) {
+        return `Modèle manquant pour le TPE ${sansModele.terminalSN} !`
+    }
+    const ids = [...new Set(details.map((item) => Number(item.modele)))]
+    const modeles = await prisma.model_piece.findMany({
+        where: { id_model: { in: ids } },
+        select: { id_model: true },
+    })
+    const existants = new Set(modeles.map((m) => m.id_model))
+    const inconnu = details.find((item) => !existants.has(Number(item.modele)))
+    if (inconnu) {
+        return `Modèle invalide pour le TPE ${inconnu.terminalSN} !`
+    }
+    details.forEach((item) => { item.modele = Number(item.modele) })
+    return null
+}
+
 const faireDecom = async (req, res) => {
     try {
         const {
@@ -80,6 +110,13 @@ const faireDecom = async (req, res) => {
 
         const details = typeof listeDecom === "string" ? JSON.parse(listeDecom) : listeDecom;
 
+        // Chaque TPE doit avoir un modèle : il sera enregistré au parc lors de la validation (validationListeDecom)
+        const erreurModele = await verifierModelesDecom(details)
+        if (erreurModele) {
+            console.error(erreurModele)
+            return res.status(400).json({ message: erreurModele });
+        }
+
         let isReg = false
         let dateAction = new Date()
         const dateVer = new Date(dateDecom)
@@ -88,9 +125,8 @@ const faireDecom = async (req, res) => {
             isReg = true
         }
 
-        // Statut des TPE : attente_decom (8), ou decom_remplacement (16) si le décom est un remplacement
-        const statutEntree = getStatutEntreeDecom(toBoolean(isRemplacement))
-
+        // Le parc (parc_tpe / history_tpe) n'est pas modifié ici : les TPE sont créés / mis à jour
+        // uniquement à la validation de la liste (validationListeDecom).
         const decom = await prisma.$transaction(async (tx) => {
             const decomForm = await tx.forms.create({
                 data: {
@@ -129,111 +165,9 @@ const faireDecom = async (req, res) => {
                 })
             }
 
-            /***************        GESTION DES TPE     *****************/
-
-            let allTpes = null
-            // Récupérer les SN de la liste
-            const serials = details.map(item => item.terminalSN);
-
-            // 1. Create only missing ones
-            await tx.parc_tpe.createMany({
-                data: serials.map(item => ({
-                    serial_number: item,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: statutEntree,
-                })),
-                skipDuplicates: true
-            });
-
-            if (isReg == false) {
-                // 2. Update ALL (existing + newly created)
-                await tx.parc_tpe.updateMany({
-                    where: {
-                        serial_number: { in: serials }
-                    },
-                    data: {
-                        updated_by: utilisateur.id_user,
-                        updated_at: dateAction,
-                        last_modified_at: dateAction,
-                        statut_id: statutEntree,
-                    }
-                });
-            } else {
-                // Récupérer les TPE existants avec leur date de modification
-                const existingTpesWithDates = await tx.parc_tpe.findMany({
-                    where: {
-                        serial_number: { in: serials }
-                    },
-                    select: {
-                        serial_number: true,
-                        last_modified_at: true,
-                    }
-                });
-
-                // Créer une map pour accès rapide
-                const tpeDateMap = new Map(
-                    existingTpesWithDates.map(tpe => [
-                        tpe.serial_number,
-                        tpe.last_modified_at
-                    ])
-                );
-
-                // Filtrer seulement ceux dont la date est plus ancienne
-                const filteredToUpdate = serials.filter(item => {
-                    const lastModified = tpeDateMap.get(item);
-
-                    // Si aucune date existe, on autorise l'update
-                    if (!lastModified) return true;
-
-                    return new Date(lastModified) < new Date(dateAction);
-                });
-
-                // Faire les updates seulement pour ceux autorisés
-                await Promise.all(
-                    filteredToUpdate.map(item =>
-                        tx.parc_tpe.update({
-                            where: {
-                                serial_number: item
-                            },
-                            data: {
-                                updated_by: utilisateur.id_user,
-                                updated_at: dateAction,
-                                last_modified_at: dateAction,
-                                statut_id: statutEntree,
-                            }
-                        })
-                    )
-                );
-            }
-
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => ({
-                    id_tpe: tpe.id,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    statut_id: statutEntree,
-                    form_id: decomForm.id,
-                }))
-            });
-
             return {
                 decomForm,
                 nouveauDecom,
-                allTpes,
             }
         })
 
@@ -432,9 +366,15 @@ const modifyDecom = async (req, res) => {
             ? JSON.parse(listeDecom)
             : listeDecom;
 
+        // Chaque TPE doit avoir un modèle : il sera enregistré au parc lors de la validation (validationListeDecom)
+        const erreurModele = await verifierModelesDecom(details)
+        if (erreurModele) {
+            console.error(erreurModele)
+            return res.status(400).json({ message: erreurModele });
+        }
+
         const dateAction = new Date()
 
-        // Statut des TPE selon l'option remplacement (envoyée par le formulaire, sinon celle déjà enregistrée)
         const decomActuel = await prisma.form_decom.findUnique({
             where: { id: parseInt(id) },
             select: { is_remplacement: true },
@@ -443,8 +383,6 @@ const modifyDecom = async (req, res) => {
             console.error('Décommissionnement introuvable !')
             return res.status(404).json({ message: "Décommissionnement introuvable !" });
         }
-        const estRemplacement = isRemplacement !== undefined ? toBoolean(isRemplacement) : decomActuel.is_remplacement
-        const statutEntree = getStatutEntreeDecom(estRemplacement)
 
         const updatedDecom = await prisma.$transaction(async (tx) => {
             const decom = await tx.form_decom.findUnique({
@@ -499,61 +437,10 @@ const modifyDecom = async (req, res) => {
                 })
             }
 
-            /***************        GESTION DES TPE     *****************/
-
-            let allTpes = null
-            // Récupérer les SN de la liste
-            const serials = details.map(item => item.terminalSN);
-
-            // 1. Create only missing ones
-            await tx.parc_tpe.createMany({
-                data: serials.map(item => ({
-                    serial_number: item,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: statutEntree,
-                })),
-                skipDuplicates: true
-            });
-
-            // 2. Update ALL (existing + newly created)
-            await tx.parc_tpe.updateMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                data: {
-                    updated_by: utilisateur.id_user,
-                    updated_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: statutEntree,
-                }
-            });
-
-            // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-            allTpes = await tx.parc_tpe.findMany({
-                where: {
-                    serial_number: { in: serials }
-                },
-                select: {
-                    id: true,
-                    serial_number: true
-                }
-            });
-
-            // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-            await tx.history_tpe.createMany({
-                data: allTpes.map(tpe => ({
-                    id_tpe: tpe.id,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    statut_id: statutEntree,
-                    form_id: decomForm.id,
-                }))
-            });
+            // Le parc n'est pas modifié ici : les TPE sont créés / mis à jour à la validation (validationListeDecom).
 
             return {
-                decomForm, decom, allTpes
+                decomForm, decom
             }
         })
 
@@ -817,47 +704,6 @@ const receptionDecom = async (req, res) => {
                 },
             })
 
-            // // Créer uniquement les parc_tpe manquants
-            // await tx.parc_tpe.createMany({
-            //     data: serials.map((serial) => ({
-            //         serial_number: serial,
-            //         created_by: utilisateur.id_user,
-            //         created_at: dateAction,
-            //         last_modified_at: dateAction,
-            //         statut_id: STATUT_DECOM,
-            //     })),
-            //     skipDuplicates: true,
-            // });
-
-            // // Mettre TOUS les TPE (existants + nouveaux) au statut paramétrage
-            // await tx.parc_tpe.updateMany({
-            //     where: { serial_number: { in: serials } },
-            //     data: {
-            //         updated_by: utilisateur.id_user,
-            //         updated_at: dateAction,
-            //         last_modified_at: dateAction,
-            //         statut_id: STATUT_DECOM,
-            //     },
-            // });
-
-            // // Récupérer les ids
-            // const allTpes = await tx.parc_tpe.findMany({
-            //     where: { serial_number: { in: serials } },
-            //     select: { id: true, serial_number: true },
-            // });
-            // const tpeBySerial = new Map(allTpes.map((tpe) => [tpe.serial_number, tpe]));
-
-            // // Historique du changement de statut parc
-            // await tx.history_tpe.createMany({
-            //     data: allTpes.map((tpe) => ({
-            //         id_tpe: tpe.id,
-            //         created_by: utilisateur.id_user,
-            //         created_at: dateAction,
-            //         statut_id: STATUT_DECOM,
-            //         form_id: receptionForm.id, // était "decomForm.id" (non défini)
-            //     })),
-            // });
-
             return {
                 receptionForm,
                 reception,
@@ -1114,11 +960,9 @@ const validationListeDecom = async (req, res) => {
             commentaire,
             listeDecom,
             listeValidee,
-            listeNonValidee,
             quantite,
             userId,
             dateReception,
-            isReg,
         } = req.body
 
         const decom = await prisma.form_decom.findUnique({
@@ -1126,17 +970,16 @@ const validationListeDecom = async (req, res) => {
                 id: parseInt(id)
             },
         })
+        if (!decom) {
+            console.error('Décommissionnement introuvable !')
+            return res.status(404).json({ message: "Décommissionnement introuvable !" });
+        }
 
         const decomForm = await prisma.forms.findUnique({
             where: {
                 id: parseInt(decom.form_id)
             },
         })
-
-        if (!decom) {
-            console.error('Décommissionnement introuvable !')
-            return res.status(404).json({ message: "Décommissionnement introuvable !" });
-        }
         if (decom.statut == 'valide_decom') {
             console.error('Décommissionnement déjà validé !')
             return res.status(400).json({ message: "Décommissionnement déjà validé !" });
@@ -1173,10 +1016,9 @@ const validationListeDecom = async (req, res) => {
         const details = listeDecom
             ? (typeof listeDecom === "string" ? JSON.parse(listeDecom) : listeDecom)
             : JSON.parse(decom.liste_decom);
-        const detailsValidee = typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee;
-        const detailsNonValidee = typeof listeNonValidee === "string" ? JSON.parse(listeNonValidee) : listeNonValidee;
+        const detailsValidee = (typeof listeValidee === "string" ? JSON.parse(listeValidee) : listeValidee) || [];
+        // Les TPE non validés ne sont pas touchés : leur statut actuel au parc est conservé.
 
-        const reg = isReg == "false" ? false : true
         let dateAction = new Date()
         // Le formulaire envoie "date_reception" : on accepte les deux noms
         const dateRegValidation = dateReception || req.body.date_reception
@@ -1185,8 +1027,47 @@ const validationListeDecom = async (req, res) => {
             dateAction = dateVer
         }
 
-        const serialsNonValidees = detailsNonValidee.map((t) => t.terminalSN);
-        const STATUT_DECOM = 12
+        // Statut des TPE : attente_decom (8), ou decom_remplacement (16) si le décom est un remplacement
+        const statutEntree = getStatutEntreeDecom(decom.is_remplacement)
+        const serialsValidees = [...new Set(detailsValidee.map((item) => String(item.terminalSN)))];
+
+        // Modèle de chaque TPE validé : pris dans la liste ENREGISTRÉE du décom (pas dans celle envoyée par le client)
+        const listeEnregistree = decom.liste_decom ? JSON.parse(decom.liste_decom) : []
+        const modeleEnregistreParSn = new Map(
+            listeEnregistree.map((item) => [String(item.terminalSN), toModelId(item.modele)])
+        )
+        const terminals = serialsValidees.map((serial) => ({
+            serial,
+            modelId: modeleEnregistreParSn.get(serial) || null,
+        }))
+        const erreurModele = await verifierModelesExistants(prisma, terminals)
+        if (erreurModele) {
+            console.error(erreurModele)
+            return res.status(400).json({ message: erreurModele });
+        }
+
+        // TPE déjà au parc : leur modèle fait foi (aligné dans les listes du décom) et leur date de dernier statut
+        // sert à détecter les régularisations antérieures au statut actuel.
+        const tpesParc = await getTpesParc(prisma, serialsValidees)
+        const alignerModele = (item) => {
+            const tpe = tpesParc.get(String(item.terminalSN))
+            return tpe?.modelId
+                ? { ...item, modele: tpe.modelId, nomModele: tpe.nomModele || item.nomModele }
+                : item
+        }
+        const detailsAlignes = details.map(alignerModele)
+        const detailsValideeAlignes = detailsValidee.map(alignerModele)
+
+        // Partition des TPE validés déjà au parc (les absents sont créés directement au bon statut) :
+        // - statut mis à jour si la date de validation est postérieure au dernier changement de statut ;
+        // - sinon (régularisation antidatée) : historique seul, le statut actuel plus récent est conservé.
+        const serialsAMettreAJour = []
+        for (const serial of serialsValidees) {
+            const tpe = tpesParc.get(serial)
+            if (!tpe) continue
+            const estAntidate = tpe.lastModifiedAt && dateAction < new Date(tpe.lastModifiedAt)
+            if (!estAntidate) serialsAMettreAJour.push(serial)
+        }
 
         const operation = await prisma.$transaction(async (tx) => {
             const receptionForm = await tx.forms.create({
@@ -1206,7 +1087,7 @@ const validationListeDecom = async (req, res) => {
                     decom_id: decom.id,
                     type: 'validation',
                     quantite: Number(quantite),
-                    liste_decom: JSON.stringify(detailsValidee),
+                    liste_decom: JSON.stringify(detailsValideeAlignes),
                 }
             })
 
@@ -1216,7 +1097,7 @@ const validationListeDecom = async (req, res) => {
                 },
                 data: {
                     statut: 'valide_decom',
-                    liste_decom: JSON.stringify(details),
+                    liste_decom: JSON.stringify(detailsAlignes),
                 }
             })
 
@@ -1237,44 +1118,48 @@ const validationListeDecom = async (req, res) => {
                 })
             }
 
-            // Créer uniquement les parc_tpe manquants
-            await tx.parc_tpe.createMany({
-                data: serialsNonValidees.map((serial) => ({
-                    serial_number: serial,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: STATUT_DECOM,
-                })),
-                skipDuplicates: true,
-            });
+            // 1. Créer les TPE manquants (avec leur modèle) et compléter le modèle des TPE existants sans modèle
+            await creerTpesEtCompleterModeles(tx, terminals, {
+                created_by: utilisateur.id_user,
+                created_at: dateAction,
+                last_modified_at: dateAction,
+                statut_id: statutEntree,
+            })
 
-            // Mettre TOUS les TPE (existants + nouveaux) au statut paramétrage
-            await tx.parc_tpe.updateMany({
-                where: { serial_number: { in: serialsNonValidees } },
-                data: {
-                    updated_by: utilisateur.id_user,
-                    updated_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: STATUT_DECOM,
-                },
-            });
+            // 2. Mettre à jour le statut des TPE existants, sauf régularisation antérieure à leur statut actuel
+            if (serialsAMettreAJour.length > 0) {
+                await tx.parc_tpe.updateMany({
+                    where: {
+                        serial_number: { in: serialsAMettreAJour }
+                    },
+                    data: {
+                        updated_by: utilisateur.id_user,
+                        updated_at: dateAction,
+                        last_modified_at: dateAction,
+                        statut_id: statutEntree,
+                    }
+                });
+            }
 
-            // Récupérer les ids
+            // 3. Historique pour TOUS les TPE validés (créés, mis à jour, ou régularisation antérieure)
             const allTpes = await tx.parc_tpe.findMany({
-                where: { serial_number: { in: serialsNonValidees } },
-                select: { id: true, serial_number: true },
+                where: {
+                    serial_number: { in: serialsValidees }
+                },
+                select: {
+                    id: true,
+                    serial_number: true
+                }
             });
 
-            // Historique du changement de statut parc
             await tx.history_tpe.createMany({
-                data: allTpes.map((tpe) => ({
+                data: allTpes.map(tpe => ({
                     id_tpe: tpe.id,
                     created_by: utilisateur.id_user,
                     created_at: dateAction,
-                    statut_id: STATUT_DECOM,
-                    form_id: receptionForm.id,
-                })),
+                    statut_id: statutEntree,
+                    form_id: decomForm.id,
+                }))
             });
 
             return {
@@ -1477,6 +1362,13 @@ const validationTransmissionDecom = async (req, res) => {
             const dejaPresents = new Set(snExistants.map((s) => s.serial_number))
             const aCreer = detailsValidee.filter((item) => item.terminalSN && !dejaPresents.has(String(item.terminalSN)))
             const coupe = (valeur) => (valeur === undefined || valeur === null || valeur === '') ? null : String(valeur).slice(0, 255)
+            // Modèle : celui du parc fait foi (renseigné à la validation de la liste),
+            // sinon celui de la liste enregistrée du décom (jamais celui envoyé par le client)
+            const tpesParc = await getTpesParc(tx, aCreer.map((item) => item.terminalSN))
+            const modeleDecomParSn = new Map(
+                (decom.liste_decom ? JSON.parse(decom.liste_decom) : [])
+                    .map((item) => [String(item.terminalSN), toModelId(item.modele)])
+            )
             if (aCreer.length > 0) {
                 await tx.sn_decom.createMany({
                     data: aCreer.map((item) => ({
@@ -1490,6 +1382,12 @@ const validationTransmissionDecom = async (req, res) => {
                         ri: coupe(item.RI),
                         commercial: coupe(item.nomCommercial),
                         commentaire: coupe(item.commentaire),
+                        model_id: tpesParc.get(String(item.terminalSN))?.modelId
+                            || modeleDecomParSn.get(String(item.terminalSN))
+                            || null,
+                        has_carton: toBoolean(item.hasCarton),
+                        has_chargeur: toBoolean(item.hasChargeur),
+                        has_carte_sim: toBoolean(item.hasCarteSim),
                         created_at: dateAction,
                         last_modified_at: dateAction,
                     }))
@@ -1611,7 +1509,7 @@ const returnDecom = async (req, res) => {
             console.error('Erreur: décommissionnement introuvale !')
             return res.status(404).json({ message: "decom introuvable !" });
         }
-        if (decom.statut != 'en_cours') {
+        if (decom.statut != 'en_cours' && decom.statut != 'recu') {
             console.error('Statut de décommissionnement non conforme !')
             return res.status(400).json({ message: "Statut de décommissionnement non conforme !" });
         }
@@ -2713,6 +2611,7 @@ const clotureDecom = async (req, res) => {
                 await tx.parc_tpe.createMany({
                     data: proceedCreate.map((item) => ({
                         serial_number: item.serial_number,
+                        model_id: Number(item.model_id) || null,
                         created_by: utilisateur.id_user,
                         created_at: item.created_at ? addOneSecond(item.created_at) : addOneSecond(dateAction),
                         last_modified_at: item.last_modified_at
@@ -2960,7 +2859,6 @@ const extractDecom = async (req, res) => {
 
         // Le fichier excel est récupéré ici
         const file = req.file
-        // console.log("Fichier reçu : ", file)
 
         if (!file) {
             console.log("Aucun fichier reçu")
@@ -2977,101 +2875,146 @@ const extractDecom = async (req, res) => {
             return res.status(400).json({ message: "Invalid Excel file" });
         }
 
-        // Récupération des en-têtes 
+        // Normalisation : majuscules, sans accents, espaces simples ("Modèle" -> "MODELE")
+        const normaliser = (valeur) => String(valeur ?? "")
+            .normalize("NFD").replace(/[̀-ͯ]/g, "")
+            .replace(/\s+/g, " ").trim().toUpperCase()
+
+        // Récupération des en-têtes
         const headers = {};
         worksheet.getRow(1).eachCell((cell, col) => {
-            headers[String(cell.value).trim().toUpperCase()] = col;
+            headers[normaliser(getCellValue(cell))] = col;
         });
 
-        const requiredHeaders = [
-            "PDV",
-            "CAISSE",
-            "SN",
-            "ETAT",
-            "RI",
-            "BANQUE",
-            "TID GIM",
-            "TID ECOBANK",
-            "COMMERCIAL",
-            "COMMENTAIRE",
-        ];
-
-        for (const header of requiredHeaders) {
-            if (!headers[header]) {
-                console.log(`Colonne requise manquante : ${header}`)
+        // Noms acceptés pour chaque colonne : template actuel + anciens fichiers
+        const colonnes = {
+            pdv: ["POINT MARCHAND", "PDV"],
+            caisse: ["CAISSE"],
+            sn: ["S/N", "SN"],
+            modele: ["MODELE"],
+            chargeur: ["CHARGEUR"],
+            carteSim: ["CARTE SIM"],
+            carton: ["CARTON"],
+            etat: ["ETAT"],
+            ri: ["RI"],
+            banque: ["BANQUE"],
+            tidGim: ["TID GIM"],
+            tidEcobank: ["TID ECOBANK"],
+            commercial: ["COMMERCIAL"],
+            commentaire: ["COMMENTAIRE"],
+        }
+        const colonnesOptionnelles = ["chargeur", "carteSim", "carton"]
+        const indexColonnes = {}
+        for (const [cle, noms] of Object.entries(colonnes)) {
+            const nom = noms.find((n) => headers[n])
+            if (nom) {
+                indexColonnes[cle] = headers[nom]
+                continue
+            }
+            if (!colonnesOptionnelles.includes(cle)) {
+                console.log(`Colonne requise manquante : ${noms[0]}`)
                 return res.status(400).json({
-                    message: `Missing required column: ${header}`
+                    message: `Colonne requise manquante : ${noms[0]}`
                 });
             }
         }
+        const lire = (row, cle) => indexColonnes[cle]
+            ? String(getCellValue(row.getCell(indexColonnes[cle])) || "").trim()
+            : ""
+        const estOui = (valeur) => ["OUI", "O", "X", "OK", "1", "TRUE", "VRAI", "YES"].includes(normaliser(valeur))
 
-        const marchands = [];
+        const lignes = [];
         const uniqueKeys = new Set();
-        let duplicateError = null;
-        let invalidRowError = null;
+        let erreur = null;
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return;
+            if (rowNumber === 1 || erreur) return;
 
-            const pdv = String(getCellValue(row.getCell(headers["PDV"])) || "").trim();
-            const caisse = String(getCellValue(row.getCell(headers["CAISSE"])) || "").trim();
-            const sn = String(getCellValue(row.getCell(headers["SN"])) || "").trim();
-            const etat = String(getCellValue(row.getCell(headers["ETAT"])) || "").trim();
-            const ri = String(getCellValue(row.getCell(headers["RI"])) || "").trim();
-            const banque = String(getCellValue(row.getCell(headers["BANQUE"])) || "").trim();
-            const tid_gim = String(getCellValue(row.getCell(headers["TID GIM"])) || "").trim();
-            const tid_ecobank = String(getCellValue(row.getCell(headers["TID ECOBANK"])) || "").trim();
-            const commercial = String(getCellValue(row.getCell(headers["COMMERCIAL"])) || "").trim();
-            const commentaire = String(getCellValue(row.getCell(headers["COMMENTAIRE"])) || "").trim();
+            const pdv = lire(row, "pdv");
+            const caisse = lire(row, "caisse");
+            const sn = lire(row, "sn");
 
             // Ignore les lignes vides ou inutiles
             if (!pdv || !sn || !caisse) {
                 return;
             }
-            if (sn && (sn.length != 10 || !isOnlyDigits(sn))) {
-                invalidRowError = {
-                    rowNumber,
-                    marchand: { sn }
-                };
+            if (sn.length != 10 || !isOnlyDigits(sn)) {
+                erreur = `S/N invalide à la ligne ${rowNumber} pour le TPE ${sn}`;
                 return;
             }
+            if (uniqueKeys.has(sn)) {
+                erreur = `Doublon de SN trouvé à la ligne ${rowNumber} pour le marchand ${pdv} avec le SN ${sn}`;
+                return;
+            }
+            uniqueKeys.add(sn);
 
-            const marchand = {
+            const ri = lire(row, "ri").toLowerCase();
+            lignes.push({
+                rowNumber,
                 pdv,
                 caisse,
                 sn,
-                etat,
-                ri: ri.toLowerCase() === "ok" ? "ok" : ri.toLowerCase() === "nok" ? "nok" : "",
-                commercial,
-                commentaire,
-                banque,
-                tid_gim,
-                tid_ecobank,
-            };
-
-            const key = `${marchand.sn}`;
-            if (uniqueKeys.has(key)) {
-                duplicateError = {
-                    rowNumber,
-                    marchand
-                };
-                return;
-            }
-            uniqueKeys.add(key);
-            marchands.push(marchand);
-
-            // console.log("Données extraites ligne", rowNumber, marchand);
+                modele: lire(row, "modele"),
+                etat: lire(row, "etat"),
+                ri: ri === "ok" ? "ok" : ri === "nok" ? "nok" : "",
+                commercial: lire(row, "commercial"),
+                commentaire: lire(row, "commentaire"),
+                banque: lire(row, "banque"),
+                tid_gim: lire(row, "tidGim"),
+                tid_ecobank: lire(row, "tidEcobank"),
+                has_chargeur: estOui(lire(row, "chargeur")),
+                has_carte_sim: estOui(lire(row, "carteSim")),
+                has_carton: estOui(lire(row, "carton")),
+            });
         })
 
-        if (duplicateError) {
-            return res.status(400).json({
-                message: `Doublon de SN trouvé à la ligne ${duplicateError.rowNumber} pour le marchand ${duplicateError.marchand.marchand} avec le SN ${duplicateError.marchand.sn}`,
-            });
+        if (erreur) {
+            return res.status(400).json({ message: erreur });
         }
 
-        if (invalidRowError) {
-            return res.status(400).json({
-                message: `S/N invalide à la ligne ${invalidRowError.rowNumber} pour le TPE ${invalidRowError.marchand.sn}`,
-            });
+        // Modèles connus en base (comparaison sans espaces ni accents : "A920 Pro" == "A920PRO")
+        const cleModele = (valeur) => normaliser(valeur).replace(/\s/g, "")
+        const modeles = await prisma.model_piece.findMany({ select: { id_model: true, nom_model: true } })
+        const modeleParNom = new Map(
+            modeles.filter((m) => m.nom_model).map((m) => [cleModele(m.nom_model), m])
+        )
+        const nomsModeles = modeles.map((m) => m.nom_model).filter(Boolean).join(", ")
+
+        // TPE déjà au parc : leur modèle enregistré fait foi
+        const tpesParc = lignes.length ? await prisma.parc_tpe.findMany({
+            where: { serial_number: { in: lignes.map((l) => l.sn) } },
+            select: {
+                serial_number: true,
+                statut_id: true,
+                model_id: true,
+                model_piece: { select: { nom_model: true } },
+            },
+        }) : []
+        const parcParSn = new Map(tpesParc.map((t) => [t.serial_number, t]))
+
+        const marchands = [];
+        for (const { rowNumber, ...ligne } of lignes) {
+            const tpe = parcParSn.get(ligne.sn)
+            let modeleId = null
+            let nomModele = ligne.modele
+            if (tpe?.model_id) {
+                modeleId = tpe.model_id
+                nomModele = tpe.model_piece?.nom_model ?? ligne.modele
+            } else {
+                const modele = modeleParNom.get(cleModele(ligne.modele))
+                if (!modele) {
+                    return res.status(400).json({
+                        message: `Modèle ${ligne.modele ? `"${ligne.modele}" invalide` : "manquant"} à la ligne ${rowNumber} pour le TPE ${ligne.sn}. Modèles possibles : ${nomsModeles}.`,
+                    });
+                }
+                modeleId = modele.id_model
+                nomModele = modele.nom_model
+            }
+            marchands.push({
+                ...ligne,
+                modele: nomModele,
+                modele_id: modeleId,
+                ancien_statut_id: tpe ? tpe.statut_id : null,
+            })
         }
 
         console.log(`Extraction complète par utilisateur ${userId} !`)
@@ -3092,7 +3035,7 @@ const downloadTemplateDecom = async (req, res) => {
             userId
         } = req.body
 
-        const utilisateur = await prisma.users.findUnique({
+        const utilisateur = userId ? await prisma.users.findUnique({
             where: {
                 id_user: parseInt(userId),
             },
@@ -3100,7 +3043,7 @@ const downloadTemplateDecom = async (req, res) => {
                 id_user: true,
                 username: true,
             },
-        })
+        }) : null
 
         const workbook = new ExcelJS.Workbook();
 
@@ -3109,9 +3052,10 @@ const downloadTemplateDecom = async (req, res) => {
             "Point Marchand",
             "Caisse",
             "S/N",
+            "Modèle",
             "Chargeur",
             "Carte SIM",
-            "Carton",   
+            "Carton",
             "Etat",
             "RI",
             "Banque",
@@ -3132,6 +3076,33 @@ const downloadTemplateDecom = async (req, res) => {
             cell.alignment = { vertical: "middle", horizontal: "center" };
         });
 
+        // Feuille de référence des modèles + listes déroulantes (Modèle, Chargeur, Carte SIM, Carton)
+        const modeles = await prisma.model_piece.findMany({
+            where: { nom_model: { not: null } },
+            select: { nom_model: true },
+            orderBy: { nom_model: 'asc' },
+        })
+        const modelesSheet = workbook.addWorksheet('Modeles');
+        modelesSheet.addRow(["Modèle"]).font = { bold: true };
+        modeles.forEach((m) => modelesSheet.addRow([m.nom_model]));
+        const NB_LIGNES_TEMPLATE = 500
+        for (let ligne = 2; ligne <= NB_LIGNES_TEMPLATE + 1; ligne++) {
+            if (modeles.length) {
+                decomSheet.getCell(`D${ligne}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: [`Modeles!$A$2:$A$${modeles.length + 1}`],
+                };
+            }
+            for (const col of ['E', 'F', 'G']) {
+                decomSheet.getCell(`${col}${ligne}`).dataValidation = {
+                    type: 'list',
+                    allowBlank: true,
+                    formulae: ['"Oui,Non"'],
+                };
+            }
+        }
+
         const buffer = await workbook.xlsx.writeBuffer();
         res.setHeader(
             "Content-Type",
@@ -3144,7 +3115,7 @@ const downloadTemplateDecom = async (req, res) => {
         );
         res.send(buffer);
 
-        console.log(`Template de décommissionnement téléchargé avec succès par ${utilisateur.username} ID ${utilisateur.id_user} !`);
+        console.log(`Template de décommissionnement téléchargé avec succès par ${utilisateur?.username} ID ${utilisateur?.id_user} !`);
 
     } catch (error) {
         console.error('Erreur de téléchargement du template de décommissionnement:', error);
@@ -3191,19 +3162,28 @@ const exportOneDecomToExcel = async (req, res) => {
 
         const workbook = new ExcelJS.Workbook();
 
+        // Nom des modèles pour les lignes qui n'ont que l'id (nomModele absent)
+        const modelesExport = await prisma.model_piece.findMany({ select: { id_model: true, nom_model: true } })
+        const nomsModeles = new Map(modelesExport.map((m) => [m.id_model, m.nom_model]))
+
         const decomSheet = workbook.addWorksheet('Décommissionnement');
         const decomHeaders = [
             "Index",
             "Point Marchand",
             "Caisse",
             "S/N",
+            "Modèle",
             "Banque",
             "TID GIM",
             "TID ECOBANK",
+            "Chargeur",
+            "Carte SIM",
+            "Carton",
             "Etat",
             "RI",
             "Commercial",
             "Commentaire",
+            "Statut Decom",
         ];
         const decomHeaderRow = decomSheet.addRow(decomHeaders);
         decomHeaderRow.eachCell((cell) => {
@@ -3243,18 +3223,26 @@ const exportOneDecomToExcel = async (req, res) => {
         });
 
         listeDecom.forEach((item, index) => {
+            const hasChargeur = item.hasChargeur ? "Oui" : "Non";
+            const hasCarteSim = item.hasCarteSim ? "Oui" : "Non";
+            const hasCarton = item.hasCarton ? "Oui" : "Non";
             decomSheet.addRow([
                 index + 1,
                 item.pointMarchand,
                 item.caisse,
                 item.terminalSN,
+                item.nomModele || nomsModeles.get(Number(item.modele)) || 'N/A',
                 item.banque,
                 item.idGim,
                 item.idEcobank,
+                hasChargeur,
+                hasCarteSim,
+                hasCarton,
                 item.etat,
                 item.RI,
                 item.nomCommercial,
                 item.commentaire,
+                decom.statut,
             ])
         });
 
@@ -4088,12 +4076,27 @@ const miseEnReparationTpe = async (req, res) => {
                 serial: terminal.terminalSN,
                 pieces,
                 pointMarchand: terminal.pointMarchand,
-                modele: Number(terminal.modele),
+                modele: toModelId(terminal.modele),
                 commentaire: terminal.etatTpe,
             };
         });
 
         const serials = terminaux.map((t) => t.serial);
+
+        // Modèle : obligatoire pour les TPE qui n'ont pas encore de modèle au parc, et doit exister.
+        // Un modèle déjà enregistré au parc fait foi (jamais écrasé).
+        const tpesParcReparation = await getTpesParc(prisma, serials)
+        const terminauxModele = terminaux.map((t) => ({ serial: String(t.serial), modelId: t.modele }))
+        const sansModele = terminauxModele.find((t) => !t.modelId && !tpesParcReparation.get(t.serial)?.modelId)
+        if (sansModele) {
+            console.error(`Modèle manquant pour le TPE ${sansModele.serial} !`)
+            return res.status(400).json({ message: `Modèle manquant pour le TPE ${sansModele.serial} !` });
+        }
+        const erreurModeleReparation = await verifierModelesExistants(prisma, terminauxModele)
+        if (erreurModeleReparation) {
+            console.error(erreurModeleReparation)
+            return res.status(400).json({ message: erreurModeleReparation });
+        }
 
         // 3. Toutes les écritures dans UNE transaction, en séquentiel
         const operation = await prisma.$transaction(async (tx) => {
@@ -4136,17 +4139,12 @@ const miseEnReparationTpe = async (req, res) => {
 
             /***********        GESTION DES TPE        ***********/
 
-            // Créer uniquement les parc_tpe manquants
-            await tx.parc_tpe.createMany({
-                data: terminaux.map((t) => ({
-                    serial_number: t.serial,
-                    created_by: utilisateur.id_user,
-                    created_at: dateAction,
-                    last_modified_at: dateAction,
-                    statut_id: A_REPARER_STATUT_ID,
-                    model_id: t.modele,
-                })),
-                skipDuplicates: true,
+            // Créer les parc_tpe manquants avec leur modèle, compléter le modèle des TPE existants sans modèle
+            await creerTpesEtCompleterModeles(tx, terminauxModele, {
+                created_by: utilisateur.id_user,
+                created_at: dateAction,
+                last_modified_at: dateAction,
+                statut_id: A_REPARER_STATUT_ID,
             });
 
             // Mettre TOUS les TPE (existants + nouveaux) au statut a_reparer
@@ -4853,6 +4851,10 @@ const exportAllDecomToExcel = async (req, res) => {
 
         const workbook = new ExcelJS.Workbook();
 
+        // Nom des modèles pour les lignes qui n'ont que l'id (nomModele absent)
+        const modelesExport = await prisma.model_piece.findMany({ select: { id_model: true, nom_model: true } })
+        const nomsModeles = new Map(modelesExport.map((m) => [m.id_model, m.nom_model]))
+
         const decomSheet = workbook.addWorksheet('Décommissionnements');
         const decomHeaders = [
             "Index",
@@ -4860,9 +4862,13 @@ const exportAllDecomToExcel = async (req, res) => {
             "Point Marchand",
             "Caisse",
             "S/N",
+            "Modele",
             "Banque",
             "TID GIM",
             "TID ECOBANK",
+            "Chargeur",
+            "Carte SIM",
+            "Carton",
             "Etat",
             "RI",
             "Commercial",
@@ -4895,15 +4901,22 @@ const exportAllDecomToExcel = async (req, res) => {
             const dateCloture = retour && decom.statut == 'clos' ? retour.forms.last_modified_at : 'N/A'
 
             listeDecom.forEach((decomItem, index) => {
+                const hasChargeur = decomItem.hasChargeur ? "Oui" : "Non";
+                const hasCarteSim = decomItem.hasCarteSim ? "Oui" : "Non";
+                const hasCarton = decomItem.hasCarton ? "Oui" : "Non";
                 decomSheet.addRow([
                     index + 1,
                     decom.id,
                     decomItem.pointMarchand,
                     decomItem.caisse,
                     decomItem.terminalSN,
+                    decomItem.nomModele || nomsModeles.get(Number(decomItem.modele)) || 'N/A',
                     decomItem.banque,
                     decomItem.idGim,
                     decomItem.idEcobank,
+                    hasChargeur,
+                    hasCarteSim,
+                    hasCarton,
                     decomItem.etat,
                     decomItem.RI,
                     decomItem.nomCommercial,
@@ -4931,7 +4944,8 @@ const exportAllDecomToExcel = async (req, res) => {
         const verificationHeaders = [
             "Index",
             "Decom ID",
-            "Statut",
+            "Statut Decom",
+            "Statut Terminal",
             "Point Marchand",
             "S/N",
             "Commentaire de retour",
@@ -4990,6 +5004,7 @@ const exportAllDecomToExcel = async (req, res) => {
                 verificationSheet.addRow([
                     index + 1,
                     decom.id,
+                    decom.statut,
                     statut,
                     item.point_marchand,
                     item.serial_number,

@@ -93,8 +93,9 @@ export default function LivraisonInputs() {
 
   const [optionsModels, setOptionsModels] = useState([])
   const [listModels, setListModels] = useState([])
-  const [selectedModel, setSelectedModel] = useState(1)
-  const [nomModel, setNomModel] = useState('A920')
+  // Pas de modèle pré-sélectionné : il est écrit au parc, l'utilisateur doit le choisir
+  const [selectedModel, setSelectedModel] = useState(null)
+  const [nomModel, setNomModel] = useState('')
 
   const [stockChargeurs, setStockChargeurs] = useState([])
   const [selectedChargeur, setSelectedChargeur] = useState(false)
@@ -106,6 +107,9 @@ export default function LivraisonInputs() {
   const [isRneChecked, setRneChecked] = useState(false)
 
   const [statutTpe, setStatutTpe] = useState('')
+  // Modèle enregistré au parc (il fait foi) : pour le SN en cours de saisie, et pour les SN ajoutés à la liste
+  const [modeleParcTpe, setModeleParcTpe] = useState(null)
+  const [modelesParcParSn, setModelesParcParSn] = useState({})
 
   const banques = {
     '00343': 'BACI',
@@ -217,9 +221,22 @@ export default function LivraisonInputs() {
     terminals.filter((terminal) =>
       terminal.SERIAL_NUMBER.includes(terminalSN)) : [];
 
+  // Message d'erreur si le modèle enregistré au parc diffère du modèle choisi (livraisons de TPE uniquement)
+  const conflitModele = (modeleParc, modelId) => (
+    ![5, 7, 8].includes(Number(livraisonID)) && modeleParc && modelId && Number(modeleParc.id) !== Number(modelId)
+      ? `Ce TPE est enregistré au parc en tant que ${String(modeleParc.nom).toUpperCase()} : le modèle choisi ne correspond pas.`
+      : null
+  )
+  // SN de la liste dont le modèle au parc diffère du modèle choisi
+  const snEnConflit = (modelId) => Object.entries(modelesParcParSn)
+    .filter(([sn, modeleParc]) => produitsLivre.some((p) => p.serialNumber === sn) && conflitModele(modeleParc, modelId))
+    .map(([sn, modeleParc]) => `${sn} (${String(modeleParc.nom).toUpperCase()})`)
+
   const ChangeModel = (value) => {
     console.log("Selected value (model) : ", value)
     setSelectedModel(value)
+    const conflits = snEnConflit(value)
+    setErrorAjout(conflits.length > 0 ? `Le modèle choisi ne correspond pas au modèle enregistré au parc pour : ${conflits.join(', ')}` : '')
     const model = listModels.find((item) => {
       return item.id_model == parseInt(value)
     })
@@ -304,6 +321,7 @@ export default function LivraisonInputs() {
   }
 
   const handleChangeSn = async (value) => {
+    setModeleParcTpe(null)
     setTerminalName('')
     setTerminalBanque('')
     setTerminalCaisse('')
@@ -370,6 +388,7 @@ export default function LivraisonInputs() {
         if (tpeData) {
           const statutTpe = tpeData.statut_tpe.statut
           setStatutTpe(statutTpe)
+          setModeleParcTpe(tpeData.model_id ? { id: tpeData.model_id, nom: tpeData.model_piece?.nom_model || '' } : null)
         } else {
           setStatutTpe('non enregistré')
         }
@@ -441,6 +460,12 @@ export default function LivraisonInputs() {
       return;
     }
 
+    const erreurModele = conflitModele(modeleParcTpe, selectedModel)
+    if (erreurModele) {
+      setErrorAjout(erreurModele);
+      return;
+    }
+
     setErrorAjout('')
     setIsConfirmModalOpen(true)
   }
@@ -489,6 +514,10 @@ export default function LivraisonInputs() {
     setMOOVChecked(false);
     setRneChecked(false)
     setMobileMoney([]);
+    if (modeleParcTpe) {
+      setModelesParcParSn((prev) => ({ ...prev, [terminalSN]: modeleParcTpe }))
+    }
+    setModeleParcTpe(null)
     setStatutTpe('')
     setErrorAjout('')
     setIsConfirmModalOpen(false)
@@ -546,22 +575,21 @@ export default function LivraisonInputs() {
         text: "Formulaire créé avec succès",
         icon: "success"
       });
-      navigate('/toutes-les-livraisons');
-    } catch (error) {
-      setLoadingDelivery(false)
-      console.log('error')
-      setError('Erreur lors de la génération du formulaire');
-      Swal.fire({
-        title: "Attention",
-        text: "Une erreur s'est produite lors de la livraison.",
-        icon: "warning"
-      });
-      navigate('/toutes-les-livraisons');
-    } finally {
       setProduitsLivres([])
       setProduitsLivresTable([])
       setQuantiteLivraison(0)
       setMessage('')
+      navigate('/toutes-les-livraisons');
+    } catch (error) {
+      // Le formulaire est conservé pour permettre la correction (ex. modèle différent de celui du parc)
+      console.log('error', error)
+      setError('Erreur lors de la génération du formulaire');
+      Swal.fire({
+        title: "Attention",
+        text: error?.message || "Une erreur s'est produite lors de la livraison.",
+        icon: "warning"
+      });
+    } finally {
       setLoadingDelivery(false)
     }
   }
@@ -577,6 +605,16 @@ export default function LivraisonInputs() {
   };
 
   const handleValidate = () => {
+
+    const conflits = snEnConflit(selectedModel)
+    if (conflits.length > 0) {
+      Swal.fire({
+        title: "Modèle incorrect",
+        text: `Le modèle choisi ne correspond pas au modèle enregistré au parc pour : ${conflits.join(', ')}`,
+        icon: "error"
+      });
+      return;
+    }
 
     if (!checkValidate()) {
       Swal.fire({
@@ -658,7 +696,6 @@ export default function LivraisonInputs() {
                         placeholder="Choisir une option"
                         onChange={ChangeModel}
                         className="dark:bg-dark-900"
-                        defaultValue={1}
                       />
                     </div>
                     <div>
@@ -722,6 +759,9 @@ export default function LivraisonInputs() {
                     <div>
                       <Label htmlFor="input">Numéro de série <span className="text-red-700">*</span></Label>
                       <span className="text-xs text-blue-500 text-center">{statutTpe}</span>
+                      {modeleParcTpe && (
+                        <span className="text-xs text-gray-500 text-center ml-2">Modèle au parc : {String(modeleParcTpe.nom).toUpperCase()}</span>
+                      )}
                       <Input type="text" id="input" value={terminalSN} onChange={(e) => {
                         const value = e.target.value
                         // Allow only digits

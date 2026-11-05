@@ -99,6 +99,24 @@ export class Rebut {
         }
     }
 
+    async getStocksPourRebut(pieceId, modelId, userId) {
+        try {
+            const response = await axios.get(`${urlBase}/api/rebut/getStocksPourRebut/${pieceId}/${modelId}/${userId}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    async createStockFromRebut(payload) {
+        try {
+            const response = await axios.post(`${urlBase}/api/rebut/createStockFromRebut`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
     async getOneDemandeRebut(id) {
         try {
             const response = await axios.get(`${urlBase}/api/rebut/getOneDemandeRebut/${id}`)

@@ -55,13 +55,17 @@ export default function TpeRebutDetails() {
 
     const [allUsers, setAllUsers] = useState([])
 
+    // Pièces déjà retirées du lot (utilisées ou mises en stock) : elles ne sont plus modifiables
+    const [piecesVerrouillees, setPiecesVerrouillees] = useState([])
+    const piecesModifiables = pieces.filter((piece) => !piecesVerrouillees.includes(piece.id_piece))
+
     const allPieceDef =
-        pieces.length > 0 &&
-        selectedPiecesDef?.length === pieces.length;
+        piecesModifiables.length > 0 &&
+        selectedPiecesDef?.length === piecesModifiables.length;
 
     const allPieceFunc =
-        pieces.length > 0 &&
-        selectedPiecesRec?.length === pieces.length;
+        piecesModifiables.length > 0 &&
+        selectedPiecesRec?.length === piecesModifiables.length;
 
     const allPieceRecupFonc =
         piecesFonc.length > 0 &&
@@ -104,6 +108,11 @@ export default function TpeRebutDetails() {
                 })
                 setPiecesDef(listePieceDef)
                 setSelectedPiecesDef(listePieceDefId)
+
+                const listePiecesVerrouillees = terminalRebut?.pieces_rebut?.filter((item) => {
+                    return item.etat == 'utilise' || item.etat == 'en_stock'
+                }) || []
+                setPiecesVerrouillees(listePiecesVerrouillees.map((item) => item.piece_id))
 
                 const indexSession = terminalRebut?.sn_rebut.length - 1
                 setPiecesHistorique(terminalRebut?.sn_rebut[indexSession]?.history_snapshot_piece_rebut)
@@ -153,7 +162,7 @@ export default function TpeRebutDetails() {
             setSelectedPiecesRec([]);
         } else {
             setSelectedPiecesRec(
-                pieces.map(piece => piece.id_piece)
+                piecesModifiables.map(piece => piece.id_piece)
             );
         }
     };
@@ -163,7 +172,7 @@ export default function TpeRebutDetails() {
             setSelectedPiecesDef([]);
         } else {
             setSelectedPiecesDef(
-                pieces.map(piece => piece.id_piece)
+                piecesModifiables.map(piece => piece.id_piece)
             );
         }
     };
@@ -317,6 +326,32 @@ export default function TpeRebutDetails() {
                                 <>
                                     <div>
                                         <span className="text-blue-600 font-medium">{piece.nom_piece} ,</span>
+                                    </div>
+                                </>
+                            )
+                        }
+                    })}
+                </div>
+            </>
+        )
+    }
+
+    const piecesEnStockTemplate = (historique) => {
+        const listeEnStock = historique.history_piece_rebut.filter((item) => {
+            return item.etat == 'en_stock'
+        })
+        return (
+            <>
+                <div className="grid grid-cols-2 text-xs">
+                    {listeEnStock?.map((item) => {
+                        const piece = pieces.find((p) => {
+                            return p.id_piece == item.piece_id
+                        })
+                        if (piece) {
+                            return (
+                                <>
+                                    <div>
+                                        <span className="text-emerald-600 font-medium">{piece.nom_piece} ,</span>
                                     </div>
                                 </>
                             )
@@ -518,6 +553,7 @@ export default function TpeRebutDetails() {
                             <Column field="created_at" header="Date" body={dateTemplate} sortable></Column>
                             <Column header="Liste pièces fonctionnelles" body={piecesFoncTemplate}></Column>
                             <Column header="Liste pièces récupérées" body={piecesRecupTemplate}></Column>
+                            <Column header="Liste pièces mises en stock" body={piecesEnStockTemplate}></Column>
                             <Column field="created_by" header="Utilisateur" body={userTemplate} sortable></Column>
                         </DataTable>
                     </div>
@@ -545,7 +581,7 @@ export default function TpeRebutDetails() {
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2">
-                                    {pieces.map((item) => {
+                                    {piecesModifiables.map((item) => {
                                         return (
                                             <>
                                                 <div>
@@ -575,7 +611,7 @@ export default function TpeRebutDetails() {
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2">
-                                    {pieces.map((item) => {
+                                    {piecesModifiables.map((item) => {
                                         return (
                                             <>
                                                 <div>

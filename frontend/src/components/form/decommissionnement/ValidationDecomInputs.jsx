@@ -306,12 +306,27 @@ export default function ValidationDecomInputs() {
                                                 <TableCell
                                                     isHeader
                                                     className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    TID GIM
+                                                    Modèle
                                                 </TableCell>
                                                 <TableCell
                                                     isHeader
                                                     className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    TID ECOBANK
+                                                    Banque
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    Chargeur
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    Carte SIM
+                                                </TableCell>
+                                                <TableCell
+                                                    isHeader
+                                                    className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    Carton
                                                 </TableCell>
                                                 <TableCell
                                                     isHeader
@@ -361,11 +376,41 @@ export default function ValidationDecomInputs() {
                                                     </TableCell>
                                                     <TableCell
                                                         className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                        {item.idGim}
+                                                        {item.nomModele || <span>N/A</span>}
                                                     </TableCell>
                                                     <TableCell
                                                         className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                        {item.idEcobank}
+                                                        {item.banque}
+                                                    </TableCell>
+                                                    <TableCell
+                                                        className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                        {item.hasChargeur ? (
+                                                            <>
+                                                                <span className="text-green-500">Oui</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-red-500">Non</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell
+                                                        className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                        {item.hasCarteSim ? (
+                                                            <>
+                                                                <span className="text-green-500">Oui</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-red-500">Non</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell
+                                                        className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                        {item.hasCarton ? (
+                                                            <>
+                                                                <span className="text-green-500">Oui</span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-red-500">Non</span>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell
                                                         className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">

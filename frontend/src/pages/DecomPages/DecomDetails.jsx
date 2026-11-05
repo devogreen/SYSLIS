@@ -1290,7 +1290,7 @@ export default function DecomDetails() {
                                                     <div className="flex justify-between p-4 pb-0">
                                                         <div className='p-4 pb-0 text-xs text-gray-600 space-x-3'>
                                                             <span>Total : {quantiteDecom}</span>
-                                                             {isValideDecom ? (<><span>Total validé : {quantiteValideDecom}</span></>) : (<></>)}
+                                                            {isValideDecom ? (<><span>Total validé : {quantiteValideDecom}</span></>) : (<></>)}
                                                             {checking ? (
                                                                 <>
                                                                     <span className=" font-medium">a réparer : <span className="text-blue-600">{totals.a_reparer}</span></span>
@@ -1388,34 +1388,28 @@ export default function DecomDetails() {
                                                                                 <>
                                                                                     <TableRow>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             {index + 1}
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-xs dark:text-gray-400">
                                                                                             {item.point_marchand}
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             {item.serial_number}
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             <span className={statutClass}>
                                                                                                 {statut}
                                                                                             </span>
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             {item.commentaire_retour}
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             <div className="grid grid-cols-2 text-xs">
                                                                                                 {piecesDefectueuses?.map((item) => {
@@ -1435,7 +1429,6 @@ export default function DecomDetails() {
                                                                                             </div>
                                                                                         </TableCell>
                                                                                         <TableCell
-                                                                                            isHeader
                                                                                             className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                                                             <div className="grid grid-cols-2 text-xs">
                                                                                                 {piecesRecuperables?.map((item) => {
@@ -1485,12 +1478,27 @@ export default function DecomDetails() {
                                                                             <TableCell
                                                                                 isHeader
                                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                TID GIM
+                                                                                Modèle
                                                                             </TableCell>
                                                                             <TableCell
                                                                                 isHeader
                                                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                                                TID ECOBANK
+                                                                                Banque
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Chargeur
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Carte SIM
+                                                                            </TableCell>
+                                                                            <TableCell
+                                                                                isHeader
+                                                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                                                Carton
                                                                             </TableCell>
                                                                             <TableCell
                                                                                 isHeader
@@ -1523,57 +1531,78 @@ export default function DecomDetails() {
                                                                             const classNonValide = "px-4 py-3 text-gray-500 text-start text-theme-xs opacity-20 line-through"
                                                                             const cellClass = isValideDecom ? (isSelected ? classList : classNonValide) : classList
                                                                             return (
-                                                                            <TableRow key={item.terminalSN || index}>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {index + 1}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.pointMarchand}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.terminalSN}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.idGim}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.idEcobank}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    <span style={{ fontSize: '9px' }}>
-                                                                                        {item.etat}
-                                                                                    </span>
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.RI}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    {item.nomCommercial}
-                                                                                </TableCell>
-                                                                                <TableCell
-                                                                                    isHeader
-                                                                                    className={cellClass}>
-                                                                                    <span style={{ fontSize: '9px' }}>
-                                                                                        {item.commentaire}
-                                                                                    </span>
-                                                                                </TableCell>
-                                                                            </TableRow>
+                                                                                <TableRow key={item.terminalSN || index}>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {index + 1}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.pointMarchand}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.terminalSN}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.nomModele || <span>N/A</span>}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.banque}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.hasChargeur ? (
+                                                                                            <>
+                                                                                                <span className="text-green-500">Oui</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="text-red-500">Non</span>
+                                                                                        )}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.hasCarteSim ? (
+                                                                                            <>
+                                                                                                <span className="text-green-500">Oui</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="text-red-500">Non</span>
+                                                                                        )}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.hasCarton ? (
+                                                                                            <>
+                                                                                                <span className="text-green-500">Oui</span>
+                                                                                            </>
+                                                                                        ) : (
+                                                                                            <span className="text-red-500">Non</span>
+                                                                                        )}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        <span style={{ fontSize: '9px' }}>
+                                                                                            {item.etat}
+                                                                                        </span>
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.RI}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        {item.nomCommercial}
+                                                                                    </TableCell>
+                                                                                    <TableCell
+                                                                                        className={cellClass}>
+                                                                                        <span style={{ fontSize: '9px' }}>
+                                                                                            {item.commentaire}
+                                                                                        </span>
+                                                                                    </TableCell>
+                                                                                </TableRow>
                                                                             )
                                                                         })}
                                                                     </TableBody>
@@ -1878,7 +1907,6 @@ export default function DecomDetails() {
                     </div>
                 </div>
             </Modal>
-
         </>
     )
-}
+} 

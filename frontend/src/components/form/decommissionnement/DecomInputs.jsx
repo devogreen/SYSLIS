@@ -110,11 +110,10 @@ export default function DecomInputs() {
 
                 const models = await stockData.getAllModels()
                 setModelList(models)
-                const optionsModels = models.map((model) => ({
-                    value: model.id,
+                setOptionsModels(models.map((model) => ({
+                    value: String(model.id_model),
                     label: model.nom_model,
-                }))
-                setOptionsModels(optionsModels)
+                })))
 
             } catch (error) {
                 console.error('Error fetching data ', error)
@@ -144,6 +143,8 @@ export default function DecomInputs() {
         setSelectedModel(null)
         setNomModel('')
         setHasModel(false)
+        setIdGim('')
+        setIdEcobank('')
         try {
             const pointMarchand = merchantList.find((terminal) => {
                 return terminal.SERIAL_NUMBER == value
@@ -163,10 +164,11 @@ export default function DecomInputs() {
                     const statutTpe = tpeData.statut_tpe.statut
                     setStatutTpe(statutTpe)
                     setIdStatutTpe(tpeData.statut_tpe.id)
+                    // Le modèle déjà enregistré au parc fait foi
                     if (tpeData.model_id) {
-                        setSelectedModel(tpeData.model_id)
+                        setSelectedModel(String(tpeData.model_id))
                         setHasModel(true)
-                        setNomModel(tpeData.model_piece.nom_model)
+                        setNomModel(tpeData.model_piece?.nom_model || '')
                     }
                 } else {
                     setStatutTpe('non enregistré')
@@ -182,11 +184,9 @@ export default function DecomInputs() {
     const handleSelectModel = (value) => {
         setSelectedModel(value)
         const model = modelList.find((item) => {
-            return item.id == value
+            return item.id_model == value
         })
-        if (model) {
-            setNomModel(model.nom_model)
-        }
+        setNomModel(model ? model.nom_model : '')
     }
 
     const onDrop = useCallback(async (acceptedFiles) => {
@@ -276,9 +276,6 @@ export default function DecomInputs() {
     const handleDownloadTemplate = async () => {
         setLoadingDownloadTemplate(true)
         try {
-            const payload = {
-                userId: Number(userId)
-            }
             const response = await decomData.downloadTemplateDecom(userId);
 
             const url = window.URL.createObjectURL(response.data);
@@ -328,21 +325,25 @@ export default function DecomInputs() {
 
             const response = await decomData.extractDecom(fd)
             const marchands = response.data
-            const listeDecomData = marchands.map((item, index) => {
-                return ({
-                    pointMarchand: item.pdv,
-                    terminalSN: item.sn,
-                    caisse: item.caisse,
-                    etat: item.etat,
-                    RI: item.ri == 'ok' ? 'OK' : item.ri == 'nok' ? 'NOK' : '',
-                    nomCommercial: item.commercial,
-                    commentaire: item.commentaire,
-                    banque: item.banque,
-                    idGim: item.tid_gim,
-                    idEcobank: item.tid_ecobank,
-                })
-            })
-            console.log(listeDecomData)
+            // Le backend renvoie l'id du modèle (celui du parc si le TPE y est déjà) et les accessoires
+            const listeDecomData = marchands.map((item) => ({
+                pointMarchand: item.pdv,
+                terminalSN: item.sn,
+                modele: item.modele_id,
+                nomModele: item.modele,
+                caisse: item.caisse,
+                etat: item.etat,
+                ancienStatut: item.ancien_statut_id,
+                RI: item.ri == 'ok' ? 'OK' : item.ri == 'nok' ? 'NOK' : '',
+                nomCommercial: item.commercial,
+                commentaire: item.commentaire,
+                banque: item.banque,
+                idGim: item.tid_gim,
+                idEcobank: item.tid_ecobank,
+                hasChargeur: Boolean(item.has_chargeur),
+                hasCarton: Boolean(item.has_carton),
+                hasCarteSim: Boolean(item.has_carte_sim),
+            }))
             setListeDecomExcel(listeDecomData)
             Swal.fire({
                 title: "Succès",
@@ -399,6 +400,10 @@ export default function DecomInputs() {
             return
         }
         for (let m of listeDecomExcel) {
+            if (!m.modele) {
+                setErrorAjout(`Modèle manquant pour le TPE ${m.terminalSN} !`);
+                return;
+            }
             const isDuplicate = listeDecom.some(item => {
                 return item.terminalSN == m.terminalSN
             });
@@ -420,31 +425,24 @@ export default function DecomInputs() {
 
     const handleAjout = () => {
         setIsModalConfirmOpen(false)
-        let etat = ''
-        if (isRAS) {
-            etat = 'R.A.S'
-            if (!hasCarton) {
-                etat = 'Sans Carton / R.A.S'
-            }
-        } else {
-            etat = (hasCarton ? 'Avec Carton' : 'Sans Carton') + ' / ' + (hasChargeur ? 'Avec Chargeur' : 'Sans Chargeur') + ' / ' + `${etatTpe}`
-        }
+
         const newElement = {
             pointMarchand: terminalName,
             terminalSN,
-            modele: selectedModel,
+            modele: Number(selectedModel),
+            nomModele: nomModel,
             caisse: terminalCaisse,
             banque: terminalBanque,
             idGim,
             idEcobank,
-            etat,
+            etat: isRAS ? 'R.A.S' : isProblem ? etatTpe : '',
             RI: isRAS ? '' : isRI ? 'OK' : 'NOK',
             nomCommercial,
             commentaire,
             ancienStatut: Number(idStatutTpe),
-            hasChargeur,
+            hasChargeur: isRAS ? true : hasChargeur,
+            hasCarteSim: isRAS ? true : hasCarteSim,
             hasCarton,
-            hasCarteSim,
         }
         setListeDecom((prev) => [...prev, newElement]);
         setQuantiteTotale((prev) => prev + 1);
@@ -460,6 +458,14 @@ export default function DecomInputs() {
         setCommentaire('')
         setStatutTpe('')
         setIdStatutTpe('')
+        setSelectedModel(null)
+        setNomModel('')
+        setHasModel(false)
+        setHasCarton(false)
+        setHasChargeur(false)
+        setHasCarteSim(false)
+        setIsRI(false)
+        setEtatTpe('')
     }
 
     const handleAjoutParExcel = () => {
@@ -469,7 +475,7 @@ export default function DecomInputs() {
         setQuantiteTotale((prev) => prev + listeDecomExcel.length);
         setListeDecom((prev) => [...prev, ...listeDecomExcel]);
         setSelectedExcelFile(null)
-        setMarchandsExcel([])
+        setListeDecomExcel([])
     }
 
     const handleDelete = (indexToRemove) => {
@@ -479,11 +485,25 @@ export default function DecomInputs() {
         setQuantiteTotale((prev) => prev - 1);
     };
 
+    const handleDeleteFile = (indexToRemove) => {
+        setSelectedFiles((prev) => prev.filter((_, index) => index !== indexToRemove));
+    };
+
     const handleConfirmValidate = () => {
         if (listeDecom.length == 0) {
             Swal.fire({
                 title: "Attention",
                 text: "Aucun S/N enregistré !",
+                icon: "warning"
+            })
+            return
+        }
+
+        const sansModele = listeDecom.find((item) => !item.modele)
+        if (sansModele) {
+            Swal.fire({
+                title: "Attention",
+                text: `Le modèle du TPE ${sansModele.terminalSN} n'est pas renseigné !`,
                 icon: "warning"
             })
             return
@@ -676,6 +696,7 @@ export default function DecomInputs() {
                                                                                 <div>
                                                                                     <Label>Modèle <span className="text-red-700">*</span></Label>
                                                                                     <Select
+                                                                                        key={terminalSN}
                                                                                         options={optionsModels}
                                                                                         placeholder="Choisir une option"
                                                                                         onChange={handleSelectModel}
@@ -1026,12 +1047,27 @@ export default function DecomInputs() {
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                TID GIM
+                                                Modèle
                                             </TableCell>
                                             <TableCell
                                                 isHeader
                                                 className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                TID ECOBANK
+                                                Banque
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Chargeur
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Carte SIM
+                                            </TableCell>
+                                            <TableCell
+                                                isHeader
+                                                className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                Carton
                                             </TableCell>
                                             <TableCell
                                                 isHeader
@@ -1065,56 +1101,76 @@ export default function DecomInputs() {
                                         {listeDecom.map((item, index) => (
                                             <TableRow>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     {index + 1}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     {item.pointMarchand}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     {item.terminalSN}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    {item.idGim}
+                                                    {item.nomModele || modelList.find((m) => m.id_model == item.modele)?.nom_model || <span>N/A</span>}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                                                    {item.idEcobank}
+                                                    {item.banque}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.hasChargeur ? (
+                                                        <>
+                                                            <span className="text-green-500">Oui</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-red-500">Non</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.hasCarteSim ? (
+                                                        <>
+                                                            <span className="text-green-500">Oui</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-red-500">Non</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell
+                                                    className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                                                    {item.hasCarton ? (
+                                                        <>
+                                                            <span className="text-green-500">Oui</span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-red-500">Non</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     <span style={{ fontSize: '9px' }}>
                                                         {item.etat}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     {item.RI}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     {item.nomCommercial}
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     <span style={{ fontSize: '9px' }}>
                                                         {item.commentaire}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell
-                                                    isHeader
                                                     className="px-4 py-3 text-gray-500 text-start text-theme-xs dark:text-gray-400">
                                                     <button
                                                         className="text-red-500 hover:text-red-700"
@@ -1175,6 +1231,10 @@ export default function DecomInputs() {
                                 <span>S/N: </span>
                                 <span className="font-bold text-sm">{terminalSN}</span>
                             </div>
+                            <div>
+                                <span>Modèle: </span>
+                                <span className="font-bold text-sm">{nomModel}</span>
+                            </div>
                             {terminalBanque ? (
                                 <>
                                     <div>
@@ -1232,6 +1292,15 @@ export default function DecomInputs() {
                                                 <span className="font-bold text-sm">Sans Chargeur</span>
                                             </>
                                         )}
+                                        {hasCarteSim ? (
+                                            <>
+                                                <span className="font-bold text-sm">Avec Carte SIM</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-sm">Sans Carte SIM</span>
+                                            </>
+                                        )}
                                         {isRI ? (
                                             <>
                                                 <span className="font-bold text-sm">RI OK</span>
@@ -1279,6 +1348,35 @@ export default function DecomInputs() {
                                                 <div>
                                                     <span>Etat: </span>
                                                     <span className="font-bold text-sm">{item.etat}</span>
+                                                </div>
+                                                <div className="flex flex-col space-y-1">
+                                                    {item.hasCarton ? (
+                                                        <>
+                                                            <span className="font-bold text-sm">Avec Carton</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="font-bold text-sm">Sans Carton</span>
+                                                        </>
+                                                    )}
+                                                    {item.hasChargeur ? (
+                                                        <>
+                                                            <span className="font-bold text-sm">Avec Chargeur</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="font-bold text-sm">Sans Chargeur</span>
+                                                        </>
+                                                    )}
+                                                    {item.hasCarteSim ? (
+                                                        <>
+                                                            <span className="font-bold text-sm">Avec Carte SIM</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="font-bold text-sm">Sans Carte SIM</span>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </>

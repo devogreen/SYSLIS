@@ -11,6 +11,35 @@ const configEmail = process.env.NODEMAILER_USER
 const JSZip = require("jszip");
 const ExcelJS = require("exceljs");
 const { allowedNodeEnvironmentFlags } = require("process");
+const {
+  toModelId,
+  verifierModelesExistants,
+  getTpesParc,
+  trouverConflitsModele,
+  creerTpesEtCompleterModeles,
+} = require("../../utils/parcTpeModele");
+
+// Types de livraison commerciale qui ne concernent pas des TPE (chargeurs) : pas d'écriture au parc
+const TYPES_LIVRAISON_SANS_TPE = [5, 7, 8]
+
+// Contrôle du modèle (unique pour tout le formulaire) AVANT toute écriture :
+// modèle obligatoire et existant, et identique au modèle déjà enregistré au parc pour chaque SN.
+// Retourne un message d'erreur, ou null si tout est correct.
+const controlerModeleFormulaire = async (serials, modelId, libelle = "TPE") => {
+  if (!toModelId(modelId)) {
+    return `Vous devez choisir le modèle du ${libelle} !`
+  }
+  const items = serials.map((serial) => ({ serial, modelId }))
+  const erreur = await verifierModelesExistants(prisma, items, { obligatoire: true })
+  if (erreur) return erreur
+
+  const conflits = trouverConflitsModele(items, await getTpesParc(prisma, serials))
+  if (conflits.length > 0) {
+    const liste = conflits.map((c) => `${c.serial} (${String(c.nomModeleParc || c.modeleParc).toUpperCase()})`).join(", ")
+    return `Le modèle choisi ne correspond pas au modèle enregistré au parc pour : ${liste}`
+  }
+  return null
+}
 
 const formatDate = (isoDate) => {
   const date = new Date(isoDate);
@@ -323,6 +352,15 @@ const deliver = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    // Modèle obligatoire et cohérent avec le parc (livraisons de TPE uniquement)
+    if (!TYPES_LIVRAISON_SANS_TPE.includes(parseInt(type_livraison_id))) {
+      const erreurModele = await controlerModeleFormulaire(produits.map((item) => item.serialNumber), selected_model)
+      if (erreurModele) {
+        console.error(erreurModele)
+        return res.status(400).json({ message: erreurModele });
+      }
+    }
+
     const signature = req.files?.signature?.[0] || null;
     if (!signature) {
       console.error('Signature manquante !')
@@ -390,16 +428,12 @@ const deliver = async (req, res) => {
         // Récupérer les SN de la liste
         const serials = produits.map(item => item.serialNumber);
 
-        // 1. Create only missing ones
-        await tx.parc_tpe.createMany({
-          data: serials.map(item => ({
-            serial_number: item,
-            created_by: utilisateur.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            statut_id: 6,
-          })),
-          skipDuplicates: true
+        // 1. Créer les TPE manquants avec le modèle du formulaire, compléter le modèle des TPE existants sans modèle
+        await creerTpesEtCompleterModeles(tx, serials.map((serial) => ({ serial, modelId: selected_model })), {
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 6,
         });
 
         // 2. Update ALL (existing + newly created)
@@ -819,6 +853,15 @@ const updateLivraison = async (req, res) => {
       return res.status(400).json({ message: "Impossible de modifier une livraison déjà validée." });
     }
 
+    // Modèle obligatoire et cohérent avec le parc (livraisons de TPE uniquement)
+    if (!TYPES_LIVRAISON_SANS_TPE.includes(parseInt(type_livraison_id))) {
+      const erreurModele = await controlerModeleFormulaire(produits.map((item) => item.serialNumber), selected_model)
+      if (erreurModele) {
+        console.error(erreurModele)
+        return res.status(400).json({ message: erreurModele });
+      }
+    }
+
     const dateAction = new Date()
 
     const livraison = await prisma.$transaction(async (tx) => {
@@ -838,8 +881,8 @@ const updateLivraison = async (req, res) => {
         stock_id: selectedStock ? +selectedStock : null,
       };
 
-      // Mise à jour de la livraison
-      const updated = await prisma.livraison.update({
+      // Mise à jour de la livraison (dans la transaction)
+      const updated = await tx.livraison.update({
         where: { id_livraison: parseInt(id) },
         data: dataToUpdate
       });
@@ -865,16 +908,12 @@ const updateLivraison = async (req, res) => {
         // Récupérer les SN de la liste
         const serials = produits.map(item => item.serialNumber);
 
-        // 1. Create only missing ones
-        await tx.parc_tpe.createMany({
-          data: serials.map(item => ({
-            serial_number: item,
-            created_by: utilisateur.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            statut_id: 6,
-          })),
-          skipDuplicates: true
+        // 1. Créer les TPE manquants avec le modèle du formulaire, compléter le modèle des TPE existants sans modèle
+        await creerTpesEtCompleterModeles(tx, serials.map((serial) => ({ serial, modelId: selected_model })), {
+          created_by: utilisateur.id_user,
+          created_at: dateAction,
+          last_modified_at: dateAction,
+          statut_id: 6,
         });
 
         // 2. Update ALL (existing + newly created)
@@ -2110,6 +2149,13 @@ const makeRemplacement = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    // Modèle du TPE remplaçant obligatoire et cohérent avec le parc
+    const erreurModele = await controlerModeleFormulaire(produits.map((item) => item.nouvelSN), nouveau_model, "TPE remplaçant")
+    if (erreurModele) {
+      console.error(erreurModele)
+      return res.status(400).json({ message: erreurModele });
+    }
+
     const signature = req.files?.signature?.[0] || null;
     if (!signature) {
       console.error('Signature manquante !')
@@ -2181,16 +2227,12 @@ const makeRemplacement = async (req, res) => {
 
       /**NOUVEAU TPE**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: serials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 7,
-        })),
-        skipDuplicates: true
+      // 1. Créer les TPE manquants avec le modèle du formulaire, compléter le modèle des TPE existants sans modèle
+      await creerTpesEtCompleterModeles(tx, serials.map((serial) => ({ serial, modelId: nouveau_model })), {
+        created_by: utilisateur.id_user,
+        created_at: dateAction,
+        last_modified_at: dateAction,
+        statut_id: 7,
       });
 
       // 2. Update ALL (existing + newly created)
@@ -3077,6 +3119,13 @@ const updateRemplacement = async (req, res) => {
       return res.status(400).json({ message: "Remplacement déjà validée." });
     }
 
+    // Modèle du TPE remplaçant obligatoire et cohérent avec le parc
+    const erreurModele = await controlerModeleFormulaire(produits.map((item) => item.nouvelSN), nouveau_model, "TPE remplaçant")
+    if (erreurModele) {
+      console.error(erreurModele)
+      return res.status(400).json({ message: erreurModele });
+    }
+
     const dateAction = new Date();
 
     const newRemplacement = await prisma.$transaction(async (tx) => {
@@ -3128,16 +3177,12 @@ const updateRemplacement = async (req, res) => {
 
       /**NOUVEAU TPE**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: serials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 7,
-        })),
-        skipDuplicates: true
+      // 1. Créer les TPE manquants avec le modèle du formulaire, compléter le modèle des TPE existants sans modèle
+      await creerTpesEtCompleterModeles(tx, serials.map((serial) => ({ serial, modelId: nouveau_model })), {
+        created_by: utilisateur.id_user,
+        created_at: dateAction,
+        last_modified_at: dateAction,
+        statut_id: 7,
       });
 
       // 2. Update ALL (existing + newly created)
@@ -3663,6 +3708,13 @@ const regRemplacement = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
+    // Modèle du TPE remplaçant obligatoire et cohérent avec le parc
+    const erreurModele = await controlerModeleFormulaire(produits.map((item) => item.nouvelSN), nouveau_model, "TPE remplaçant")
+    if (erreurModele) {
+      console.error(erreurModele)
+      return res.status(400).json({ message: erreurModele });
+    }
+
     const signature = req.files?.signature?.[0] || null;
     if (!signature) {
       console.error('Signature manquante !')
@@ -3735,16 +3787,12 @@ const regRemplacement = async (req, res) => {
 
       /**NOUVEAU TPE**/
 
-      // 1. Create only missing ones
-      await tx.parc_tpe.createMany({
-        data: serials.map(item => ({
-          serial_number: item,
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 7,
-        })),
-        skipDuplicates: true
+      // 1. Créer les TPE manquants avec le modèle du formulaire, compléter le modèle des TPE existants sans modèle
+      await creerTpesEtCompleterModeles(tx, serials.map((serial) => ({ serial, modelId: nouveau_model })), {
+        created_by: utilisateur.id_user,
+        created_at: dateAction,
+        last_modified_at: dateAction,
+        statut_id: 7,
       });
 
       // 2. Update ALL (existing + newly created)
