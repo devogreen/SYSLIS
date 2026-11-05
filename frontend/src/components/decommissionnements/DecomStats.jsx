@@ -43,30 +43,40 @@ const NOEUDS = {
   param_livres: { label: "Paramétrage direct — livrés", filtre: (l) => l.branche === "parametrage" && l.date_livraison },
   param_attente: { label: "Paramétrage direct — en attente de livraison", filtre: (l) => l.branche === "parametrage" && !l.date_livraison },
   reparation: { label: "À réparer", filtre: (l) => l.branche === "reparation" },
-  rep_attente_rep: { label: "À réparer — pas encore réparés", filtre: (l) => l.branche === "reparation" && !l.date_repare },
-  rep_repares: { label: "À réparer — réparés", filtre: (l) => l.branche === "reparation" && l.date_repare },
-  rep_attente_param: { label: "Réparés — pas encore revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.date_repare && !l.date_retour_param },
-  rep_param: { label: "Réparés — revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.date_retour_param },
-  rep_attente_livr: { label: "Réparés et paramétrés — en attente de livraison", filtre: (l) => l.branche === "reparation" && l.date_retour_param && !l.date_livraison },
+  rep_attente_rep: { label: "À réparer — pas encore réparés", filtre: (l) => l.branche === "reparation" && !l.etape_repare },
+  rep_repares: { label: "À réparer — réparés", filtre: (l) => l.branche === "reparation" && l.etape_repare },
+  rep_attente_param: { label: "Réparés — pas encore revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.etape_repare && !l.etape_retour_param },
+  rep_param: { label: "Réparés — revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.etape_retour_param },
+  rep_attente_livr: { label: "Réparés et paramétrés — en attente de livraison", filtre: (l) => l.branche === "reparation" && l.etape_retour_param && !l.date_livraison },
   rep_livres: { label: "Réparés — livrés", filtre: (l) => l.branche === "reparation" && l.date_livraison },
   rebut: { label: "Rebut", filtre: (l) => l.branche === "rebut" },
-  rebut_direct: { label: "Rebut direct", filtre: (l) => l.branche === "rebut" && !l.rebut_apres_reparation },
+  rebut_direct: { label: "Rebut direct", filtre: (l) => l.branche === "rebut" && !l.rebut_apres_reparation && !l.rebut_apres_parametrage },
   rebut_apres_rep: { label: "Rebut après tentative de réparation", filtre: (l) => l.branche === "rebut" && l.rebut_apres_reparation },
+  rebut_apres_param: { label: "Rebut après paramétrage", filtre: (l) => l.branche === "rebut" && l.rebut_apres_parametrage },
   en_cours: { label: "Décom en cours (diagnostic non décidé)", filtre: (l) => l.branche === "en_cours" },
   sans_diagnostic: { label: "Décom clôturé sans diagnostic (TPE non reçu)", filtre: (l) => l.branche === "sans_diagnostic" },
   livres: { label: "Tous les TPE livrés", filtre: (l) => !!l.date_livraison },
+  atypiques: { label: "Parcours atypiques (classés selon leur statut final)", filtre: (l) => l.parcours_atypique },
 };
 
 // Feuilles de l'export complet
 const FEUILLES = [
   ["Tous", "tous"], ["Param. direct", "parametrage"], ["Param. livrés", "param_livres"],
   ["À réparer", "reparation"], ["Réparés", "rep_repares"], ["Réparés retour param", "rep_param"], ["Réparés livrés", "rep_livres"],
-  ["Rebut", "rebut"], ["En cours", "en_cours"], ["Sans diagnostic", "sans_diagnostic"],
+  ["Rebut", "rebut"], ["En cours", "en_cours"], ["Sans diagnostic", "sans_diagnostic"], ["Parcours atypiques", "atypiques"],
 ];
 
 const BRANCHES = {
   parametrage: "Paramétrage direct", reparation: "À réparer", rebut: "Rebut", en_cours: "En cours", sans_diagnostic: "Sans diagnostic",
 };
+
+// Libellé du résultat (branche + précision du rebut)
+const resultat = (l) => BRANCHES[l.branche]
+  + (l.rebut_apres_reparation ? " (après réparation)" : l.rebut_apres_parametrage ? " (après paramétrage)" : "");
+
+// Date d'étape : date réelle, ou « non enregistrée » si l'étape a été sautée mais une étape suivante est atteinte
+const NON_ENREGISTREE = "Non enregistrée";
+const dateEtape = (date, franchie) => (date ? fmtDate(date) : franchie ? NON_ENREGISTREE : "");
 
 const periodeParDefaut = () => {
   const now = new Date();
@@ -83,14 +93,16 @@ const ligneExcel = (l) => ({
   "Banque": l.banque || "",
   "Point marchand": l.point_marchand || "",
   "Diagnostic": DIAGNOSTICS[l.diagnostic] || "",
-  "Résultat": BRANCHES[l.branche] + (l.rebut_apres_reparation ? " (après réparation)" : ""),
-  "Réparé le": l.date_repare ? fmtDate(l.date_repare) : "",
-  "Retour paramétrage le": l.date_retour_param ? fmtDate(l.date_retour_param) : "",
+  "Résultat": resultat(l),
+  "Réparé le": dateEtape(l.date_repare, l.branche === "reparation" && l.etape_repare),
+  "Retour paramétrage le": dateEtape(l.date_retour_param, l.branche === "reparation" && l.etape_retour_param),
   "Livré le": l.date_livraison ? fmtDate(l.date_livraison) : "",
   "Type de livraison": l.type_livraison === "remplacement" ? "Remplacement" : l.type_livraison === "back_office" ? "Back office" : "",
   "Rebut le": l.date_rebut ? fmtDate(l.date_rebut) : "",
   "Statut actuel": libelle(l.statut_actuel),
   "Reparti dans un autre décom": l.suivi_interrompu ? "Oui" : "",
+  "Parcours atypique": l.parcours_atypique ? "Oui" : "",
+  "Motif": l.motif_atypique || "",
 });
 
 // =====================================================================
@@ -122,6 +134,11 @@ function Attente({ valeur, label, onClick }) {
       <i className="pi pi-clock text-[10px]" /> {nf.format(valeur)} {label}
     </button>
   );
+}
+
+function DateEtape({ date, franchie }) {
+  if (date || !franchie) return fmtDate(date);
+  return <span className="text-xs italic text-gray-400" title="Étape non enregistrée dans l'historique : le TPE a atteint une étape suivante">{NON_ENREGISTREE}</span>;
 }
 
 function Fleche({ delai }) {
@@ -239,10 +256,13 @@ export default function DecomStats() {
       ["Rebut", r.rebut.total],
       ["  dont direct", r.rebut.direct],
       ["  dont après réparation", r.rebut.apres_reparation],
+      ["  dont après paramétrage", r.rebut.apres_parametrage || 0],
       ["Décom en cours", r.en_cours],
       ["Clôturé sans diagnostic", r.sans_diagnostic],
       ["Livrés back office", r.livres.back_office],
       ["Livrés en remplacement", r.livres.remplacement],
+      [],
+      ["Parcours atypiques (classés selon leur statut final)", r.atypiques || 0],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resume), "Résumé");
     for (const [nom, cle] of FEUILLES) {
@@ -333,6 +353,14 @@ export default function DecomStats() {
                 </button>
               ))}
             </div>
+            {r.atypiques > 0 && (
+              <button type="button" onClick={() => choisir("atypiques")}
+                title="TPE dont le parcours ne suit pas le circuit habituel (étapes sautées, décom non clôturé, diagnostic contredit) : ils sont comptés selon leur statut final."
+                className="mt-3 flex items-center gap-1.5 text-xs text-amber-700 hover:underline dark:text-amber-400">
+                <i className="pi pi-exclamation-triangle text-[11px]" />
+                {nf.format(r.atypiques)} TPE au parcours atypique, classés selon leur statut final
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -382,6 +410,11 @@ export default function DecomStats() {
                   actif={noeud === "rebut_direct"} onClick={() => choisir("rebut_direct")} />
                 <Compteur petit label="Après tentative de réparation" valeur={r.rebut.apres_reparation} base={r.rebut.total}
                   actif={noeud === "rebut_apres_rep"} onClick={() => choisir("rebut_apres_rep")} />
+                {r.rebut.apres_parametrage > 0 && (
+                  <Compteur petit label="Après paramétrage" valeur={r.rebut.apres_parametrage} base={r.rebut.total}
+                    actif={noeud === "rebut_apres_param"} onClick={() => choisir("rebut_apres_param")}
+                    aide="Diagnostiqués « paramétrage » mais finalement mis au rebut" />
+                )}
               </div>
               {d.rebut_cloture_rebut != null && (
                 <p className="mt-2 text-xs text-gray-500">Après réparation : délai médian clôture → rebut {fmtDuree(d.rebut_cloture_rebut)}</p>
@@ -414,7 +447,7 @@ export default function DecomStats() {
         <div className="overflow-x-auto [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
           <DataTable value={lignesNoeud} loading={loading} paginator rows={10} rowsPerPageOptions={[10, 25, 50, 100]}
             size="small" stripedRows removableSort emptyMessage="Aucun TPE."
-            globalFilter={recherche} globalFilterFields={["serial_number", "modele", "banque", "point_marchand", "statut_actuel"]}>
+            globalFilter={recherche} globalFilterFields={["serial_number", "modele", "banque", "point_marchand", "statut_actuel", "motif_atypique"]}>
             <Column header="N° de série" sortable sortField="serial_number" body={(l) => (l.id_tpe
               ? <Link to={`/historique-tpe/${l.id_tpe}`} className="font-medium text-brand-500 hover:underline">{l.serial_number}</Link>
               : l.serial_number)} />
@@ -432,11 +465,12 @@ export default function DecomStats() {
             <Column header="Résultat" sortable sortField="branche" body={(l) => (
               <span className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: couleurs[l.branche] }} />
-                {BRANCHES[l.branche]}{l.rebut_apres_reparation ? " (après rép.)" : ""}
+                {BRANCHES[l.branche]}{l.rebut_apres_reparation ? " (après rép.)" : l.rebut_apres_parametrage ? " (après param.)" : ""}
+                {l.parcours_atypique && <i className="pi pi-exclamation-triangle text-xs text-amber-600 dark:text-amber-400" title={`Parcours atypique : ${l.motif_atypique}`} />}
               </span>
             )} />
-            <Column header="Réparé le" sortable sortField="date_repare" body={(l) => fmtDate(l.date_repare)} />
-            <Column header="Paramétré le" sortable sortField="date_retour_param" body={(l) => fmtDate(l.date_retour_param)} />
+            <Column header="Réparé le" sortable sortField="date_repare" body={(l) => <DateEtape date={l.date_repare} franchie={l.branche === "reparation" && l.etape_repare} />} />
+            <Column header="Paramétré le" sortable sortField="date_retour_param" body={(l) => <DateEtape date={l.date_retour_param} franchie={l.branche === "reparation" && l.etape_retour_param} />} />
             <Column header="Livré le" sortable sortField="date_livraison" body={(l) => (l.date_livraison ? (
               <span className="whitespace-nowrap">{fmtDate(l.date_livraison)} <span className="text-xs text-gray-500">({l.type_livraison === "remplacement" ? "rempl." : "BO"})</span></span>
             ) : "—")} />

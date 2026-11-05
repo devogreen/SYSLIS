@@ -11,6 +11,10 @@
 //    Rebut               -> direct / après tentative de réparation
 //    En cours            -> décom pas encore clôturé (diagnostic non décidé)
 //
+//  Le statut final du TPE fait foi : un TPE au parcours incomplet ou
+//  incohérent mais finalement livré / mis au rebut est classé selon cette
+//  issue et signalé comme « parcours atypique » (voir corrigerSelonIssue).
+//
 //  Unité = un passage en décom (un TPE présent dans 2 décoms de la période
 //  compte 2 fois, chaque passage étant suivi séparément).
 // =====================================================================
@@ -26,9 +30,12 @@ const STATUT_ATTENTE_DECOM = 8;
 const STATUT_REPARE = 10;
 const STATUT_A_REPARER = 11;
 const STATUT_PARAM_MAINTENANCE = 13;
+const STATUT_DECOM_EN_REPARATION = 14;
 const STATUT_DECOM_REMPLACEMENT = 16;
 const STATUTS_ENTREE = [STATUT_ATTENTE_DECOM, STATUT_DECOM_REMPLACEMENT];
 const STATUTS_LIVRE = [STATUT_BACK_OFFICE_LIVRE, STATUT_REMPLACEMENT];
+// Statuts prouvant que le TPE est passé par le circuit de réparation
+const STATUTS_CIRCUIT_REPARATION = [STATUT_A_REPARER, STATUT_DECOM_EN_REPARATION, STATUT_REPARE];
 
 // Statuts de form_decom à partir desquels le diagnostic est définitif
 const DECOM_CLOTURE = [
@@ -93,6 +100,104 @@ const texte = (v) => (v === undefined || v === null || v === '' ? null : String(
 // Premier évènement d'historique (dans la fenêtre) dont le statut est dans `statuts`, après `apres`
 const premier = (hist, statuts, apres) =>
     hist.find((h) => statuts.includes(h.statut_id) && h.date >= apres) || null;
+
+// Issue réelle du passage : dernier statut de la fenêtre, s'il est livré (6/7) ou rebut (5).
+// `evt` = premier évènement de la série finale (ex. 6 puis 7 -> date du 6), `type` = livre | rebut.
+const issueFinale = (hist) => {
+    if (!hist.length) return null;
+    const dernier = hist[hist.length - 1];
+    const livre = STATUTS_LIVRE.includes(dernier.statut_id);
+    if (!livre && dernier.statut_id !== STATUT_REBUT) return null;
+    const serie = livre ? STATUTS_LIVRE : [STATUT_REBUT];
+    let i = hist.length - 1;
+    while (i > 0 && serie.includes(hist[i - 1].statut_id)) i--;
+    return { type: livre ? 'livre' : 'rebut', evt: hist[i] };
+};
+
+// ---------------------------------------------------------------------
+//  Parcours atypiques : le statut final du TPE fait foi
+//
+//  Certains TPE ne suivent pas le circuit théorique de leur branche
+//  (ex. diagnostiqué « à réparer » mais livré sans passer par 10 -> 4),
+//  ou finissent livrés / au rebut alors que le décom n'est pas clôturé.
+//  Si le dernier statut de la fenêtre de suivi est livré (6/7) ou rebut (5),
+//  le passage est classé selon cette issue réelle :
+//    - livré  : reste dans sa branche de diagnostic (paramétrage / à réparer) ;
+//               les étapes sautées sont comptées comme franchies (sans date,
+//               donc sans effet sur les délais médians). Diagnostic rebut,
+//               décom en cours ou sans diagnostic -> branche selon le parcours
+//               (à réparer s'il est passé par 11/14/10, sinon paramétrage).
+//    - rebut  : branche rebut (après paramétrage / après réparation / direct).
+//  Chaque correction est signalée (parcours_atypique + motif_atypique).
+// ---------------------------------------------------------------------
+const LIBELLES_BRANCHE = {
+    en_cours: 'Décom non clôturé',
+    sans_diagnostic: 'Clôturé sans diagnostic',
+    parametrage: 'Diagnostic paramétrage',
+    reparation: 'Diagnostic à réparer',
+    rebut: 'Diagnostic rebut',
+};
+
+const corrigerSelonIssue = (l, { hist, branche, cloture, diag, debutSuivi }) => {
+    const issue = issueFinale(hist);
+    if (!issue) return;
+    // L'issue doit être postérieure à l'entrée du TPE dans ce décom (statut 8/16).
+    // Sans ligne d'entrée, on ne l'accepte que pour un décom clôturé.
+    const entree = hist.find((h) => STATUTS_ENTREE.includes(h.statut_id));
+    if (entree ? issue.evt.date <= entree.date : !cloture) return;
+
+    const motif = (m) => l.motifs_atypiques.push(m);
+    const viaReparation = hist.some((h) => STATUTS_CIRCUIT_REPARATION.includes(h.statut_id));
+
+    if (issue.type === 'livre') {
+        let cible = branche;
+        if (!['parametrage', 'reparation'].includes(branche)) {
+            cible = viaReparation || diag === 'a_reparer' ? 'reparation' : 'parametrage';
+            motif(`${LIBELLES_BRANCHE[branche]}, TPE finalement livré`);
+        } else if (l.branche === 'rebut') {
+            motif('Mis au rebut puis finalement livré');
+        }
+        l.branche = cible;
+        l.rebut_apres_reparation = false;
+        l.rebut_apres_parametrage = false;
+        l.date_rebut = null;
+
+        if (cible === 'reparation' && !l.date_retour_param) {
+            const param = premier(hist, [STATUT_PARAMETRAGE], l.date_repare || debutSuivi);
+            if (param && param.date <= issue.evt.date) l.date_retour_param = param.date;
+        }
+        if (!l.motifs_atypiques.length) {
+            if (cible === 'reparation' && !l.date_repare) motif('Livré sans réparation enregistrée');
+            else if (!l.date_retour_param) motif('Livré sans retour en paramétrage enregistré');
+        }
+        if (!l.date_livraison) {
+            l.date_livraison = issue.evt.date;
+            l.type_livraison = issue.evt.statut_id === STATUT_REMPLACEMENT ? 'remplacement' : 'back_office';
+            if (!l.motifs_atypiques.length) motif('Livraison hors parcours habituel');
+        }
+        if (cible === 'reparation') l.etape_repare = true;
+        l.etape_retour_param = true;
+        return;
+    }
+
+    // Issue = rebut
+    if (l.branche !== 'rebut') {
+        if (branche === 'parametrage') {
+            l.rebut_apres_parametrage = true;
+            motif('Diagnostic paramétrage, TPE finalement mis au rebut');
+        } else {
+            if (viaReparation) l.rebut_apres_reparation = true;
+            else if (diag === 'parametrage') l.rebut_apres_parametrage = true;
+            motif(`${LIBELLES_BRANCHE[branche]}, TPE mis au rebut`);
+        }
+        l.branche = 'rebut';
+        l.date_rebut = issue.evt.date;
+    } else if (l.date_livraison) {
+        motif('Livré puis mis au rebut');
+    }
+    l.date_livraison = null;
+    l.type_livraison = null;
+};
 
 // ---------------------------------------------------------------------
 //  GET /api/stats/decom/entonnoir
@@ -242,11 +347,17 @@ const getEntonnoirDecom = async (req, res) => {
                 diagnostic,
                 branche,
                 rebut_apres_reparation: false,
+                rebut_apres_parametrage: false,
                 date_repare: null,
                 date_retour_param: null,
                 date_livraison: null,
                 type_livraison: null,
                 date_rebut: null,
+                // Étapes franchies (vraies aussi quand l'étape a été sautée mais qu'une étape suivante est atteinte)
+                etape_repare: false,
+                etape_retour_param: false,
+                parcours_atypique: false,
+                motifs_atypiques: [],
                 suivi_interrompu: Boolean(suivant), // le TPE est reparti dans un autre décom
             };
 
@@ -284,6 +395,13 @@ const getEntonnoirDecom = async (req, res) => {
                 const rebut = premier(hist, [STATUT_REBUT], debutSuivi);
                 l.date_rebut = l.date_cloture || (rebut ? rebut.date : null);
             }
+            l.etape_repare = Boolean(l.date_repare);
+            l.etape_retour_param = Boolean(l.date_retour_param);
+
+            corrigerSelonIssue(l, { hist, branche, cloture, diag: diagnostic, debutSuivi });
+            l.parcours_atypique = l.motifs_atypiques.length > 0;
+            l.motif_atypique = l.motifs_atypiques.join(' ; ') || null;
+            delete l.motifs_atypiques;
             lignes.push(l);
         }
 
@@ -299,17 +417,19 @@ const getEntonnoirDecom = async (req, res) => {
             parametrage: { total: compte(param), livres: compte((l) => param(l) && l.date_livraison) },
             reparation: {
                 total: compte(rep),
-                repares: compte((l) => rep(l) && l.date_repare),
-                retour_param: compte((l) => rep(l) && l.date_retour_param),
+                repares: compte((l) => rep(l) && l.etape_repare),
+                retour_param: compte((l) => rep(l) && l.etape_retour_param),
                 livres: compte((l) => rep(l) && l.date_livraison),
             },
             rebut: {
                 total: compte(rebut),
-                direct: compte((l) => rebut(l) && !l.rebut_apres_reparation),
+                direct: compte((l) => rebut(l) && !l.rebut_apres_reparation && !l.rebut_apres_parametrage),
                 apres_reparation: compte((l) => rebut(l) && l.rebut_apres_reparation),
+                apres_parametrage: compte((l) => rebut(l) && l.rebut_apres_parametrage),
             },
             en_cours: compte((l) => l.branche === 'en_cours'),
             sans_diagnostic: compte((l) => l.branche === 'sans_diagnostic'),
+            atypiques: compte((l) => l.parcours_atypique),
             livres: {
                 back_office: compte((l) => l.type_livraison === 'back_office'),
                 remplacement: compte((l) => l.type_livraison === 'remplacement'),
@@ -346,8 +466,8 @@ const resumeVide = () => ({
     total: 0, nb_tpe: 0, nb_decoms: 0,
     parametrage: { total: 0, livres: 0 },
     reparation: { total: 0, repares: 0, retour_param: 0, livres: 0 },
-    rebut: { total: 0, direct: 0, apres_reparation: 0 },
-    en_cours: 0, sans_diagnostic: 0,
+    rebut: { total: 0, direct: 0, apres_reparation: 0, apres_parametrage: 0 },
+    en_cours: 0, sans_diagnostic: 0, atypiques: 0,
     livres: { back_office: 0, remplacement: 0 },
 });
 
