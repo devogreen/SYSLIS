@@ -197,6 +197,24 @@ export default function ManipulationTpeInputs() {
     const snSansModele = listeSn.filter((item) => !item.modele_id)
     // SN dont le fichier indique un autre modèle que celui du parc (corrigeables avec le rôle 27)
     const snConflitModele = listeSn.filter((item) => item.conflit_modele)
+    const snNonEnregistres = listeSn.filter((item) => !item.enregistre)
+    // TPE du parc sans modèle qui en recevront un (colonne MODELE du fichier, sinon modèle par défaut)
+    const snModeleACompleter = listeSn.filter((item) => item.enregistre && !item.modele_parc && (item.modele_id || selectedModel))
+
+    // Modification du modèle SANS changement de statut (rôle 27) :
+    // - par S/N : TPE du parc, en correction du modèle ou sans modèle enregistré ;
+    // - par fichier : modèles à corriger (case cochée) ou à compléter.
+    const tpeAuParc = terminalSn.length === 10 && Boolean(statutTpe) && statutTpe !== 'non enregistré'
+    const statutFacultatifSingle = peutCorrigerModele && tpeAuParc && (corrigerModele || !modeleParc)
+    const statutFacultatifMultiple = peutCorrigerModele && listeSn.length > 0
+        && ((corrigerModele && snConflitModele.length > 0) || listeSn.some((item) => item.enregistre && !item.modele_parc))
+    const statutFacultatif = isSingle ? statutFacultatifSingle : (isMultiple ? statutFacultatifMultiple : false)
+
+    // La liste des statuts change (option « Statut inchangé ») : on repart d'un choix vide
+    useEffect(() => {
+        setSelectedStatut(null)
+        setNomStatut('')
+    }, [statutFacultatif])
 
     const handleSelectStatut = async (value) => {
         // '0' = "Statut inchangé" (proposé uniquement en correction de modèle)
@@ -219,8 +237,12 @@ export default function ManipulationTpeInputs() {
             setErrorAjout('S/N invalide !')
             return
         }
-        if (!selectedStatut && !corrigerModele) {
+        if (!selectedStatut && !statutFacultatifSingle) {
             setErrorAjout('Vous devez choisir un statut !')
+            return
+        }
+        if (!selectedStatut && !selectedModel) {
+            setErrorAjout(corrigerModele ? 'Vous devez choisir le nouveau modèle du TPE !' : 'Sans changement de statut, vous devez choisir le modèle à enregistrer !')
             return
         }
         if (selectedStatut && selectedStatut == statutTpeId) {
@@ -247,12 +269,16 @@ export default function ManipulationTpeInputs() {
             setErrorAjout('Liste de S/N invalide !')
             return
         }
-        if (!selectedStatut && !(corrigerModele && snConflitModele.length > 0)) {
+        if (!selectedStatut && !statutFacultatifMultiple) {
             setErrorAjout('Vous devez choisir un statut !')
             return
         }
-        if (!selectedStatut && snNonEnregistresSansModele.length > 0) {
-            setErrorAjout(`Sans changement de statut, les TPE non enregistrés au parc ne peuvent pas être créés : retirez-les du fichier ou choisissez un statut.`)
+        if (!selectedStatut && snNonEnregistres.length > 0) {
+            setErrorAjout(`Sans changement de statut, les ${snNonEnregistres.length} TPE non enregistrés au parc ne peuvent pas être créés : retirez-les du fichier ou choisissez un statut.`)
+            return
+        }
+        if (!selectedStatut && !(corrigerModele && snConflitModele.length > 0) && snModeleACompleter.length === 0) {
+            setErrorAjout('Aucun modèle à modifier : renseignez la colonne MODELE du fichier, choisissez un modèle par défaut ou un statut.')
             return
         }
         if (snNonEnregistresSansModele.length > 0 && !selectedModel) {
@@ -358,7 +384,7 @@ export default function ManipulationTpeInputs() {
                                 </div>
                             ) : (
                                 <>
-                                    <ComponentCard className="md:w-1/2 w-full" title="Modifier le statut de TPE">
+                                    <ComponentCard className="md:w-1/2 w-full" title={peutCorrigerModele ? "Modifier le statut ou le modèle de TPE" : "Modifier le statut de TPE"}>
                                         <div className="space-y-3">
                                             <div className="space-y-4">
                                                 <div>
@@ -468,6 +494,11 @@ export default function ManipulationTpeInputs() {
                                                                             onChange={handleSelectModel}
                                                                             className="dark:bg-dark-900"
                                                                         />
+                                                                        {statutFacultatifSingle ? (
+                                                                            <span className="text-xs text-orange-600">Le statut est facultatif : le modèle peut être enregistré sans changer le statut.</span>
+                                                                        ) : (
+                                                                            <></>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                             </div>
@@ -485,6 +516,10 @@ export default function ManipulationTpeInputs() {
                                                         <div className="space-y-2">
                                                             <div>
                                                                 <Label>Fichier Excel</Label>
+                                                                <span className="block text-xs text-gray-500 pb-1">
+                                                                    Colonnes : SERIAL NUMBER (obligatoire), MODELE (facultative).
+                                                                    {peutCorrigerModele ? " Avec la colonne MODELE, le modèle peut être modifié sans changer le statut." : ""}
+                                                                </span>
                                                                 <div className="flex space-x-1.5">
                                                                     <div
                                                                         {...getExcelRootProps()}
@@ -584,9 +619,10 @@ export default function ManipulationTpeInputs() {
                                                     <></>
                                                 )}
                                                 <div>
-                                                    <Label>Nouveau Statut {corrigerModele ? <span className="text-xs text-gray-500">(facultatif)</span> : <span className="text-red-700">*</span>}</Label>
+                                                    <Label>Nouveau Statut {statutFacultatif ? <span className="text-xs text-gray-500">(facultatif : modification du modèle seule possible)</span> : <span className="text-red-700">*</span>}</Label>
                                                     <Select
-                                                        options={corrigerModele ? [{ value: '0', label: '— Statut inchangé —' }, ...optionsStatut] : optionsStatut}
+                                                        key={statutFacultatif ? 'statut-facultatif' : 'statut-obligatoire'}
+                                                        options={statutFacultatif ? [{ value: '0', label: '— Statut inchangé —' }, ...optionsStatut] : optionsStatut}
                                                         placeholder="Choisir une option"
                                                         onChange={handleSelectStatut}
                                                         className="dark:bg-dark-900"
@@ -675,6 +711,13 @@ export default function ManipulationTpeInputs() {
                                     <span><i className="pi pi-arrow-right"></i></span>
                                     <span className="font-bold text-blue-600">{String(nomModel).toUpperCase()}</span>
                                 </div>
+                            ) : !modeleParc && nomModel && tpeAuParc ? (
+                                <div className="text-center text-sm space-x-2">
+                                    <span className="font-medium">Modèle :</span>
+                                    <span className="text-red-600 font-medium">aucun</span>
+                                    <span><i className="pi pi-arrow-right"></i></span>
+                                    <span className="font-bold text-blue-600">{String(nomModel).toUpperCase()}</span>
+                                </div>
                             ) : modeleParc || nomModel ? (
                                 <div className="text-center text-sm">
                                     <span className="font-medium">Modèle : </span>
@@ -758,6 +801,14 @@ export default function ManipulationTpeInputs() {
                                 ) : (
                                     <></>
                                 )}
+                                {snModeleACompleter.length > 0 ? (
+                                    <div>
+                                        <span className="font-medium">Modèles enregistrés (TPE du parc sans modèle) : </span>
+                                        <span className="font-bold text-blue-600">{snModeleACompleter.length} TPE</span>
+                                    </div>
+                                ) : (
+                                    <></>
+                                )}
                                 {snSansModele.length > 0 && nomModel ? (
                                     <div>
                                         <span className="font-medium">Modèle des {snSansModele.length} TPE sans modèle : </span>
@@ -782,4 +833,4 @@ export default function ManipulationTpeInputs() {
             </Modal>
         </>
     )
-}
+}

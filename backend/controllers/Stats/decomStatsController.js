@@ -34,6 +34,12 @@ const STATUT_DECOM_EN_REPARATION = 14;
 const STATUT_DECOM_REMPLACEMENT = 16;
 const STATUTS_ENTREE = [STATUT_ATTENTE_DECOM, STATUT_DECOM_REMPLACEMENT];
 const STATUTS_LIVRE = [STATUT_BACK_OFFICE_LIVRE, STATUT_REMPLACEMENT];
+// Libellés statut_tpe des statuts « livré » (le statut actuel est reconnu par libellé, ou à défaut par id)
+const NOM_LIVRE_BO = 'back_office_livre';
+const NOM_LIVRE_REMPLACEMENT = 'back_office_remplace';
+const estLivre = (tpe) => Boolean(tpe) && ([NOM_LIVRE_BO, NOM_LIVRE_REMPLACEMENT].includes(tpe.statut) || STATUTS_LIVRE.includes(Number(tpe.statut_id)));
+const typeLivraisonActuel = (tpe) =>
+    (tpe.statut === NOM_LIVRE_REMPLACEMENT || (tpe.statut !== NOM_LIVRE_BO && Number(tpe.statut_id) === STATUT_REMPLACEMENT) ? 'remplacement' : 'back_office');
 // Statuts prouvant que le TPE est passé par le circuit de réparation
 const STATUTS_CIRCUIT_REPARATION = [STATUT_A_REPARER, STATUT_DECOM_EN_REPARATION, STATUT_REPARE];
 
@@ -101,9 +107,20 @@ const texte = (v) => (v === undefined || v === null || v === '' ? null : String(
 const premier = (hist, statuts, apres) =>
     hist.find((h) => statuts.includes(h.statut_id) && h.date >= apres) || null;
 
-// Issue réelle du passage : dernier statut de la fenêtre, s'il est livré (6/7) ou rebut (5).
-// `evt` = premier évènement de la série finale (ex. 6 puis 7 -> date du 6), `type` = livre | rebut.
-const issueFinale = (hist) => {
+// Issue réelle du passage, `type` = livre | rebut, `evt` = évènement daté (ou null), `type_livraison`.
+//  1. Statut ACTUEL du TPE back_office_livre / back_office_remplace (et passage non suivi d'un
+//     autre décom) -> livré, quel que soit le parcours. Date = dernière série de 6/7 de
+//     l'historique postérieure à l'entrée dans le décom, sinon null (livraison non historisée).
+//  2. Sinon : dernier statut de la fenêtre, s'il est livré (6/7) ou rebut (5) ;
+//     date = premier évènement de la série finale (ex. 6 puis 7 -> date du 6).
+const issueFinale = (hist, tpe, interrompu, entree) => {
+    if (!interrompu && estLivre(tpe)) {
+        const apresEntree = entree ? hist.filter((h) => h.date > entree.date) : hist;
+        let i = apresEntree.length - 1;
+        while (i >= 0 && !STATUTS_LIVRE.includes(apresEntree[i].statut_id)) i--;
+        while (i > 0 && STATUTS_LIVRE.includes(apresEntree[i - 1].statut_id)) i--;
+        return { type: 'livre', evt: i >= 0 ? apresEntree[i] : null, type_livraison: typeLivraisonActuel(tpe), actuel: true };
+    }
     if (!hist.length) return null;
     const dernier = hist[hist.length - 1];
     const livre = STATUTS_LIVRE.includes(dernier.statut_id);
@@ -111,7 +128,12 @@ const issueFinale = (hist) => {
     const serie = livre ? STATUTS_LIVRE : [STATUT_REBUT];
     let i = hist.length - 1;
     while (i > 0 && serie.includes(hist[i - 1].statut_id)) i--;
-    return { type: livre ? 'livre' : 'rebut', evt: hist[i] };
+    return {
+        type: livre ? 'livre' : 'rebut',
+        evt: hist[i],
+        type_livraison: livre ? (hist[i].statut_id === STATUT_REMPLACEMENT ? 'remplacement' : 'back_office') : null,
+        actuel: false,
+    };
 };
 
 // ---------------------------------------------------------------------
@@ -120,8 +142,10 @@ const issueFinale = (hist) => {
 //  Certains TPE ne suivent pas le circuit théorique de leur branche
 //  (ex. diagnostiqué « à réparer » mais livré sans passer par 10 -> 4),
 //  ou finissent livrés / au rebut alors que le décom n'est pas clôturé.
-//  Si le dernier statut de la fenêtre de suivi est livré (6/7) ou rebut (5),
-//  le passage est classé selon cette issue réelle :
+//  Issue réelle (voir issueFinale) : statut ACTUEL back_office_livre /
+//  back_office_remplace -> livré quel que soit le parcours (sauf si le TPE est
+//  reparti dans un autre décom) ; sinon dernier statut de la fenêtre de suivi
+//  s'il est livré (6/7) ou rebut (5). Le passage est classé selon cette issue :
 //    - livré  : reste dans sa branche de diagnostic (paramétrage / à réparer) ;
 //               les étapes sautées sont comptées comme franchies (sans date,
 //               donc sans effet sur les délais médians). Diagnostic rebut,
@@ -138,13 +162,14 @@ const LIBELLES_BRANCHE = {
     rebut: 'Diagnostic rebut',
 };
 
-const corrigerSelonIssue = (l, { hist, branche, cloture, diag, debutSuivi }) => {
-    const issue = issueFinale(hist);
-    if (!issue) return;
+const corrigerSelonIssue = (l, { hist, tpe, interrompu, branche, cloture, diag, debutSuivi }) => {
     // L'issue doit être postérieure à l'entrée du TPE dans ce décom (statut 8/16).
-    // Sans ligne d'entrée, on ne l'accepte que pour un décom clôturé.
+    // Sans ligne d'entrée, on ne l'accepte que pour un décom clôturé (le TPE n'est
+    // peut-être jamais entré : ex. décom en cours, TPE encore livré chez le marchand).
     const entree = hist.find((h) => STATUTS_ENTREE.includes(h.statut_id));
-    if (entree ? issue.evt.date <= entree.date : !cloture) return;
+    const issue = issueFinale(hist, tpe, interrompu, entree);
+    if (!issue) return;
+    if (entree ? issue.evt && issue.evt.date <= entree.date : !cloture) return;
 
     const motif = (m) => l.motifs_atypiques.push(m);
     const viaReparation = hist.some((h) => STATUTS_CIRCUIT_REPARATION.includes(h.statut_id));
@@ -164,16 +189,18 @@ const corrigerSelonIssue = (l, { hist, branche, cloture, diag, debutSuivi }) => 
 
         if (cible === 'reparation' && !l.date_retour_param) {
             const param = premier(hist, [STATUT_PARAMETRAGE], l.date_repare || debutSuivi);
-            if (param && param.date <= issue.evt.date) l.date_retour_param = param.date;
+            if (param && (!issue.evt || param.date <= issue.evt.date)) l.date_retour_param = param.date;
         }
         if (!l.motifs_atypiques.length) {
             if (cible === 'reparation' && !l.date_repare) motif('Livré sans réparation enregistrée');
             else if (!l.date_retour_param) motif('Livré sans retour en paramétrage enregistré');
         }
-        if (!l.date_livraison) {
-            l.date_livraison = issue.evt.date;
-            l.type_livraison = issue.evt.statut_id === STATUT_REMPLACEMENT ? 'remplacement' : 'back_office';
-            if (!l.motifs_atypiques.length) motif('Livraison hors parcours habituel');
+        if (!l.livre) {
+            l.livre = true;
+            l.date_livraison = issue.evt ? issue.evt.date : null;
+            l.type_livraison = issue.type_livraison;
+            if (!issue.evt) motif('Statut actuel livré, livraison absente de l\'historique');
+            else if (!l.motifs_atypiques.length) motif('Livraison hors parcours habituel');
         }
         if (cible === 'reparation') l.etape_repare = true;
         l.etape_retour_param = true;
@@ -192,9 +219,10 @@ const corrigerSelonIssue = (l, { hist, branche, cloture, diag, debutSuivi }) => 
         }
         l.branche = 'rebut';
         l.date_rebut = issue.evt.date;
-    } else if (l.date_livraison) {
+    } else if (l.livre) {
         motif('Livré puis mis au rebut');
     }
+    l.livre = false;
     l.date_livraison = null;
     l.type_livraison = null;
 };
@@ -350,6 +378,7 @@ const getEntonnoirDecom = async (req, res) => {
                 rebut_apres_parametrage: false,
                 date_repare: null,
                 date_retour_param: null,
+                livre: false, // vrai aussi quand la date de livraison est inconnue (statut actuel livré non historisé)
                 date_livraison: null,
                 type_livraison: null,
                 date_rebut: null,
@@ -397,8 +426,9 @@ const getEntonnoirDecom = async (req, res) => {
             }
             l.etape_repare = Boolean(l.date_repare);
             l.etape_retour_param = Boolean(l.date_retour_param);
+            l.livre = Boolean(l.date_livraison);
 
-            corrigerSelonIssue(l, { hist, branche, cloture, diag: diagnostic, debutSuivi });
+            corrigerSelonIssue(l, { hist, tpe, interrompu: Boolean(suivant), branche, cloture, diag: diagnostic, debutSuivi });
             l.parcours_atypique = l.motifs_atypiques.length > 0;
             l.motif_atypique = l.motifs_atypiques.join(' ; ') || null;
             delete l.motifs_atypiques;
@@ -414,12 +444,12 @@ const getEntonnoirDecom = async (req, res) => {
             total: lignes.length,
             nb_tpe: new Set(lignes.map((l) => l.serial_number)).size,
             nb_decoms: new Set(lignes.map((l) => l.decom_id)).size,
-            parametrage: { total: compte(param), livres: compte((l) => param(l) && l.date_livraison) },
+            parametrage: { total: compte(param), livres: compte((l) => param(l) && l.livre) },
             reparation: {
                 total: compte(rep),
                 repares: compte((l) => rep(l) && l.etape_repare),
                 retour_param: compte((l) => rep(l) && l.etape_retour_param),
-                livres: compte((l) => rep(l) && l.date_livraison),
+                livres: compte((l) => rep(l) && l.livre),
             },
             rebut: {
                 total: compte(rebut),
@@ -431,8 +461,8 @@ const getEntonnoirDecom = async (req, res) => {
             sans_diagnostic: compte((l) => l.branche === 'sans_diagnostic'),
             atypiques: compte((l) => l.parcours_atypique),
             livres: {
-                back_office: compte((l) => l.type_livraison === 'back_office'),
-                remplacement: compte((l) => l.type_livraison === 'remplacement'),
+                back_office: compte((l) => l.livre && l.type_livraison === 'back_office'),
+                remplacement: compte((l) => l.livre && l.type_livraison === 'remplacement'),
             },
         };
 
@@ -452,7 +482,8 @@ const getEntonnoirDecom = async (req, res) => {
         // Ancienneté (heures depuis l'étape précédente) pour repérer les TPE bloqués
         lignes.forEach((l) => {
             const derniere = l.date_livraison || l.date_rebut || l.date_retour_param || l.date_repare || l.date_cloture || l.date_creation;
-            l.heures_depuis_derniere_etape = arrondi(heures(derniere, maintenant));
+            // Livré sans date connue : l'ancienneté n'a pas de sens
+            l.heures_depuis_derniere_etape = l.livre && !l.date_livraison ? null : arrondi(heures(derniere, maintenant));
         });
 
         res.status(200).json({ resume, delais, lignes });

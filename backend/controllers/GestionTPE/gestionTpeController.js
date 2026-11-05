@@ -16,6 +16,11 @@ const {
  * CORRECTION DU MODÈLE — seul endroit où un modèle déjà enregistré au parc peut être remplacé.
  * Réservée au rôle 27 (vérifié côté serveur). Pas de table d'historique : chaque correction
  * est tracée dans le journal du serveur (ligne "[CORRECTION MODELE TPE]").
+ *
+ * MODIFICATION DU MODÈLE SANS CHANGEMENT DE STATUT — également réservée au rôle 27 :
+ * sans statutId, seul le modèle est modifié (correction d'un modèle existant avec corrigerModele,
+ * ou enregistrement du modèle d'un TPE du parc qui n'en a pas). Statut, historique et
+ * last_modified_at restent inchangés.
  */
 const ROLE_CORRECTION_MODELE = 27
 
@@ -26,6 +31,18 @@ const aLeRole = async (userId, roleId) => {
         where: { user_id: parseInt(userId), role_id: roleId },
     })
     return Boolean(role)
+}
+
+// Contrôle des droits : la correction d'un modèle et toute modification sans changement de statut
+// sont réservées au rôle 27. Retourne { status, message } en cas de refus, sinon null.
+const controlerDroitsModele = async (utilisateur, { changerStatut, corriger }) => {
+    if (changerStatut && !corriger) return null
+    if (await aLeRole(utilisateur.id_user, ROLE_CORRECTION_MODELE)) return null
+    if (!changerStatut && !corriger) {
+        return { status: 400, message: "Vous devez choisir un statut !" }
+    }
+    console.error(`Modification de modèle refusée pour ${utilisateur.username} (rôle ${ROLE_CORRECTION_MODELE} requis)`)
+    return { status: 403, message: "Vous n'êtes pas autorisé à modifier le modèle d'un TPE !" }
 }
 
 // TPE au parc dont le modèle enregistré diffère du modèle demandé : [{ serial, ancienModelId, nouveauModelId }]
@@ -241,17 +258,12 @@ const changeTpeStatut = async (req, res) => {
 
         const corriger = toBoolean(corrigerModele)
         const changerStatut = Boolean(toModelId(statutId)) // id de statut > 0
-        if (!changerStatut && !corriger) {
-            return res.status(400).json({ message: "Vous devez choisir un statut !" });
+        const refus = await controlerDroitsModele(utilisateur, { changerStatut, corriger })
+        if (refus) {
+            return res.status(refus.status).json({ message: refus.message });
         }
-        if (corriger) {
-            if (!(await aLeRole(utilisateur.id_user, ROLE_CORRECTION_MODELE))) {
-                console.error(`Correction de modèle refusée pour ${utilisateur.username} (rôle ${ROLE_CORRECTION_MODELE} requis)`)
-                return res.status(403).json({ message: "Vous n'êtes pas autorisé à corriger le modèle d'un TPE !" });
-            }
-            if (!toModelId(modelId)) {
-                return res.status(400).json({ message: "Vous devez choisir le nouveau modèle du TPE !" });
-            }
+        if ((corriger || !changerStatut) && !toModelId(modelId)) {
+            return res.status(400).json({ message: corriger ? "Vous devez choisir le nouveau modèle du TPE !" : "Vous devez choisir un statut ou un modèle !" });
         }
 
         const terminal = { serial: terminalSn, modelId: toModelId(modelId) }
@@ -267,7 +279,11 @@ const changeTpeStatut = async (req, res) => {
         }
         const corrections = corriger ? preparerCorrectionsModele([terminal], tpesParc) : []
         if (!changerStatut && corrections.length === 0 && tpesParc.get(terminalSn)?.modelId) {
-            return res.status(400).json({ message: "Le TPE a déjà ce modèle : rien à modifier." });
+            return res.status(400).json({
+                message: corriger
+                    ? "Le TPE a déjà ce modèle : rien à modifier."
+                    : "Ce TPE a déjà un modèle au parc : cochez « Corriger le modèle » pour le remplacer.",
+            });
         }
         const dateAction = new Date()
 
@@ -521,12 +537,9 @@ const changeListeStatut = async (req, res) => {
 
         const corriger = toBoolean(corrigerModele)
         const changerStatut = Boolean(toModelId(statutId)) // id de statut > 0
-        if (!changerStatut && !corriger) {
-            return res.status(400).json({ message: "Vous devez choisir un statut !" });
-        }
-        if (corriger && !(await aLeRole(utilisateur.id_user, ROLE_CORRECTION_MODELE))) {
-            console.error(`Correction de modèle refusée pour ${utilisateur.username} (rôle ${ROLE_CORRECTION_MODELE} requis)`)
-            return res.status(403).json({ message: "Vous n'êtes pas autorisé à corriger le modèle d'un TPE !" });
+        const refus = await controlerDroitsModele(utilisateur, { changerStatut, corriger })
+        if (refus) {
+            return res.status(refus.status).json({ message: refus.message });
         }
 
         const modeleParSn = new Map((Array.isArray(terminaux) ? terminaux : [])
@@ -554,7 +567,7 @@ const changeListeStatut = async (req, res) => {
             : []
         const completions = items.filter((item) => item.modelId && !tpesParc.get(item.serial)?.modelId)
         if (!changerStatut && corrections.length === 0 && completions.length === 0) {
-            return res.status(400).json({ message: "Aucun modèle à corriger : rien à modifier." });
+            return res.status(400).json({ message: "Aucun modèle à modifier : rien à faire sans changement de statut." });
         }
         const dateAction = new Date()
 
@@ -817,4 +830,4 @@ module.exports = {
     changeListeStatut,
     getTpe,
     exportTpeToExcel,
-}
+}

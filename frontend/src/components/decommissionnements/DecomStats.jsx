@@ -40,22 +40,22 @@ const DIAGNOSTICS = { parametrage: "Paramétrage", a_reparer: "À réparer", reb
 const NOEUDS = {
   tous: { label: "Tous les TPE entrés en décom", filtre: () => true },
   parametrage: { label: "Paramétrage direct", filtre: (l) => l.branche === "parametrage" },
-  param_livres: { label: "Paramétrage direct — livrés", filtre: (l) => l.branche === "parametrage" && l.date_livraison },
-  param_attente: { label: "Paramétrage direct — en attente de livraison", filtre: (l) => l.branche === "parametrage" && !l.date_livraison },
+  param_livres: { label: "Paramétrage direct — livrés", filtre: (l) => l.branche === "parametrage" && l.livre },
+  param_attente: { label: "Paramétrage direct — en attente de livraison", filtre: (l) => l.branche === "parametrage" && !l.livre },
   reparation: { label: "À réparer", filtre: (l) => l.branche === "reparation" },
   rep_attente_rep: { label: "À réparer — pas encore réparés", filtre: (l) => l.branche === "reparation" && !l.etape_repare },
   rep_repares: { label: "À réparer — réparés", filtre: (l) => l.branche === "reparation" && l.etape_repare },
   rep_attente_param: { label: "Réparés — pas encore revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.etape_repare && !l.etape_retour_param },
   rep_param: { label: "Réparés — revenus en paramétrage", filtre: (l) => l.branche === "reparation" && l.etape_retour_param },
-  rep_attente_livr: { label: "Réparés et paramétrés — en attente de livraison", filtre: (l) => l.branche === "reparation" && l.etape_retour_param && !l.date_livraison },
-  rep_livres: { label: "Réparés — livrés", filtre: (l) => l.branche === "reparation" && l.date_livraison },
+  rep_attente_livr: { label: "Réparés et paramétrés — en attente de livraison", filtre: (l) => l.branche === "reparation" && l.etape_retour_param && !l.livre },
+  rep_livres: { label: "Réparés — livrés", filtre: (l) => l.branche === "reparation" && l.livre },
   rebut: { label: "Rebut", filtre: (l) => l.branche === "rebut" },
   rebut_direct: { label: "Rebut direct", filtre: (l) => l.branche === "rebut" && !l.rebut_apres_reparation && !l.rebut_apres_parametrage },
   rebut_apres_rep: { label: "Rebut après tentative de réparation", filtre: (l) => l.branche === "rebut" && l.rebut_apres_reparation },
   rebut_apres_param: { label: "Rebut après paramétrage", filtre: (l) => l.branche === "rebut" && l.rebut_apres_parametrage },
   en_cours: { label: "Décom en cours (diagnostic non décidé)", filtre: (l) => l.branche === "en_cours" },
   sans_diagnostic: { label: "Décom clôturé sans diagnostic (TPE non reçu)", filtre: (l) => l.branche === "sans_diagnostic" },
-  livres: { label: "Tous les TPE livrés", filtre: (l) => !!l.date_livraison },
+  livres: { label: "Tous les TPE livrés", filtre: (l) => !!l.livre },
   atypiques: { label: "Parcours atypiques (classés selon leur statut final)", filtre: (l) => l.parcours_atypique },
 };
 
@@ -96,7 +96,7 @@ const ligneExcel = (l) => ({
   "Résultat": resultat(l),
   "Réparé le": dateEtape(l.date_repare, l.branche === "reparation" && l.etape_repare),
   "Retour paramétrage le": dateEtape(l.date_retour_param, l.branche === "reparation" && l.etape_retour_param),
-  "Livré le": l.date_livraison ? fmtDate(l.date_livraison) : "",
+  "Livré le": dateEtape(l.date_livraison, l.livre),
   "Type de livraison": l.type_livraison === "remplacement" ? "Remplacement" : l.type_livraison === "back_office" ? "Back office" : "",
   "Rebut le": l.date_rebut ? fmtDate(l.date_rebut) : "",
   "Statut actuel": libelle(l.statut_actuel),
@@ -136,9 +136,9 @@ function Attente({ valeur, label, onClick }) {
   );
 }
 
-function DateEtape({ date, franchie }) {
+function DateEtape({ date, franchie, aide = "Étape non enregistrée dans l'historique : le TPE a atteint une étape suivante" }) {
   if (date || !franchie) return fmtDate(date);
-  return <span className="text-xs italic text-gray-400" title="Étape non enregistrée dans l'historique : le TPE a atteint une étape suivante">{NON_ENREGISTREE}</span>;
+  return <span className="text-xs italic text-gray-400" title={aide}>{NON_ENREGISTREE}</span>;
 }
 
 function Fleche({ delai }) {
@@ -471,8 +471,8 @@ export default function DecomStats() {
             )} />
             <Column header="Réparé le" sortable sortField="date_repare" body={(l) => <DateEtape date={l.date_repare} franchie={l.branche === "reparation" && l.etape_repare} />} />
             <Column header="Paramétré le" sortable sortField="date_retour_param" body={(l) => <DateEtape date={l.date_retour_param} franchie={l.branche === "reparation" && l.etape_retour_param} />} />
-            <Column header="Livré le" sortable sortField="date_livraison" body={(l) => (l.date_livraison ? (
-              <span className="whitespace-nowrap">{fmtDate(l.date_livraison)} <span className="text-xs text-gray-500">({l.type_livraison === "remplacement" ? "rempl." : "BO"})</span></span>
+            <Column header="Livré le" sortable sortField="date_livraison" body={(l) => (l.livre ? (
+              <span className="whitespace-nowrap"><DateEtape date={l.date_livraison} franchie aide="Statut actuel livré, mais aucune livraison dans l'historique : date inconnue" /> <span className="text-xs text-gray-500">({l.type_livraison === "remplacement" ? "rempl." : "BO"})</span></span>
             ) : "—")} />
             <Column header="Rebut le" sortable sortField="date_rebut" body={(l) => fmtDate(l.date_rebut)} />
             <Column header="Statut actuel" sortable sortField="statut_actuel" body={(l) => (
