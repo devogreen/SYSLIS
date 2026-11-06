@@ -38,30 +38,24 @@ export default function CreateStockInputs() {
     const [newStockPiece, setNewStockPiece] = useState(0)
     const [finalStockPiece, setFinaleStockPiece] = useState(0)
     const [entreeParPieceModalOpen, setEntreeParPieceModalOpen] = useState(false)
-    const [sortieParPieceModalOpen, setSortieParPieceModalOpen] = useState(false)
 
     const [quantiteCarton, setQuantiteCarton] = useState(null)
     const [newStockCarton, setNewStockCarton] = useState(0)
     const [finalStockCarton, setFinalStockCarton] = useState(0)
     const [quantitePieceCarton, setQuantitePieceCarton] = useState(0)
     const [entreeParCartonModalOpen, setEntreeParCartonModalOpen] = useState(false)
-    const [sortieParCartonModalOpen, setSortieParCartonModalOpen] = useState(false)
     const [selectedCartons, setSelectedCartons] = useState([])
     const [listeCartons, setListeCartons] = useState([])
 
     const [stockPieceCarton, setStockPieceCarton] = useState(0)
     const [finalStockPieceCarton, setFinalStockPieceCarton] = useState(0)
     const [selectedCarton, setSelectedCarton] = useState(null)
-    const [entreeParPieceCartonModalOpen, setEntreeParPieceCartonModalOpen] = useState(false)
-    const [sortieParPieceCartonModalOpen, setSortieParPieceCartonModalOpen] = useState(false)
     const [nomCarton, setNomCarton] = useState('')
 
     const [stockCartonLot, setStockCartonLot] = useState(0)
     const [finalStockCartonLot, setFinalStockCartonLot] = useState(0)
     const [selectedLot, setSelectedLot] = useState(null)
     const [nomLot, setNomLot] = useState('')
-    const [entreeParCartonLotModalOpen, setEntreeParCartonLotModalOpen] = useState(false)
-    const [sortieParCartonLotModalOpen, setSortieParCartonLotModalOpen] = useState(false)
     const [stockPieceLot, setStockPieceLot] = useState(0)
     const [finalStockPieceLot, setFinalStockPieceLot] = useState(0)
 
@@ -72,7 +66,6 @@ export default function CreateStockInputs() {
     const [selectedLots, setSelectedLots] = useState([])
     const [listeLots, setListeLots] = useState([])
     const [entreeParLotModalOpen, setEntreeParLotModalOpen] = useState(false)
-    const [sortieParLotModalOpen, setSortieParLotModalOpen] = useState(false)
 
     const [nomPiece, setNomPiece] = useState('')
 
@@ -185,7 +178,7 @@ export default function CreateStockInputs() {
                     })
                     const nomService = service ? service.nom_service : ''
                     setNomService(nomService)
-                    if (demande_data.statut_demande != 'valide' && roles_id.includes(4)) {
+                    if (!['valide', 'partiel'].includes(demande_data.statut_demande) && roles_id.includes(4)) {
                         const successPath = from === "demande-details"
                             ? `/valider-demande/${idDemande}`
                             : "/voir-stocks";
@@ -195,7 +188,7 @@ export default function CreateStockInputs() {
                             ? `/demande-details/${idDemande}`
                             : "/voir-stocks";
                         setFromFail(failPath)
-                    } else if (demande_data.statut_demande == 'valide') {
+                    } else if (['valide', 'partiel'].includes(demande_data.statut_demande)) {
                         const successPath = `/livraison-demande/${idDemande}`
                         setFromSuccess(successPath)
                     }
@@ -285,52 +278,9 @@ export default function CreateStockInputs() {
         setSelectedService(value)
     }
 
-    useEffect(() => {
-        const fetchQuantite = async () => {
-            if (!selectedModel || !selectedService) return // wait until both are chosen
-            try {
-                const quantite_piece = await stockData.getStockPiece(id, selectedModel, selectedService)
-                setQuantitePiece(quantite_piece)
-                console.log(quantite_piece)
-
-                const stock_carton_all = await stockData.getCartonPiece(id, selectedModel, selectedService)
-                const stock_carton = stock_carton_all.filter((item) => {
-                    return item.is_deleted == false
-                })
-                setQuantiteCarton(stock_carton.length)
-                const carton_simple = stock_carton.filter((item) => {
-                    return item.lot_id == null
-                })
-                const options_carton = carton_simple.map((item) => ({
-                    value: item.id,
-                    label: `Carton ${item.numero_carton} - ${item.quantite_totale_piece} pièces`
-                }))
-                setOptionsCartons(options_carton)
-                setListeCartons(stock_carton)
-
-                const stock_lot_all = await stockData.getLotPiece(id, selectedModel, selectedService)
-                const stock_lot = stock_lot_all.filter((item) => {
-                    return item.is_deleted == false
-                })
-                setQuantiteLot(stock_lot.length)
-                setListeLots(stock_lot)
-                const options_lot = stock_lot.map((item) => ({
-                    value: item.id,
-                    label: `Lot ${item.numero_lot} - ${item.quantite_carton} cartons - ${item.quantite_piece} pièces`
-                }))
-                setOptionsLot(options_lot)
-
-            } catch (error) {
-                console.log("Error fetching quantity", error)
-            }
-        }
-
-        // fetchQuantite()
-    }, [selectedModel, selectedService])
-
+    // Création de stock : uniquement des entrées (les sorties se font par une demande ou depuis la page du stock)
     const optionsTypes = [
         { value: "ENTREE", label: "ENTREE" },
-        { value: "SORTIE", label: "SORTIE" },
     ]
 
     const handleSelectType = (value) => {
@@ -530,320 +480,8 @@ export default function CreateStockInputs() {
         setError('')
         setIsEntree(true)
     }
-    const handleSortieParLot = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (selectedLots.length == 0) {
-            setError("Vous devez selectionner des lots !")
-            return
-        }
-
-        let destockPiece = 0
-        let destockCarton = 0
-
-        for (let id of selectedLots) {
-            const cartons = listeCartons.filter((item) => {
-                return item.lot_id == id
-            })
-            destockCarton += cartons.length
-            for (let carton of cartons) {
-                destockPiece += carton.quantite_totale_piece
-            }
-        }
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(destockCarton)
-        setFinalStockCarton(quantiteCarton - destockCarton)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setNewStockLot(selectedLots.length)
-        setFinalStockLot(quantiteLot - selectedLots.length)
-        setSortieParLotModalOpen(true)
-        setIsEntree(false)
-        setError('')
-    }
-    const handleValidateParLot = async () => {
-        setEntreeParLotModalOpen(false)
-        setSortieParLotModalOpen(false)
-
-        const item_id = id
-        const model_id = selectedModel
-        const service_id = selectedService
-        const listeLots = selectedLots ? selectedLots : []
-
-        const details = {
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: newStockPiece,
-            stockFinalPiece: finalStockPiece,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: newStockCarton,
-            stockFinalCarton: finalStockCarton,
-            quantiteCartonLot: quantiteCartonLot ? quantiteCartonLot : 0,
-            listeLots,
-        }
-
-        const payload = {
-            stockInitialLot: quantiteLot ? quantiteLot : 0,
-            quantiteMouvementLot: newStockLot,
-            stockFinalLot: finalStockLot,
-            details,
-            motif,
-            commentaire,
-            isEntree,
-            userId
-        }
-
-        try {
-            setLoadingValidation(true)
-            console.log('Sendind payload...')
-
-            const response = await stockData.setStockLot(item_id, model_id, service_id, payload)
-
-            console.log(response)
-            Swal.fire({
-                title: "Succès",
-                text: "Modification effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/entree-sortie-stock')
-
-        } catch (error) {
-            Swal.fire({
-                title: "Attention",
-                text: "Une erreur est survenue lors de la modification !",
-                icon: "warning"
-            })
-            navigate('/entree-sortie-stock')
-        } finally {
-            setLoadingValidation(false)
-        }
-    }
-
     // FONCTIONS POUR MOUVEMENT PAR CARTONS LOT
-    const handleEntreeParCartonLot = () => {
-        const newStockCartonInt = parseInt(newStockCarton)
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedLot) {
-            setError('Vous devez choisir le lot !')
-            return
-        }
-        if (newStockCartonInt == 0 || isNaN(newStockCartonInt) || newStockCartonInt == "") {
-            setError('Quantité invalide !')
-            return
-        }
-        if ((newStockCartonInt + stockCartonLot) > quantiteCartonLot) {
-            setError('Quantité excessive !')
-            return
-        }
-
-        setFinalStockCartonLot(newStockCartonInt + stockCartonLot)
-        setFinalStockCarton(quantiteCarton + newStockCartonInt)
-        setFinaleStockPiece(quantitePiece + (newStockCartonInt * quantitePieceCarton))
-        setFinalStockPieceLot(stockPieceLot + (newStockCartonInt * quantitePieceCarton))
-        setEntreeParCartonLotModalOpen(true)
-        setError('')
-        setIsEntree(true)
-    }
-    const handleSortieParCartonLot = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedLot) {
-            setError('Vous devez choisir le lot !')
-            return
-        }
-        if (selectedCartons.length == 0) {
-            setError("Vous devez selectionner des cartons !")
-            return
-        }
-
-        let destockPiece = 0
-
-        for (let id of selectedCartons) {
-            const carton = listeCartons.find((item) => {
-                return item.id == id
-            })
-            destockPiece += carton ? carton.quantite_totale_piece : 0
-        }
-
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(selectedCartons.length)
-        setFinalStockCarton(quantiteCarton - selectedCartons.length)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setFinalStockCartonLot(stockCartonLot - selectedCartons.length)
-        setFinalStockPieceLot(stockPieceLot - destockPiece)
-        setSortieParCartonLotModalOpen(true)
-        setIsEntree(false)
-        setError('')
-    }
-    const handleValidateParCartonLot = async () => {
-        setEntreeParCartonLotModalOpen(false)
-        setSortieParCartonLotModalOpen(false)
-
-        const item_id = id
-        const model_id = selectedModel
-        const service_id = selectedService
-        const listeCartons = selectedCartons ? selectedCartons : []
-
-        const details = {
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: newStockPiece,
-            stockFinalPiece: finalStockPiece,
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: newStockCarton,
-            stockFinalCarton: finalStockCarton,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            stockInitialPieceLot: stockPieceLot,
-            stockFinalPieceLot: finalStockPieceLot,
-            listeCartons,
-            selectedLot,
-        }
-
-        const payload = {
-            stockInitialCartonLot: stockCartonLot ? stockCartonLot : 0,
-            quantiteMouvementCartonLot: newStockCarton,
-            stockFinalCartonLot: finalStockCartonLot,
-            details,
-            motif,
-            commentaire,
-            isEntree,
-            userId
-        }
-
-        try {
-            setLoadingValidation(true)
-            console.log('Sendind payload...')
-
-            const response = await stockData.setStockCartonLot(item_id, model_id, service_id, payload)
-
-            console.log(response)
-            Swal.fire({
-                title: "Succès",
-                text: "Modification effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/entree-sortie-stock')
-
-        } catch (error) {
-            Swal.fire({
-                title: "Attention",
-                text: "Une erreur est survenue lors de la modification !",
-                icon: "warning"
-            })
-            navigate('/entree-sortie-stock')
-        } finally {
-            setLoadingValidation(false)
-        }
-    }
-
     // FONCTIONS POUR MOUVEMENT PAR PIECES CARTON
-    const handleEntreeParPieceCarton = () => {
-        const newStockPieceInt = parseInt(newStockPiece)
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedCarton) {
-            setError('Vous devez choisir le carton !')
-            return
-        }
-        if (newStockPieceInt == 0 || isNaN(newStockPieceInt) || newStockPieceInt == "") {
-            setError('Quantité invalide !')
-            return
-        }
-        if ((newStockPieceInt + stockPieceCarton) > quantitePieceCarton) {
-            setError('Quantité excessive !')
-            return
-        }
-
-        setFinalStockPieceCarton(newStockPieceInt + stockPieceCarton)
-        setFinaleStockPiece(quantitePiece + newStockPieceInt)
-        if (selectedLot) { setFinalStockPieceLot(newStockPieceInt + stockPieceLot) }
-        setEntreeParPieceCartonModalOpen(true)
-        setError('')
-        setIsEntree(true)
-    }
-    const handleSortieParPieceCarton = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (!selectedCarton) {
-            setError('Vous devez choisir le carton !')
-            return
-        }
-        if (newStockPiece == 0) {
-            setError('Quantité invalide !')
-            return
-        }
-        if (newStockPiece > stockPieceCarton) {
-            setError('Stock insuffisant !')
-            return
-        }
-
-        setFinalStockPieceCarton(stockPieceCarton - newStockPiece)
-        setFinaleStockPiece(quantitePiece - newStockPiece)
-        if (selectedLot) { setFinalStockPieceLot(stockPieceLot - newStockPiece) }
-        setSortieParPieceCartonModalOpen(true)
-        setError('')
-        setIsEntree(false)
-    }
-    const handleValidateParPieceCarton = async () => {
-        setEntreeParPieceCartonModalOpen(false)
-        setSortieParPieceCartonModalOpen(false)
-
-        const item_id = id
-        const model_id = selectedModel
-        const service_id = selectedService
-
-        const details = {
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: newStockPiece,
-            stockFinalPiece: finalStockPiece,
-            quantitePieceCarton,
-            selectedCarton,
-            stockInitialPieceLot: stockPieceLot ? stockPieceLot : null,
-            stockFinalPieceLot: finalStockPieceLot ? finalStockPieceLot : null,
-            selectedLot: selectedLot ? selectedLot : null,
-        }
-
-        const payload = {
-            stockInitialPieceCarton: stockPieceCarton,
-            quantiteMouvementPieceCarton: newStockPiece,
-            stockFinalPieceCarton: finalStockPieceCarton,
-            details,
-            motif,
-            commentaire,
-            isEntree,
-            userId
-        }
-
-        try {
-            setLoadingValidation(true)
-            console.log('Sendind payload...')
-
-            const response = await stockData.setStockPieceCarton(item_id, model_id, service_id, payload)
-
-            console.log(response)
-            Swal.fire({
-                title: "Succès",
-                text: "Modification effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/entree-sortie-stock')
-
-        } catch (error) {
-            Swal.fire({
-                title: "Attention",
-                text: "Une erreur est survenue lors de la modification !",
-                icon: "warning"
-            })
-            navigate('/entree-sortie-stock')
-        } finally {
-            setLoadingValidation(false)
-        }
-    }
-
     // FONCTIONS POUR MOUVEMENT PAR CARTON
     const handleEntreeParCarton = () => {
         const newStockCartonInt = parseInt(newStockCarton)
@@ -876,86 +514,6 @@ export default function CreateStockInputs() {
         setError('')
         setIsEntree(true)
     }
-    const handleSortieParCarton = () => {
-
-        if (!checkValidate()) {
-            return
-        }
-        if (selectedCartons.length == 0) {
-            setError("Vous devez selectionner des cartons !")
-            return
-        }
-
-        let destockPiece = 0
-
-        for (let id of selectedCartons) {
-            const carton = listeCartons.find((item) => {
-                return item.id == id
-            })
-            destockPiece += carton ? carton.quantite_totale_piece : 0
-        }
-        setNewStockPiece(destockPiece)
-        setNewStockCarton(selectedCartons.length)
-        setFinalStockCarton(quantiteCarton - selectedCartons.length)
-        setFinaleStockPiece(quantitePiece - destockPiece)
-        setSortieParCartonModalOpen(true)
-        setIsEntree(false)
-        setError('')
-    }
-    const handleValidateParCarton = async () => {
-        setEntreeParCartonModalOpen(false)
-        setSortieParCartonModalOpen(false)
-
-        const item_id = id
-        const model_id = selectedModel
-        const service_id = selectedService
-        const listeCartons = selectedCartons ? selectedCartons : []
-
-        const details = {
-            stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvementPiece: newStockPiece,
-            stockFinalPiece: finalStockPiece,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            listeCartons,
-        }
-
-        const payload = {
-            stockInitialCarton: quantiteCarton ? quantiteCarton : 0,
-            quantiteMouvementCarton: newStockCarton,
-            stockFinalCarton: finalStockCarton,
-            details,
-            motif,
-            commentaire,
-            isEntree,
-            userId
-        }
-
-        try {
-            setLoadingValidation(true)
-            console.log('Sendind payload...')
-
-            const response = await stockData.setStockCarton(item_id, model_id, service_id, payload)
-
-            console.log(response)
-            Swal.fire({
-                title: "Succès",
-                text: "Modification effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/entree-sortie-stock')
-
-        } catch (error) {
-            Swal.fire({
-                title: "Attention",
-                text: "Une erreur est survenue lors de la modification !",
-                icon: "warning"
-            })
-            navigate('/entree-sortie-stock')
-        } finally {
-            setLoadingValidation(false)
-        }
-    }
-
 
     // FONCTIONS POUR MOUVEMENT STOCK PAR PIECE
     const handleEntreeParPiece = () => {
@@ -979,65 +537,6 @@ export default function CreateStockInputs() {
         setError('')
         setIsEntree(true)
     }
-    const handleSortieParPiece = () => {
-        if (!checkValidate()) {
-            return
-        }
-        if (newStockPiece == 0) {
-            setError("Quantité invalide !")
-            return
-        }
-        if (newStockPiece > quantitePiece) {
-            setError("Stock insuffisant !")
-            return
-        }
-        setIsEntree(false)
-        setFinaleStockPiece(quantitePiece - newStockPiece)
-        setSortieParPieceModalOpen(true)
-        setError('')
-    }
-    const handleValidateParPiece = async () => {
-        setEntreeParPieceModalOpen(false)
-        setSortieParPieceModalOpen(false)
-
-        const item_id = id
-        const model_id = selectedModel
-        const service_id = selectedService
-        const payload = {
-            stockInitial: quantitePiece ? quantitePiece : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinal: finalStockPiece,
-            motif,
-            commentaire,
-            isEntree,
-            userId
-        }
-        try {
-            setLoadingValidation(true)
-            console.log('Sendind payload...')
-
-            const response = await stockData.setStockPiece(item_id, model_id, service_id, payload)
-
-            console.log(response)
-            Swal.fire({
-                title: "Succès",
-                text: "Modification effectuée avec succès !",
-                icon: "success"
-            })
-            navigate('/entree-sortie-stock')
-
-        } catch (error) {
-            Swal.fire({
-                title: "Attention",
-                text: "Une erreur est survenue lors de la modification !",
-                icon: "warning"
-            })
-            navigate('/entree-sortie-stock')
-        } finally {
-            setLoadingValidation(false)
-        }
-    }
-
     // FONCTIONS POUR MOUVEMENT STOCK PAR SN
     const handleEntreeParSn = () => {
         if (!checkValidate()) {
@@ -1084,7 +583,7 @@ export default function CreateStockInputs() {
         } catch (error) {
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la création !",
+                text: error?.message || "Une erreur est survenue lors de la création !",
                 icon: "warning"
             })
             // navigate('/voir-stocks')
@@ -1122,7 +621,7 @@ export default function CreateStockInputs() {
         } catch (error) {
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la création !",
+                text: error?.message || "Une erreur est survenue lors de la création !",
                 icon: "warning"
             })
             navigate('/voir-stocks')
@@ -1426,8 +925,7 @@ export default function CreateStockInputs() {
                                                                 className="dark:bg-dark-900"
                                                             />
                                                         </div> */}
-                                                        {selectedEntree ? (
-                                                            <>
+                                                                                                                    <>
                                                                 <div className="space-y-5">
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <div>
@@ -1495,274 +993,6 @@ export default function CreateStockInputs() {
                                                                     </div>
                                                                 </div>
                                                             </>
-                                                        ) : (
-                                                            <>
-                                                                <div>
-                                                                    <div>
-                                                                        <MultiSelect
-                                                                            value={selectedLots}
-                                                                            options={optionsLot}
-                                                                            display="chip"
-                                                                            optionLabel="label"
-                                                                            maxSelectedLabels={3}
-                                                                            onChange={(e) => setSelectedLots(e.value)}
-                                                                            placeholder="Choisir le(s) lot(s)"
-                                                                            className="w-full"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    {loadingValidation ? (
-                                                                        <>
-                                                                            <div>
-                                                                                <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div className="w-full flex justify-center items-center">
-                                                                                <button className="w-1/2 text-center flex items-center justify-between bg-red-400 p-2 rounded-2xl"
-                                                                                    onClick={handleSortieParLot}
-                                                                                >
-                                                                                    <span>Sortie</span>
-                                                                                    <i className="pi pi-arrow-circle-up"></i>
-                                                                                </button>
-                                                                            </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {parCartonLot ? (
-                                            <>
-                                                <div>
-                                                    <div className="space-y-5">
-                                                        <div className="py-3 text-center">
-                                                            <span className="text-sm font-semibold">Mouvement par cartons-lot</span>
-                                                        </div>
-                                                        {/* <div>
-                                                            <Label>Choisir le type</Label>
-                                                            <Select
-                                                                options={optionsTypes}
-                                                                placeholder="Choisir une option"
-                                                                onChange={handleSelectType}
-                                                                className="dark:bg-dark-900"
-                                                            />
-                                                        </div> */}
-                                                        {selectedEntree ? (
-                                                            <>
-                                                                <div className="space-y-5">
-                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                        <div>
-                                                                            <Label>Choisir le lot</Label>
-                                                                            <Select
-                                                                                options={optionsLot}
-                                                                                placeholder="Choisir une option"
-                                                                                className="dark:bg-dark-900"
-                                                                                onChange={handleSelectLotCarton}
-                                                                            />
-                                                                        </div>
-                                                                        <div>
-                                                                            <Label>Quantité Carton</Label>
-                                                                            <Input
-                                                                                type="text"
-                                                                                id="input"
-                                                                                value={newStockCarton}
-                                                                                onChange={(e) => {
-                                                                                    if (isOnlyDigits(e.target.value) || e.target.value === '') {
-                                                                                        const value = e.target.value
-                                                                                        setNewStockCarton(value)
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                    <div>
-                                                                        <Label>Quantité Pièce/Carton</Label>
-                                                                        <Input
-                                                                            type="text"
-                                                                            id="input"
-                                                                            value={quantitePieceCarton}
-                                                                            onChange={(e) => {
-                                                                                if (isOnlyDigits(e.target.value) || e.target.value === '') {
-                                                                                    const value = e.target.value
-                                                                                    if (value >= 0) {
-                                                                                        setQuantitePieceCarton(value)
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        {loadingValidation ? (
-                                                                            <>
-                                                                                <div>
-                                                                                    <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <div className="w-full flex justify-center items-center">
-                                                                                    <button className="w-1/2 flex items-center justify-between bg-green-400 p-2 rounded-2xl"
-                                                                                        onClick={handleEntreeParCartonLot}
-                                                                                    >
-                                                                                        <span>Entrée</span>
-                                                                                        <i className="pi pi-arrow-circle-down"></i>
-                                                                                    </button>
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <div className="space-y-5">
-                                                                    <div>
-                                                                        <Label>Choisir le lot</Label>
-                                                                        <Select
-                                                                            options={optionsLot}
-                                                                            placeholder="Choisir une option"
-                                                                            className="dark:bg-dark-900"
-                                                                            onChange={handleSelectLotCarton}
-                                                                        />
-                                                                    </div>
-                                                                    {selectedLot ? (
-                                                                        <>
-                                                                            <div>
-                                                                                <MultiSelect
-                                                                                    value={selectedCartons}
-                                                                                    options={optionsCartons}
-                                                                                    display="chip"
-                                                                                    optionLabel="label"
-                                                                                    maxSelectedLabels={4}
-                                                                                    onChange={(e) => setSelectedCartons(e.value)}
-                                                                                    placeholder="Choisir le(s) carton(s)"
-                                                                                    className="w-full"
-                                                                                />
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <></>
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    {loadingValidation ? (
-                                                                        <>
-                                                                            <div>
-                                                                                <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div className="w-full flex justify-center items-center">
-                                                                                <button className="w-1/2 text-center flex items-center justify-between bg-red-400 p-2 rounded-2xl"
-                                                                                    onClick={handleSortieParCartonLot}
-                                                                                >
-                                                                                    <span>Sortie</span>
-                                                                                    <i className="pi pi-arrow-circle-up"></i>
-                                                                                </button>
-                                                                            </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <></>
-                                        )}
-                                        {parPieceCarton ? (
-                                            <>
-                                                <div className="space-y-5">
-                                                    <div>
-                                                        <div className="py-3 text-center">
-                                                            <span className="text-sm font-semibold">Mouvement par pièce-carton</span>
-                                                        </div>
-                                                        <div className="space-y-5">
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <div>
-                                                                    <Label>Choisir le lot</Label>
-                                                                    <Select
-                                                                        options={optionsLot}
-                                                                        placeholder="Choisir une option"
-                                                                        className="dark:bg-dark-900"
-                                                                        onChange={handleSelectLotCarton}
-                                                                    />
-                                                                </div>
-                                                                <div>
-                                                                    <Label>Choisir le carton</Label>
-                                                                    <Select
-                                                                        options={optionsCartons}
-                                                                        placeholder="Choisir une option"
-                                                                        className="dark:bg-dark-900"
-                                                                        onChange={handleSelectCarton}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <Label>Quantité pièce</Label>
-                                                                <Input
-                                                                    type="text"
-                                                                    id="input"
-                                                                    value={newStockPiece}
-                                                                    onChange={(e) => {
-                                                                        if (isOnlyDigits(e.target.value) || e.target.value === '') {
-                                                                            const value = e.target.value
-                                                                            if (value >= 0) {
-                                                                                setNewStockPiece(value)
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        {loadingValidation ? (
-                                                            <>
-                                                                <div>
-                                                                    <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <div className="w-full flex justify-center items-center">
-                                                                    <button className="w-1/2 flex items-center justify-between bg-green-400 p-2 rounded-2xl"
-                                                                        onClick={handleEntreeParPieceCarton}
-                                                                    >
-                                                                        <span>Entrée</span>
-                                                                        <i className="pi pi-arrow-circle-down"></i>
-                                                                    </button>
-                                                                </div>
-                                                                {/* <div className="grid grid-cols-2 gap-2">
-                                                                    <div>
-                                                                        <button className="w-full text-center flex items-center justify-between bg-green-400 p-2 rounded-2xl"
-                                                                            onClick={handleEntreeParPieceCarton}
-                                                                        >
-                                                                            <span>Entrée</span>
-                                                                            <i className="pi pi-arrow-circle-down"></i>
-                                                                        </button>
-                                                                    </div>
-                                                                    <div>
-                                                                        <button className="w-full text-center flex items-center justify-between bg-red-400 p-2 rounded-2xl"
-                                                                            onClick={handleSortieParPieceCarton}
-                                                                        >
-                                                                            <span>Sortie</span>
-                                                                            <i className="pi pi-arrow-circle-up"></i>
-                                                                        </button>
-                                                                    </div>
-                                                                </div> */}
-                                                            </>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </>
@@ -1785,8 +1015,7 @@ export default function CreateStockInputs() {
                                                                 className="dark:bg-dark-900"
                                                             />
                                                         </div> */}
-                                                        {selectedEntree ? (
-                                                            <>
+                                                                                                                    <>
                                                                 <div className="space-y-5">
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <div>
@@ -1840,44 +1069,6 @@ export default function CreateStockInputs() {
                                                                     </div>
                                                                 </div>
                                                             </>
-                                                        ) : (
-                                                            <>
-                                                                <div>
-                                                                    <div>
-                                                                        <MultiSelect
-                                                                            value={selectedCartons}
-                                                                            options={optionsCartons}
-                                                                            display="chip"
-                                                                            optionLabel="label"
-                                                                            maxSelectedLabels={3}
-                                                                            onChange={(e) => setSelectedCartons(e.value)}
-                                                                            placeholder="Choisir le(s) carton(s)"
-                                                                            className="w-full"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    {loadingValidation ? (
-                                                                        <>
-                                                                            <div>
-                                                                                <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="8" animationDuration=".5s" />
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <div className="w-full flex justify-center items-center">
-                                                                                <button className="w-1/2 text-center flex items-center justify-between bg-red-400 p-2 rounded-2xl"
-                                                                                    onClick={handleSortieParCarton}
-                                                                                >
-                                                                                    <span>Sortie</span>
-                                                                                    <i className="pi pi-arrow-circle-up"></i>
-                                                                                </button>
-                                                                            </div>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </>
@@ -1923,24 +1114,6 @@ export default function CreateStockInputs() {
                                                                         <i className="pi pi-arrow-circle-down"></i>
                                                                     </button>
                                                                 </div>
-                                                                {/* <div className="grid grid-cols-2 gap-2">
-                                                                    <div>
-                                                                        <button className="w-full text-center flex items-center justify-between bg-green-400 p-2 rounded-2xl"
-                                                                            onClick={handleEntreeParPiece}
-                                                                        >
-                                                                            <span>Entrée</span>
-                                                                            <i className="pi pi-arrow-circle-down"></i>
-                                                                        </button>
-                                                                    </div>
-                                                                    <div>
-                                                                        <button className="w-full text-center flex items-center justify-between bg-red-400 p-2 rounded-2xl"
-                                                                            onClick={handleSortieParPiece}
-                                                                        >
-                                                                            <span>Sortie</span>
-                                                                            <i className="pi pi-arrow-circle-up"></i>
-                                                                        </button>
-                                                                    </div>
-                                                                </div> */}
                                                             </>
                                                         )}
                                                     </div>
@@ -2080,281 +1253,6 @@ export default function CreateStockInputs() {
                     </div>
                 </div>
             </Modal>
-            <Modal isOpen={sortieParLotModalOpen} onClose={() => setSortieParLotModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité lot initiale : {quantiteLot ? quantiteLot : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{selectedLots.length}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final lot : {finalStockLot}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockCarton}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParLot}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={entreeParCartonLotModalOpen} onClose={() => setEntreeParCartonLotModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Entrée stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Lot sélectionné : {nomLot}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockCartonLot}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-green-600 font-bold">+{newStockCarton}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockCartonLot}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Pièce/Carton : {quantitePieceCarton}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParCartonLot}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={sortieParCartonLotModalOpen} onClose={() => setSortieParCartonLotModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Lot sélectionné : {nomLot}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockCartonLot}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockCarton}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockCartonLot}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParCartonLot}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={entreeParPieceCartonModalOpen} onClose={() => setEntreeParPieceCartonModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Entrée stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Carton sélectionné : {nomCarton}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockPieceCarton}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-green-600 font-bold">+{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockPieceCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParPieceCarton}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={sortieParPieceCartonModalOpen} onClose={() => setSortieParPieceCartonModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Carton sélectionné : {nomCarton}</span>
-                            </div>
-                            <div>
-                                <span>Quantité initiale : {stockPieceCarton}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final : {finalStockPieceCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParPieceCarton}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
             <Modal isOpen={entreeParCartonModalOpen} onClose={() => setEntreeParCartonModalOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-5">
                     <div className="w-full text-center">
@@ -2410,55 +1308,6 @@ export default function CreateStockInputs() {
                     </div>
                 </div>
             </Modal>
-            <Modal isOpen={sortieParCartonModalOpen} onClose={() => setSortieParCartonModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="space-y-1 ms-5 border-b pb-2 text-sm">
-                            <div>
-                                <span>Quantité carton initiale : {quantiteCarton ? quantiteCarton : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{selectedCartons.length}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final carton : {finalStockCarton}</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1 ms-5 text-sm">
-                            <div>
-                                <span>Quantité pièce initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                            </div>
-                            <div>
-                                <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                            </div>
-                            <div>
-                                <span>Stock final pièce : {finalStockPiece}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParCarton}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
             <Modal isOpen={entreeParPieceModalOpen} onClose={() => setEntreeParPieceModalOpen(false)} className="p-4 max-w-md">
                 <div className="space-y-5">
                     <div className="w-full text-center">
@@ -2492,42 +1341,6 @@ export default function CreateStockInputs() {
                     <div className='w-full mt-6 flex justify-center items-center'>
                         <button
                             onClick={handleValidate}
-                            className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
-                            Valider
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-            <Modal isOpen={sortieParPieceModalOpen} onClose={() => setSortieParPieceModalOpen(false)} className="p-4 max-w-md">
-                <div className="space-y-5">
-                    <div className="w-full text-center">
-                        <span className="p-3 rounded bg-blue-200 text-blue-500 font-medium">Sortie stock</span>
-                    </div>
-                    <div className="text-center">
-                        <span>
-                            <span className="text-sm text-gray-800 font-medium">{nomPiece} </span>
-                            -
-                            <span className="font-semibold"> {nomModel}</span> |
-                            <span className="font-medium text-gray-700"> {nomService}</span>
-                        </span>
-                    </div>
-                    <div className="ms-5 text-center">
-                        <span className="text-sm text-gray-800 underline">Motif: {motif}</span>
-                    </div>
-                    <div className="space-y-1 ms-5">
-                        <div>
-                            <span>Quantité initiale : {quantitePiece ? quantitePiece : '0'}</span>
-                        </div>
-                        <div>
-                            <span>Mouvement : <span className="text-red-600 font-bold">-{newStockPiece}</span></span>
-                        </div>
-                        <div>
-                            <span>Stock final : {finalStockPiece}</span>
-                        </div>
-                    </div>
-                    <div className='w-full mt-6 flex justify-center items-center'>
-                        <button
-                            onClick={handleValidateParPiece}
                             className='w-1/4 mx-3 bg-green-400 rounded-2xl h-10 flex justify-center items-center'>
                             Valider
                         </button>

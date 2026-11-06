@@ -4,6 +4,6 @@ const urlServer = '/api'
 
 // const urlGreenPay = "https://achats.greenpayci.com/"
 
-const urlBase = urlServer
+const urlBase = urlLocal
 
 export default urlBase

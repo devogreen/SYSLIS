@@ -445,10 +445,6 @@ export default function DemandeInputs() {
       return
     }
 
-    if (stockInitial <= 0) {
-      setError("Quantité initiale invalide !")
-    }
-
     if (quantite <= 0 || isNaN(quantite) || quantite == "") {
       setError("Quantité demandée invalide !")
       return
@@ -510,10 +506,9 @@ export default function DemandeInputs() {
     } catch (error) {
       Swal.fire({
         title: "Attention",
-        text: "Une erreur est survenue lors de la demande !",
+        text: error?.message || "Une erreur est survenue lors de la demande !",
         icon: "warning"
       })
-      navigate('/toutes-les-demandes')
     } finally {
       setLoadingValidation(false)
     }

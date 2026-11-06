@@ -119,6 +119,28 @@ export default function StockDetails() {
     const [isOwner, setIsOwner] = useState(false)
     const [isSubOwner, setIsSubOwner] = useState(false)
 
+    // Associer (fusionner) / supprimer : propriétaire ou super administrateur (rôle 39)
+    const ROLE_SUPER_ADMIN = 39
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+    const [stockInfos, setStockInfos] = useState(null)
+    const [nomSupprimePar, setNomSupprimePar] = useState('')
+    const [codeStockFusion, setCodeStockFusion] = useState('')
+
+    const [isModalAssocierOpen, setIsModalAssocierOpen] = useState(false)
+    const [stocksFusionnables, setStocksFusionnables] = useState([])
+    const [loadingFusionnables, setLoadingFusionnables] = useState(false)
+    const [selectedSources, setSelectedSources] = useState([])
+    const [motifAssociation, setMotifAssociation] = useState('')
+    const [commentaireAssociation, setCommentaireAssociation] = useState('')
+
+    const [isModalSupprimerOpen, setIsModalSupprimerOpen] = useState(false)
+    const [motifSuppression, setMotifSuppression] = useState('')
+    const [confirmerSortie, setConfirmerSortie] = useState(false)
+    const [estTerminal, setEstTerminal] = useState(false)
+
+    const stockSupprime = !!(stockInfos && stockInfos.is_deleted)
+    const peutGererStock = (isOwner || isSuperAdmin) && !stockSupprime
+
     const toast = useRef(null);
 
     const formatDate = (isoDate) => {
@@ -139,6 +161,7 @@ export default function StockDetails() {
             setLoading(true)
             try {
                 const stock_data = await stockData.getOneStock(id)
+                setStockInfos(stock_data)
                 setCodeStock(stock_data.code_stock)
                 setQuantitePiece(stock_data.quantite_piece)
                 setQuantiteCarton(stock_data.quantite_carton)
@@ -147,9 +170,15 @@ export default function StockDetails() {
 
                 const piece_data = await stockData.getPiece(stock_data.piece_id)
                 setNomPiece(piece_data.nom_piece)
+                setEstTerminal(String(piece_data.type || '').toUpperCase() === 'TERMINAL')
 
-                const user_data = await userData.getOneUser(stock_data.owner)
-                setNomAuteur(user_data.fullname)
+                // Un stock peut ne pas avoir de propriétaire (anciennes données)
+                if (stock_data.owner) {
+                    const user_data = await userData.getOneUser(stock_data.owner)
+                    setNomAuteur(user_data.fullname)
+                } else {
+                    setNomAuteur('N/A')
+                }
 
                 const models = await stockData.getAllModels()
                 const model = models.find((item) => {
@@ -209,9 +238,10 @@ export default function StockDetails() {
 
                 const mouvements = await stockData.getOneStockMouvements(id)
                 const first = mouvements[mouvements.length - 1]
-                setInitialisation(first)
-                const details_first = JSON.parse(first.details_mouvement)
-                setDetailsInitialisation(details_first)
+                if (first) {
+                    setInitialisation(first)
+                    setDetailsInitialisation(first.details_mouvement ? JSON.parse(first.details_mouvement) : {})
+                }
 
                 const services_data = await userData.getAllServices()
                 setServices(services_data)
@@ -273,6 +303,29 @@ export default function StockDetails() {
                 const subOwners = subOwners_data.map((item) => item.user_id)
                 if (subOwners.includes(parseInt(userId))) {
                     setIsSubOwner(true)
+                }
+
+                // Super administrateur : peut associer / supprimer n'importe quel stock
+                try {
+                    const roles_data = await userData.getUserRoles(parseInt(userId))
+                    const roles_id = (roles_data.roles || []).map((role) => role.id_role)
+                    setIsSuperAdmin(roles_id.includes(ROLE_SUPER_ADMIN))
+                } catch (e) {
+                    setIsSuperAdmin(false)
+                }
+
+                // Stock supprimé / fusionné : auteur et stock d'arrivée
+                if (stock_data.is_deleted) {
+                    const auteur = users_data.find((u) => u.id_user == stock_data.deleted_by)
+                    setNomSupprimePar(auteur ? auteur.fullname : '')
+                    if (stock_data.fusionne_dans) {
+                        try {
+                            const stockFusion = await stockData.getOneStock(stock_data.fusionne_dans)
+                            setCodeStockFusion(stockFusion.code_stock)
+                        } catch (e) {
+                            setCodeStockFusion(`#${stock_data.fusionne_dans}`)
+                        }
+                    }
                 }
 
                 // const subOwners_data = await stockData.getAllStockSubOwners(id)
@@ -401,11 +454,11 @@ export default function StockDetails() {
         })
         let nomRecepteur = 'N/A'
         if (demande) {
-            if (demande.demande_reçue == true) {
+            if (demande.demande_recue == true && demande.reception_piece.length > 0) {
                 let index_reception = demande.reception_piece.length - 1
                 nomRecepteur = demande.reception_piece[index_reception].nom_recepteur
             }
-        } else if (livraison) {
+        } else if (livraison && livraison.validations && livraison.validations.length > 0) {
             let index_reception = livraison.validations.length - 1
             nomRecepteur = livraison.validations[index_reception].nom_recepteur
         }
@@ -489,7 +542,7 @@ export default function StockDetails() {
 
     const handleModifyStock = async () => {
         try {
-            if (!newCodeStock) {
+            if (!newCodeStock || !String(newCodeStock).trim()) {
                 setErrorAction('Vous devez préciser un code stock !')
                 return
             }
@@ -510,7 +563,8 @@ export default function StockDetails() {
             console.log("Payload: ", payload)
             await stockData.modifyStock(id, payload)
 
-            Swal.fire({
+            // Recharger après la fermeture du message
+            await Swal.fire({
                 title: "Succès",
                 text: "Stock modifié avec succès !",
                 icon: "success"
@@ -520,17 +574,16 @@ export default function StockDetails() {
             console.error("Erreur de modification : ", error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur s'est produite lors de la modification !",
+                text: error?.message || "Une erreur s'est produite lors de la modification !",
                 icon: "warning"
             })
-            navigate("/voir-stocks")
         } finally {
             setLoadingActions(false)
         }
     }
 
     const filteredMouvements = allMouvements.filter((item) => {
-        let itemDate = new Date(item.date)
+        let itemDate = new Date(item.created_at)
 
         const matchesStartDate = startDate ? itemDate >= startDate : true;
         const matchesEndDate = endDate ? itemDate <= endDate : true;
@@ -646,12 +699,14 @@ export default function StockDetails() {
             setErrorAction('')
             setIsModalStockOpen(false)
 
-            let detailsMouvement = null
-            if (parPiece) {
-                detailsMouvement = handleMouvementParPiece()
-                if (!detailsMouvement) {
-                    return
-                }
+            // Seul le mouvement par pièce existe depuis cette page
+            if (!parPiece) {
+                setErrorAction("Choisissez le mouvement par pièce !")
+                return
+            }
+            const detailsMouvement = handleMouvementParPiece()
+            if (!detailsMouvement) {
+                return
             }
 
             const stockId = id
@@ -674,20 +729,19 @@ export default function StockDetails() {
 
             await stockData.createMouvementStock(stockId, payload)
 
-            window.location.reload();
-            Swal.fire({
+            // Recharger après la fermeture du message (sinon le message disparaît avec le rechargement)
+            await Swal.fire({
                 title: "Succès",
                 text: "Mouvement de stock enregistré avec succès !",
                 icon: "success"
             })
-            // navigate('/voir-stocks')
+            window.location.reload();
 
         } catch (error) {
             console.error("Erreur lors de l'enregistrement du mouvement de stock : ", error)
-            window.location.reload();
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur s'est produite lors de l'enregistrement du mouvement de stock !",
+                text: error?.message || "Une erreur s'est produite lors de l'enregistrement du mouvement de stock !",
                 icon: "warning"
             })
             // navigate('/voir-stocks')
@@ -695,6 +749,168 @@ export default function StockDetails() {
             setLoadingActions(false)
         }
 
+    }
+
+    /* ---------- Associer (fusionner) des stocks dans celui-ci ---------- */
+
+    const libelleQuantites = (s) => {
+        const parties = [`${s.quantite_piece ?? 0} pièce(s)`]
+        if (s.quantite_carton) parties.push(`${s.quantite_carton} carton(s)`)
+        if (s.quantite_lot) parties.push(`${s.quantite_lot} lot(s)`)
+        if (s.quantite_sn) parties.push(`${s.quantite_sn} SN`)
+        return parties.join(' - ')
+    }
+
+    const ouvrirAssocier = async () => {
+        setErrorAction('')
+        setSelectedSources([])
+        setMotifAssociation('')
+        setCommentaireAssociation('')
+        setStocksFusionnables([])
+        setIsModalAssocierOpen(true)
+        try {
+            setLoadingFusionnables(true)
+            const data = await stockData.getStocksFusionnables(id, userId)
+            setStocksFusionnables(data)
+        } catch (error) {
+            setErrorAction(error?.message || "Impossible de charger les stocks à associer.")
+        } finally {
+            setLoadingFusionnables(false)
+        }
+    }
+
+    const optionsFusionnables = useMemo(() => stocksFusionnables.map((s) => ({
+        value: s.id,
+        label: `${s.code_stock} - ${libelleQuantites(s)}${s.owner != selectedOwner && s.stockOwner ? ` (${s.stockOwner.fullname})` : ''}`,
+    })), [stocksFusionnables, selectedOwner])
+
+    const totalAssocie = stocksFusionnables
+        .filter((s) => selectedSources.includes(s.id))
+        .reduce((acc, s) => ({
+            quantite_piece: acc.quantite_piece + (s.quantite_piece || 0),
+            quantite_carton: acc.quantite_carton + (s.quantite_carton || 0),
+            quantite_lot: acc.quantite_lot + (s.quantite_lot || 0),
+            quantite_sn: acc.quantite_sn + (s.quantite_sn || 0),
+        }), { quantite_piece: 0, quantite_carton: 0, quantite_lot: 0, quantite_sn: 0 })
+
+    const handleAssocierStocks = async () => {
+        if (selectedSources.length === 0) {
+            setErrorAction('Choisissez au moins un stock à associer !')
+            return
+        }
+        if (!motifAssociation.trim()) {
+            setErrorAction('Veuillez préciser le motif !')
+            return
+        }
+        const codes = stocksFusionnables.filter((s) => selectedSources.includes(s.id)).map((s) => s.code_stock).join(', ')
+        setIsModalAssocierOpen(false)
+        const confirmation = await Swal.fire({
+            title: "Associer les stocks ?",
+            html: `Tout le contenu de <b>${codes}</b> (${libelleQuantites(totalAssocie)}) passera dans le stock <b>${codeStock}</b>.<br/>` +
+                `Ces stocks seront vidés puis supprimés ; leurs propriétaires et sous-propriétaires deviendront sous-propriétaires de ${codeStock}.`,
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Associer",
+            cancelButtonText: "Annuler",
+        })
+        if (!confirmation.isConfirmed) {
+            setIsModalAssocierOpen(true)
+            return
+        }
+        try {
+            setLoadingActions(true)
+            setErrorAction('')
+            const response = await stockData.associerStocks(id, {
+                userId,
+                sourceIds: selectedSources,
+                motif: motifAssociation.trim(),
+                commentaire: commentaireAssociation,
+            })
+            await Swal.fire({
+                title: "Succès",
+                text: response?.message || "Stocks associés avec succès !",
+                icon: "success"
+            })
+            window.location.reload();
+        } catch (error) {
+            console.error("Erreur lors de l'association des stocks : ", error)
+            Swal.fire({
+                title: "Attention",
+                text: error?.message || "Une erreur s'est produite lors de l'association des stocks !",
+                icon: "warning"
+            })
+        } finally {
+            setLoadingActions(false)
+        }
+    }
+
+    /* ---------- Supprimer ce stock ---------- */
+
+    const stockNonVide = (quantitePiece || 0) > 0 || (quantiteCarton || 0) > 0 || (quantiteLot || 0) > 0
+    // Un stock de terminaux non vide ne se supprime pas (le statut au parc des TPE deviendrait faux)
+    const suppressionBloquee = estTerminal && stockNonVide
+
+    const ouvrirSupprimer = () => {
+        setErrorAction('')
+        setMotifSuppression('')
+        setConfirmerSortie(false)
+        setIsModalSupprimerOpen(true)
+    }
+
+    const handleSupprimerStock = async () => {
+        if (suppressionBloquee) {
+            setErrorAction('Ce stock contient encore des terminaux : déplacez-les avant de le supprimer.')
+            return
+        }
+        if (!motifSuppression.trim()) {
+            setErrorAction('Veuillez préciser le motif de la suppression !')
+            return
+        }
+        if (stockNonVide && !confirmerSortie) {
+            setErrorAction('Confirmez la sortie de tout le contenu du stock !')
+            return
+        }
+        setIsModalSupprimerOpen(false)
+        const confirmation = await Swal.fire({
+            title: `Supprimer le stock ${codeStock} ?`,
+            text: stockNonVide
+                ? "Tout le contenu restant sortira du stock (mouvement de sortie automatique). Cette action est définitive."
+                : "Cette action est définitive.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Supprimer",
+            cancelButtonText: "Annuler",
+            confirmButtonColor: "#d33",
+        })
+        if (!confirmation.isConfirmed) {
+            setIsModalSupprimerOpen(true)
+            return
+        }
+        try {
+            setLoadingActions(true)
+            setErrorAction('')
+            const response = await stockData.supprimerStock(id, {
+                userId,
+                motif: motifSuppression.trim(),
+                confirmerSortie: stockNonVide && confirmerSortie,
+            })
+            await Swal.fire({
+                title: "Succès",
+                text: response?.message || "Stock supprimé.",
+                icon: "success"
+            })
+            navigate('/voir-stocks')
+        } catch (error) {
+            console.error("Erreur lors de la suppression du stock : ", error)
+            // 409 avec contenu : le stock a reçu des pièces entre-temps
+            Swal.fire({
+                title: "Attention",
+                text: error?.message || "Une erreur s'est produite lors de la suppression du stock !",
+                icon: "warning"
+            })
+        } finally {
+            setLoadingActions(false)
+        }
     }
 
     return (
@@ -724,29 +940,34 @@ export default function StockDetails() {
                                         </>
                                     ) : (
                                         <>
-                                            {isOwner ? (
+                                            {peutGererStock ? (
                                                 <>
                                                     <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                        onClick={() => { setIsModalModifStockOpen(true) }}>
+                                                        onClick={() => { setErrorAction(''); setIsModalModifStockOpen(true) }}>
                                                         <span className='mr-4'><i className="pi pi-file-edit"></i></span>
                                                         <span className='text-sm text-gray-700 font-medium'>Modifier stock</span>
                                                     </button>
-                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                        onClick={''}>
-                                                        <span className='mr-4'><i className="pi pi-clone"></i></span>
-                                                        <span className='text-sm text-gray-700 font-medium'>Associer stocks</span>
-                                                    </button>
-                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                        onClick={''}>
-                                                        <span className='mr-4'><i className="pi pi-trash"></i></span>
-                                                        <span className='text-sm text-gray-700 font-medium'>Supprimer stocks</span>
-                                                    </button>
-
                                                 </>
                                             ) : (
                                                 <></>
                                             )}
-                                            {isOwner || isSubOwner ? (
+                                            {peutGererStock ? (
+                                                <>
+                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                        onClick={ouvrirAssocier}>
+                                                        <span className='mr-4'><i className="pi pi-clone"></i></span>
+                                                        <span className='text-sm text-gray-700 font-medium'>Associer stocks</span>
+                                                    </button>
+                                                    <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
+                                                        onClick={ouvrirSupprimer}>
+                                                        <span className='mr-4'><i className="pi pi-trash text-red-600"></i></span>
+                                                        <span className='text-sm text-red-700 font-medium'>Supprimer stock</span>
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <></>
+                                            )}
+                                            {(isOwner || isSubOwner) && !stockSupprime ? (
                                                 <>
                                                     <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
                                                         onClick={() => { setIsModalStockOpen(true) }}>
@@ -762,6 +983,24 @@ export default function StockDetails() {
                                 </div>
                             </div>
                         </div>
+                        {stockSupprime ? (
+                            <div className="border border-red-300 bg-red-50 text-red-800 rounded-sm p-3 text-sm">
+                                <div className="font-semibold">
+                                    {stockInfos.fusionne_dans ? 'Stock associé (fusionné) à un autre stock' : 'Stock supprimé'}
+                                    {stockInfos.deleted_at ? ` le ${formatDate(stockInfos.deleted_at)}` : ''}
+                                    {nomSupprimePar ? ` par ${nomSupprimePar}` : ''}
+                                </div>
+                                {stockInfos.motif_suppression ? (
+                                    <div className="text-xs mt-1">Motif : {stockInfos.motif_suppression}</div>
+                                ) : null}
+                                {stockInfos.fusionne_dans ? (
+                                    <div className="text-xs mt-1">
+                                        Contenu transféré dans le stock{' '}
+                                        <a className="underline font-semibold" href={`/details-stock/${stockInfos.fusionne_dans}`}>{codeStockFusion || `#${stockInfos.fusionne_dans}`}</a>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <div className="border rounded-sm bg-white">
                             <div className="p-3">
                                 <div>
@@ -1002,6 +1241,142 @@ export default function StockDetails() {
                     </div>
                 </div>
             </Modal>
+            <Modal isOpen={isModalAssocierOpen} onClose={() => setIsModalAssocierOpen(false)} className="p-10 max-w-3xl">
+                <div className="space-y-3">
+                    <div className="flex justify-center">
+                        <span className="border px-6">Associer des stocks à {codeStock}</span>
+                    </div>
+                    <div className="text-xs text-gray-600 text-center">
+                        Le contenu des stocks choisis (lots, cartons, numéros de série, pièces) passe dans ce stock.
+                        Ils sont ensuite vidés et supprimés. Seuls les stocks de même pièce, même modèle et même service sont proposés.
+                    </div>
+                    <div className="flex justify-center">
+                        <div className="w-4/5 space-y-4">
+                            {loadingFusionnables ? (
+                                <div className='text-center'>
+                                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                                </div>
+                            ) : stocksFusionnables.length === 0 ? (
+                                <div className="text-sm text-center text-gray-500">Aucun stock à associer.</div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <Label>Stocks à associer <span className="text-red-700">*</span></Label>
+                                        <MultiSelect value={selectedSources}
+                                            onChange={(e) => { setSelectedSources(e.value); setErrorAction('') }}
+                                            options={optionsFusionnables}
+                                            optionLabel="label"
+                                            optionValue="value"
+                                            display="chip"
+                                            filter
+                                            filterBy="label"
+                                            placeholder="Choisir les stocks"
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {selectedSources.length > 0 ? (
+                                        <div className="text-xs rounded border border-gray-200 p-2">
+                                            Ajout : <strong>{libelleQuantites(totalAssocie)}</strong>.
+                                            Stock {codeStock} après association : <strong>{(quantitePiece || 0) + totalAssocie.quantite_piece} pièce(s)</strong>.
+                                        </div>
+                                    ) : null}
+                                    <div>
+                                        <Label>Motif <span className="text-red-700">*</span></Label>
+                                        <Input type="text" value={motifAssociation}
+                                            onChange={(e) => setMotifAssociation(e.target.value)}
+                                            placeholder="Motif de l'association" />
+                                    </div>
+                                    <div>
+                                        <Label>Commentaire</Label>
+                                        <TextArea value={commentaireAssociation}
+                                            onChange={(value) => setCommentaireAssociation(value)}
+                                            rows={3}
+                                            placeholder="Commentaire" />
+                                    </div>
+                                    <div className="w-full flex justify-center items-center">
+                                        <button className="w-1/2 flex items-center justify-center bg-green-400 p-2 rounded-2xl"
+                                            onClick={handleAssocierStocks}>
+                                            Associer
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                            <div className="text-center">
+                                <span className="text-error-600 font-medium flex items-center justify-center text-sm">
+                                    {errorAction}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isModalSupprimerOpen} onClose={() => setIsModalSupprimerOpen(false)} className="p-6 max-w-xl">
+                <div className="space-y-3">
+                    <div className="flex justify-center">
+                        <span className="border px-6 text-red-700">Supprimer le stock {codeStock}</span>
+                    </div>
+                    <div className="flex justify-center">
+                        <div className="w-4/5 space-y-4">
+                            {suppressionBloquee ? (
+                                <div className="text-xs rounded border border-red-300 bg-red-50 text-red-800 p-3 space-y-2">
+                                    <div className="font-semibold">Suppression impossible : ce stock contient encore {quantitePiece || 0} terminal(aux).</div>
+                                    <div>
+                                        Les terminaux doivent d'abord quitter ce stock, sinon leur statut au parc deviendrait faux :
+                                    </div>
+                                    <ul className="list-disc ml-4">
+                                        <li>ouvrez le stock qui doit les recevoir et utilisez « Associer stocks » en choisissant {codeStock} ;</li>
+                                        <li>ou livrez-les par une demande.</li>
+                                    </ul>
+                                    <div>Une fois le stock vide, il pourra être supprimé.</div>
+                                </div>
+                            ) : stockNonVide ? (
+                                <div className="text-xs rounded border border-orange-300 bg-orange-50 text-orange-800 p-3 space-y-2">
+                                    <div className="font-semibold">Attention : ce stock n'est pas vide.</div>
+                                    <div>
+                                        Il contient encore {quantitePiece || 0} pièce(s)
+                                        {quantiteCarton ? `, ${quantiteCarton} carton(s)` : ''}
+                                        {quantiteLot ? `, ${quantiteLot} lot(s)` : ''}.
+                                        En le supprimant, tout ce contenu (numéros de série compris) sortira du stock
+                                        avec un mouvement de sortie automatique « Suppression du stock ».
+                                    </div>
+                                    <div>Pour garder ces pièces, utilisez plutôt « Associer stocks » depuis le stock qui doit les recevoir.</div>
+                                    <Checkbox
+                                        checked={confirmerSortie}
+                                        onChange={() => { setConfirmerSortie(!confirmerSortie); setErrorAction('') }}
+                                        label="Je confirme la sortie de tout le contenu"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="text-xs text-gray-600">Le stock est vide.</div>
+                            )}
+                            {!suppressionBloquee ? (
+                                <>
+                                    <div>
+                                        <Label>Motif <span className="text-red-700">*</span></Label>
+                                        <Input type="text" value={motifSuppression}
+                                            onChange={(e) => setMotifSuppression(e.target.value)}
+                                            placeholder="Motif de la suppression" />
+                                    </div>
+                                    <div className="w-full flex justify-center items-center">
+                                        <button className="w-1/2 flex items-center justify-center bg-red-500 text-white p-2 rounded-2xl disabled:opacity-40"
+                                            disabled={stockNonVide && !confirmerSortie}
+                                            onClick={handleSupprimerStock}>
+                                            Supprimer
+                                        </button>
+                                    </div>
+                                </>
+                            ) : null}
+                            <div className="text-center">
+                                <span className="text-error-600 font-medium flex items-center justify-center text-sm">
+                                    {errorAction}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+
             <Modal isOpen={isModalStockOpen} onClose={() => setIsModalStockOpen(false)} className="p-4 max-w-4xl">
                 <div>
                     <div className="space-y-3">

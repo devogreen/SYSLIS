@@ -58,8 +58,8 @@ export default function ItemDetails() {
                     setSelectedModel(modelId)
                 }
 
-                const quantite_data = await stockData.getAllOneQuantitePiece(id)
-                setQuantites(quantite_data)
+                // Quantités par service : l'ancienne table stock_piece n'est plus alimentée (affichage retiré) ;
+                // les quantités viennent des stocks ci-dessus.
 
                 const services_data = await UserData.getAllServices()
                 setServices(services_data)

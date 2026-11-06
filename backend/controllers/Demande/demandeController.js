@@ -4,7 +4,120 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
-const { toModelId, creerTpesEtCompleterModeles } = require("../../utils/parcTpeModele");
+const { toModelId } = require("../../utils/parcTpeModele");
+const {
+  HttpError,
+  TYPES_MOUVEMENT,
+  ACTIONS_RECEPTION,
+  toInt,
+  parseJson,
+  estResponsableStock,
+  debiterStockLivraison,
+  construireDetailsLivraison,
+  lireContenuLivre,
+  whereStocksAlimentables,
+  mettreEnStockReception,
+  quantiteDansUnite,
+  detailsSansLivraison,
+  bilanLivraisons,
+  suiviLivraisons,
+  appliquerStatutParc,
+} = require("../../utils/stockDemande");
+
+const { estSuperAdmin, whereResponsablesStocks } = require("../../utils/gestionStock");
+
+// Responsables des stocks actifs pouvant livrer la demande (destinataires des mails de validation).
+// Calculé côté serveur : la liste « owners » envoyée par l'écran est ignorée.
+const responsablesStocksDemande = async (demande) => {
+  const details = parseJson(demande.details_demande, {}) || {}
+  return prisma.users.findMany({
+    where: whereResponsablesStocks({
+      pieceId: demande.item_id,
+      modelId: toInt(details.selectedModel ?? details.model),
+      serviceId: toInt(details.selectedServicePiece ?? details.service),
+    }),
+    select: { id_user: true, email: true, fullname: true },
+  })
+}
+
+// Une demande se livre (en une ou plusieurs fois) tant qu'elle est validée ou partiellement livrée
+const STATUTS_LIVRABLES = ['valide', 'partiel']
+
+/**
+ * Contrôles serveur de la saisie d'une demande (création, régularisation, modification).
+ * Renvoie les valeurs sûres : détails, quantité entière > 0, service demandeur, demandeur (nom relu en base).
+ * Le modèle et le service de la pièce sont vérifiés quand ils sont fournis (et doivent être rattachés à la pièce
+ * quand la pièce a une liste de modèles / services).
+ */
+const validerSaisieDemande = async (db, { detailsDemande, quantite, serviceUser, selectedUser, userId, otherFields }) => {
+  const details = parseJson(detailsDemande, null)
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    throw new HttpError(400, "Détails de la demande invalides.")
+  }
+  const pieceId = toInt(details.selectedPiece)
+  const piece = pieceId ? await db.items.findUnique({ where: { id_piece: pieceId } }) : null
+  if (!piece || piece.is_deleted) throw new HttpError(404, "Pièce introuvable !")
+
+  const qte = toInt(quantite)
+  if (qte === null || qte < 1) {
+    throw new HttpError(400, "La quantité demandée doit être un nombre entier supérieur à 0.")
+  }
+
+  const modelId = toInt(details.selectedModel)
+  if (details.selectedModel !== undefined && details.selectedModel !== null && details.selectedModel !== '') {
+    const model = modelId ? await db.model_piece.findUnique({ where: { id_model: modelId } }) : null
+    if (!model) throw new HttpError(400, "Modèle de pièce invalide.")
+    const liens = await db.items_models.findMany({ where: { item_id: piece.id_piece }, select: { model_id: true } })
+    if (liens.length > 0 && !liens.some((l) => l.model_id === modelId)) {
+      throw new HttpError(400, `Le modèle ${model.nom_model} n'est pas rattaché à la pièce ${piece.nom_piece}.`)
+    }
+  }
+
+  const servicePieceId = toInt(details.selectedServicePiece)
+  if (details.selectedServicePiece !== undefined && details.selectedServicePiece !== null && details.selectedServicePiece !== '') {
+    const servicePiece = servicePieceId ? await db.services.findUnique({ where: { id: servicePieceId } }) : null
+    if (!servicePiece) throw new HttpError(400, "Service de la pièce invalide.")
+    const liens = await db.items_services.findMany({ where: { item_id: piece.id_piece }, select: { service_id: true } })
+    if (liens.length > 0 && !liens.some((l) => l.service_id === servicePieceId)) {
+      throw new HttpError(400, `Le service ${servicePiece.nom_service} ne gère pas la pièce ${piece.nom_piece}.`)
+    }
+  }
+
+  const serviceId = toInt(serviceUser)
+  const service = serviceId ? await db.services.findUnique({ where: { id: serviceId } }) : null
+  if (!service) throw new HttpError(400, "Service demandeur invalide.")
+
+  const demandeurId = toInt(selectedUser) || toInt(userId)
+  const demandeur = demandeurId ? await db.users.findUnique({ where: { id_user: demandeurId } }) : null
+  if (!demandeur) throw new HttpError(404, "Demandeur introuvable !")
+
+  const autres = parseJson(otherFields, [])
+
+  return { details, piece, quantite: qte, service, demandeur, autres: Array.isArray(autres) ? autres : [] }
+}
+
+// Applique les valeurs contrôlées au body (le reste du traitement lit req.body) ; renvoie false si une réponse d'erreur est partie
+const appliquerSaisieDemande = async (req, res) => {
+  try {
+    const saisie = await validerSaisieDemande(prisma, req.body || {})
+    Object.assign(req.body, {
+      detailsDemande: saisie.details,
+      quantite: saisie.quantite,
+      serviceUser: saisie.service.id,
+      selectedUser: saisie.demandeur.id_user,
+      nomUser: saisie.demandeur.fullname,
+      otherFields: saisie.autres,
+    })
+    return true
+  } catch (error) {
+    if (error.status) {
+      console.error(error.message)
+      res.status(error.status).json({ message: error.message })
+      return false
+    }
+    throw error
+  }
+}
 const cloudinary = require("../../config/clouddinaryConifg");
 const { get } = require("http");
 const { urlToHttpOptions } = require("url");
@@ -410,6 +523,8 @@ if (test_env) {
 
 const faireDemande = async (req, res) => {
   try {
+    if (!(await appliquerSaisieDemande(req, res))) return
+
     const {
       detailsDemande,
       userId,
@@ -604,32 +719,63 @@ const faireDemande = async (req, res) => {
   }
 };
 
+// Liste des demandes : seulement ce que les listes affichent ou filtrent (pas de signatures, pas de détail des
+// livraisons, pas des listes d'ids / de SN du contenu livré) — la fiche d'une demande passe par getOneDemande.
+const FORM_LISTE = { select: { id: true, is_reg: true, created_at: true, last_modified_at: true, nom_user: true } }
+const CLES_DETAILS_LOURDES = ['listeSn', 'contenuLivre', 'cartons', 'listeLots', 'livraison']
+
 const getAllDemandes = async (req, res) => {
   try {
     const demandes = await prisma.demandes.findMany({
       orderBy: { date_demande: 'desc' },
       include: {
-        forms: true,
-        items: true,
+        forms: FORM_LISTE,
+        items: { select: { id_piece: true, nom_piece: true, type: true } },
         validation_demande: {
-          include: {
-            forms: true,
+          select: {
+            id_validation_demande: true,
+            nom_validateur: true,
+            date_validation_demande: true,
+            commentaire: true,
+            statut_validation_demande: true,
+            quantite_validee: true,
+            id_user: true,
+            id_demande: true,
+            stock_id: true,
+            form_id: true,
+            forms: FORM_LISTE,
           },
         },
         livraison_piece: {
-          include: {
-            forms: true,
-          },
+          select: { id: true, demande_id: true, form_id: true, stock_id: true, forms: FORM_LISTE },
         },
         reception_piece: {
-          include: {
-            forms: true
+          select: {
+            id: true,
+            demande_id: true,
+            nom_recepteur: true,
+            commentaire: true,
+            created_at: true,
+            action_stock: true,
+            livraison_id: true,
+            stock_id: true,
+            form_id: true,
+            forms: FORM_LISTE,
+            stocks: { select: { id: true, code_stock: true } },
           },
         },
       }
     });
 
-    res.status(200).json(demandes);
+    // details_demande : on garde les champs de la demande (pièce, modèle, service, type...) sans les grosses listes
+    const allegees = demandes.map((d) => {
+      const details = parseJson(d.details_demande, null)
+      if (!details || typeof details !== 'object') return d
+      CLES_DETAILS_LOURDES.forEach((cle) => { delete details[cle] })
+      return { ...d, details_demande: JSON.stringify(details) }
+    })
+
+    res.status(200).json(allegees);
   } catch (error) {
     console.log("Erreur serveur: ", error)
     console.error("Erreur :", error)
@@ -657,7 +803,8 @@ const getOneDemande = async (req, res) => {
         },
         reception_piece: {
           include: {
-            forms: true
+            forms: true,
+            stocks: { select: { id: true, code_stock: true } },
           },
         },
       }
@@ -668,8 +815,8 @@ const getOneDemande = async (req, res) => {
       return res.status(404).json({ message: "demande introuvable" });
     }
 
-    console.log("Succès !")
-    res.status(200).json(demandes);
+    // Suivi des livraisons (partielles) : validé / livré / reste dans l'unité de la demande, réception de chacune
+    res.status(200).json({ ...demandes, suiviLivraison: suiviLivraisons(demandes) });
   } catch (error) {
     console.log('Error : ', error)
     console.error('Error : ', error)
@@ -696,20 +843,25 @@ const validateDemande = async (req, res) => {
       return res.status(404).json({ message: "Demande introuvable." });
     }
 
-    if (demande.statut_demande === "valide") {
-      console.error('Demande déjà validée !')
-      return res.status(400).json({ message: "Demande déjà validée." });
+    if (demande.statut_demande !== "en_cours") {
+      console.error('Demande non validable, statut : ', demande.statut_demande)
+      return res.status(400).json({ message: demande.statut_demande === "valide" ? "Demande déjà validée." : "Seule une demande en cours peut être validée." });
     }
 
     const signature = req.files?.signature?.[0] || null;
     if (!signature) {
       console.error('Signature manquante !')
-      return res.status(404).json({ message: "Signature introuvable !" });
+      return res.status(400).json({ message: "Signature introuvable !" });
     }
 
     if (!user_id) {
       console.error('Utilisateur non authentifié !')
       return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
+
+    const quantite = toInt(quantiteValidee)
+    if (!quantite || quantite < 1) {
+      return res.status(400).json({ message: "Quantité validée invalide." });
     }
 
     const user = await prisma.users.findUnique({
@@ -724,18 +876,22 @@ const validateDemande = async (req, res) => {
 
     const dateAction = new Date()
 
-    const validation = await prisma.$transaction(async (tx) => {
-      const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
-        folder: "greenpay/signatures",
-      });
-      const signatureCloud = uploadResult.secure_url;
+    // Upload hors transaction (appel réseau)
+    const uploadResult = await cloudinary.uploader.upload(signature.path, {
+      folder: "greenpay/signatures",
+    });
+    const signatureCloud = uploadResult.secure_url;
 
-      await tx.demandes.update({
-        where: { id: demande.id },
+    const validation = await prisma.$transaction(async (tx) => {
+      const garde = await tx.demandes.updateMany({
+        where: { id: demande.id, statut_demande: "en_cours" },
         data: {
           statut_demande: "valide",
         },
       });
+      if (garde.count !== 1) {
+        throw new HttpError(409, "La demande a déjà été traitée.")
+      }
 
       const validationForm = await tx.forms.create({
         data: {
@@ -750,7 +906,7 @@ const validateDemande = async (req, res) => {
       await tx.form_signatures.create({
         data: {
           form_id: validationForm.id,
-          signature_url: signature.path,
+          signature_url: signatureCloud,
           signed_by: user.id_user,
           signed_at: dateAction,
           role: 'validateur',
@@ -766,7 +922,7 @@ const validateDemande = async (req, res) => {
           date_validation_demande: new Date(),
           signature: signatureCloud,
           statut_validation_demande: "valide",
-          quantite_validee: +quantiteValidee,
+          quantite_validee: quantite,
           form_id: validationForm.id
         },
       });
@@ -780,17 +936,7 @@ const validateDemande = async (req, res) => {
     /****************    GESTION DES MAILS     *****************/
     // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
     try {
-      let stockOwners = []
-      if (owners && owners.length > 0) {
-        const ownersList = new Array(owners).map((item) => {
-          return parseInt(item)
-        })
-        if (ownersList && ownersList.length > 0) {
-          stockOwners = await prisma.users.findMany({
-            where: { id_user: { in: ownersList } }
-          })
-        }
-      }
+      const stockOwners = await responsablesStocksDemande(demande)
 
       const piece = await prisma.items.findUnique({
         where: { id_piece: parseInt(demande.item_id) }
@@ -896,12 +1042,27 @@ const validateDemande = async (req, res) => {
       data: validation,
     });
   } catch (error) {
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
   }
 }
 
-const livraisonDemande = async (req, res) => {
+/************************************************************************************************
+ *  LIVRAISON D'UNE DEMANDE DE STOCK
+ *  Le livreur débite UNIQUEMENT son stock d'origine. Les lots / cartons / SN livrés sortent du stock ;
+ *  leur mise en stock éventuelle chez le demandeur se fait à la réception (voir traiterReception).
+ *  Les quantités sont recalculées côté serveur (utils/stockDemande.js).
+ ************************************************************************************************/
+// ReadCommitted : après le verrou (UPDATE), les lectures voient les données validées par une transaction concurrente
+// (en RepeatableRead, Prisma lit avant de verrouiller et la transaction garderait une photo périmée).
+const OPTIONS_TRANSACTION_STOCK = { maxWait: 10000, timeout: 30000, isolationLevel: 'ReadCommitted' }
+
+const traiterLivraison = async (req, res, { isReg }) => {
+  const libelle = isReg ? 'Régularisation de livraison' : 'Livraison de stock'
   try {
     const {
       demande_id,
@@ -910,1377 +1071,166 @@ const livraisonDemande = async (req, res) => {
       stock_id,
       nomenclature,
       detailsDemande,
-      detailsDemandeur,
-      itemId,
+      date_livraison,
+      cloturer,
     } = req.body;
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demande_id) },
-    });
+    // Le livreur peut clôturer la demande avec cette livraison même si la quantité validée n'est pas atteinte
+    const cloturerDemande = cloturer === true || cloturer === 'true'
 
-    if (!demande) {
-      console.error('Demande introuvable !')
-      return res.status(404).json({ message: "Demande introuvable." });
-    }
+    const idDemande = toInt(demande_id)
+    const idUser = toInt(user_id)
+    const idStock = toInt(stock_id)
 
-    if (demande.demande_livree == true) {
-      console.error('Demande déjà livrée !')
-      return res.status(400).json({ message: "Demande déjà livrée." });
-    }
-
-    if (!user_id) {
-      console.error('Utilisateur non authentifié !')
+    if (!idUser) {
       return res.status(403).json({ message: "Utilisateur non authentifié." });
     }
-
-    const user = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
-    if (!user) {
-      console.error('Utilisateur non trouvé !')
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
+    if (!idDemande) {
+      return res.status(400).json({ message: "Demande invalide." });
+    }
+    if (!idStock) {
+      return res.status(400).json({ message: "Vous devez choisir le stock à livrer !" });
     }
 
-    /************************************     GESTION MOUVEMENT DE STOCK     *****************************/
-
-    const detailsMouvement = typeof detailsDemande === "string" ? JSON.parse(detailsDemande) : detailsDemande;
-    const detailsEntree = typeof detailsDemandeur === "string" ? JSON.parse(detailsDemandeur) : detailsDemandeur;
-    const typeMouvement = detailsMouvement.typeMouvement
-    let dataMouvement = null
-    let initial = 0
-    let stock = 0
-    let final = 0
-    let finalPiece = Number(detailsMouvement.stockFinalPiece)
-    let finalPieceLot = 0
-    let mouvement_stock = null
-    const modelPiece = parseInt(detailsMouvement.model)
-    const servicePiece = parseInt(detailsMouvement.service)
-    const pieceId = itemId
-
-    let dataEntree = null
-    let initialDemandeur = 0
-    let finalDemandeur = 0
-    const finalPieceDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-    let mouvement_stock_demandeur = null
-    const serviceDemandeur = demande.service_demandeur
-
-    let updatedQuantiteDemandeur = null
-
-    const selectedStock = await prisma.stocks.findUnique({
-      where: {
-        id: parseInt(stock_id)
-      }
-    })
-
-    let mouvementStock = null
-
-    const dateAction = new Date()
-
-    const piece = await prisma.items.findUnique({
-      where: {
-        id_piece: parseInt(itemId)
-      }
-    })
-
-    const service = await prisma.services.findUnique({
-      where: {
-        id: parseInt(demande.service_demandeur)
-      }
-    })
-
-    const service_piece = await prisma.services.findUnique({
-      where: {
-        id: servicePiece,
-      },
-    })
-
-    if (typeMouvement == 5) {
-      mouvementStock = await prisma.$transaction(async (tx) => {
-        initial = Number(detailsMouvement.stockInitialPiece)
-        stock = Number(detailsMouvement.quantiteMouvement)
-        final = Number(detailsMouvement.stockFinalPiece)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 5,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: final,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await prisma.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_piece: final,
-          last_update: dateAction,
-        }
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        // Si le stock sortant est un chargeur de la DIRECTION TECHNIQUE vers TECH ASSIST, on ne supprime pas le lot mais on le réaffecte au demandeur avec les quantités mises à jour
-        if (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'DIRECTION TECHNIQUE' && service.nom_service.toUpperCase() == 'TECH ASSIST') {
-          initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: piece.id_piece,
-              service_id: service.id,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: dateAction,
-                created_by: user.id_user,
-                last_update: dateAction,
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-              },
-              data: {
-                quantite_piece: finalDemandeur,
-                last_update: dateAction,
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-        await tx.demandes.update({
-          where: { id: parseInt(demande_id) },
-          data: {
-            stock_id: +stock_id,
-            demande_livree: true,
-            nomenclature,
-            type_demande: typeMouvement,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-          },
-        });
-
-        const livraisonForm = await tx.forms.create({
-          data: {
-            type: 'livraison_stock',
-            created_by: user.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            nom_user: user.fullname,
-            commentaire,
-          }
-        })
-
-        const livraison = await tx.livraison_piece.create({
-          data: {
-            demande_id: demande.id,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-            form_id: livraisonForm.id,
-            stock_id: parseInt(stock_id),
-          }
-        })
-
-        return {
-          livraisonForm,
-          livraison,
-        }
-      })
-    } else if (typeMouvement == 4) {
-      mouvementStock = await prisma.$transaction(async (tx) => {
-        initial = Number(detailsMouvement.stockInitialCarton)
-        stock = Number(detailsMouvement.quantiteMouvementCarton)
-        final = Number(detailsMouvement.stockFinalCarton)
-
-        const listCarton = detailsMouvement.cartons
-
-        const serialNumbers = await tx.serial_numbers.findMany({
-          where: {
-            carton_id: { in: listCarton }
-          }
-        })
-
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 4,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_carton: final,
-          quantite_piece: finalPiece,
-          last_update: dateAction,
-        }
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        // Si le stock sortant est un chargeur de la DIRECTION TECHNIQUE vers TECH ASSIST, on ne supprime pas le lot mais on le réaffecte au demandeur avec les quantités mises à jour
-        if (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'DIRECTION TECHNIQUE' && service.nom_service.toUpperCase() == 'TECH ASSIST') {
-
-          initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: piece.id_piece,
-              service_id: service.id,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                model_id: modelPiece,
-                service_id: service.id,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: dateAction,
-                created_by: user.id_user,
-                last_update: dateAction,
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                service_id: service.id,
-                last_update: dateAction,
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                quantite_carton: finalDemandeur
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-
-          await tx.stock_carton.updateMany({
-            where: { id: { in: listCarton } },
-            data: {
-              stock_id: idStock,
-              service_id: serviceDemandeur,
-            }
-          })
-        } else {
-          await tx.stock_carton.updateMany({
-            where: { id: { in: listCarton } },
-            data: {
-              is_deleted: true,
-            }
-          })
-          await tx.serial_numbers.updateMany({
-            where: { carton_id: { in: listCarton } },
-            data: {
-              is_deleted: true,
-            }
-          })
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-        await tx.demandes.update({
-          where: { id: parseInt(demande_id) },
-          data: {
-            stock_id: +stock_id,
-            demande_livree: true,
-            nomenclature,
-            type_demande: typeMouvement,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-          },
-        });
-
-        const livraisonForm = await tx.forms.create({
-          data: {
-            type: 'livraison_stock',
-            created_by: user.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            nom_user: user.fullname,
-            commentaire,
-          }
-        })
-
-        const livraison = await tx.livraison_piece.create({
-          data: {
-            demande_id: demande.id,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-            form_id: livraisonForm.id,
-            stock_id: parseInt(stock_id),
-          }
-        })
-
-        return {
-          livraisonForm,
-          livraison,
-          serialNumbers
-        }
-      })
-    } else if (typeMouvement == 3) {
-      mouvementStock = await prisma.$transaction(async (tx) => {
-        initial = Number(detailsMouvement.stockInitialPieceCarton)
-        stock = Number(detailsMouvement.quantiteMouvementPieceCarton)
-        final = Number(detailsMouvement.stockFinalPieceCarton)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 3,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_piece: finalPiece,
-          last_update: dateAction,
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        await tx.stock_carton.update({
-          where: { id: parseInt(detailsMouvement.selectedCarton) },
-          data: {
-            quantite_totale_piece: final
-          },
-        })
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        // Si le stock sortant est un chargeur de la DIRECTION TECHNIQUE vers TECH ASSIST, on ne supprime pas le lot mais on le réaffecte au demandeur avec les quantités mises à jour
-        if (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'DIRECTION TECHNIQUE' && service.nom_service.toUpperCase() == 'TECH ASSIST') {
-          initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: piece.id_piece,
-              service_id: service.id,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                model_id: modelPiece,
-                service_id: service.id,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: dateAction,
-                created_by: user.id_user,
-                last_update: dateAction,
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                service_id: service.id,
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                last_update: dateAction,
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-        if (final == 0) {
-          await tx.stock_carton.update({
-            where: { id: parseInt(detailsMouvement.selectedCarton) },
-            data: {
-              quantite_totale_piece: final,
-              is_deleted: true,
-            },
-          })
-          const quantiteCartonStock = selectedStock.quantite_carton
-          tx.stocks.update({
-            where: {
-              id: parseInt(stock_id),
-            },
-            data: {
-              quantite_carton: quantiteCartonStock - 1
-            }
-          })
-        }
-
-        if (detailsMouvement.selectedLot) {
-          const finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-          let updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot)
-            },
-            data: {
-              quantite_piece: finalPieceLot,
-            }
-          })
-          if (final == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: updatedLot.quantite_carton - 1,
-              },
-            })
-          }
-          if (updatedLot.quantite_carton == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: 0,
-                is_deleted: true
-              }
-            })
-            const quantiteLotStock = selectedStock.quantite_lot
-            await tx.stocks.update({
-              where: {
-                id: parseInt(stock_id),
-              },
-              data: {
-                quantite_lot: quantiteLotStock - 1
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-        await tx.demandes.update({
-          where: { id: parseInt(demande_id) },
-          data: {
-            stock_id: +stock_id,
-            demande_livree: true,
-            nomenclature,
-            type_demande: typeMouvement,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-          },
-        });
-
-        const livraisonForm = await tx.forms.create({
-          data: {
-            type: 'livraison_stock',
-            created_by: user.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            nom_user: user.fullname,
-            commentaire,
-          }
-        })
-
-        const livraison = await tx.livraison_piece.create({
-          data: {
-            demande_id: demande.id,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-            form_id: livraisonForm.id,
-            stock_id: parseInt(stock_id),
-          }
-        })
-
-        return {
-          livraisonForm,
-          livraison,
-        }
-      })
-    } else if (typeMouvement == 2) {
-      mouvementStock = await prisma.$transaction(async (tx) => {
-        initial = Number(detailsMouvement.stockInitialCartonLot)
-        stock = Number(detailsMouvement.quantiteMouvementCartonLot)
-        final = Number(detailsMouvement.stockFinalCartonLot)
-        finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-
-        const listCartonLot = detailsMouvement.cartons
-
-        const serialNumbers = await tx.serial_numbers.findMany({
-          where: {
-            carton_id: { in: listCartonLot }
-          }
-        })
-
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 2,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_carton: quantiteCartonStock - stock,
-          quantite_piece: finalPiece,
-          last_update: dateAction,
-        }
-
-        let updatedLot = await tx.stock_lot.update({
-          where: {
-            id: parseInt(detailsMouvement.selectedLot),
-          },
-          data: {
-            quantite_carton: final,
-            quantite_piece: finalPieceLot,
-          },
-        })
-
-        if (final == 0) {
-          updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot),
-            },
-            data: {
-              quantite_carton: final,
-              quantite_piece: finalPieceLot,
-              is_deleted: true,
-            },
-          })
-          const quantiteLotStock = selectedStock.quantite_lot
-          tx.stocks.update({
-            where: {
-              id: parseInt(stock_id),
-            },
-            data: {
-              quantite_lot: quantiteLotStock - 1
-            }
-          })
-        }
-
-        // const listCartonLot = detailsMouvement.cartons
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        // Si le stock sortant est un chargeur de la DIRECTION TECHNIQUE vers TECH ASSIST, on ne supprime pas le lot mais on le réaffecte au demandeur avec les quantités mises à jour
-        if (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'DIRECTION TECHNIQUE' && service.nom_service.toUpperCase() == 'TECH ASSIST') {
-          initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: piece.id_piece,
-              service_id: service.id,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                model_id: modelPiece,
-                service_id: service.id,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: dateAction,
-                created_by: user.id_user,
-                last_update: dateAction,
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                service_id: service.id,
-              },
-              data: {
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: dateAction,
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          await tx.stock_carton.updateMany({
-            where: {
-              id: { in: listCartonLot },
-              lot_id: updatedLot.id,
-            },
-            data: {
-              service_id: serviceDemandeur,
-              lot_id: null
-            }
-          })
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        } else {
-          await tx.stock_carton.updateMany({
-            where: { id: { in: listCartonLot } },
-            data: { is_deleted: true },
-          });
-
-          await tx.serial_numbers.updateMany({
-            where: { carton_id: { in: listCartonLot } },
-            data: { is_deleted: true },
-          });
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-        await tx.demandes.update({
-          where: { id: parseInt(demande_id) },
-          data: {
-            stock_id: +stock_id,
-            demande_livree: true,
-            nomenclature,
-            type_demande: typeMouvement,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-          },
-        });
-
-        const livraisonForm = await tx.forms.create({
-          data: {
-            type: 'livraison_stock',
-            created_by: user.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            nom_user: user.fullname,
-            commentaire,
-          }
-        })
-
-        const livraison = await tx.livraison_piece.create({
-          data: {
-            demande_id: demande.id,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-            form_id: livraisonForm.id,
-            stock_id: parseInt(stock_id),
-          }
-        })
-
-        return {
-          livraisonForm,
-          livraison,
-          serialNumbers,
-        }
-      })
-
-    } else if (typeMouvement == 1) {
-      mouvementStock = await prisma.$transaction(async (tx) => {
-        initial = Number(detailsMouvement.stockInitialLot)
-        stock = Number(detailsMouvement.quantiteMouvementLot)
-        final = Number(detailsMouvement.stockFinalLot)
-
-        const listLot = detailsMouvement.listeLots
-
-        const serialNumbers = await tx.serial_numbers.findMany({
-          where: {
-            lot_id: { in: listLot }
-          }
-        })
-
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 1,
-          demande_id: demande.id,
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_lot: final,
-          quantite_carton: quantiteCartonStock - Number(detailsMouvement.quantiteMouvementCarton),
-          quantite_piece: finalPiece,
-          last_update: dateAction,
-        }
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        // Si le stock sortant est un chargeur de la DIRECTION TECHNIQUE vers TECH ASSIST, on ne supprime pas le lot mais on le réaffecte au demandeur avec les quantités mises à jour
-        if (piece.nom_piece.toUpperCase() == 'CHARGEUR' && service_piece.nom_service.toUpperCase() == 'DIRECTION TECHNIQUE' && service.nom_service.toUpperCase() == 'TECH ASSIST') {
-          initialDemandeur = Number(detailsMouvement.stockInitialLotDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalLotDemandeur)
-          const finalCartonDemandeur = Number(detailsMouvement.quantiteMouvementCarton)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: piece.id_piece,
-              service_id: service.id,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                model_id: modelPiece,
-                service_id: service.id,
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: dateAction,
-                created_by: user.id_user,
-                last_update: dateAction,
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: piece.id_piece,
-                service_id: service.id,
-              },
-              data: {
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: dateAction,
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          await tx.stock_carton.updateMany({
-            where: {
-              id: { id: { in: listCartonLot } },
-              lot_id: updatedLot.id,
-            },
-            data: {
-              service_id: serviceDemandeur,
-              lot_id: null
-            }
-          })
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 1,
-            stock_id: idStock,
-            demande_id: demande.id,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-
-          await tx.stock_lot.update({
-            where: { id: { in: listLot } },
-            data: {
-              stock_id: idStock,
-              service_id: serviceDemandeur,
-            }
-          })
-          await tx.stock_carton.updateMany({
-            where: { lot_id: { in: listLot } },
-            data: {
-              stock_id: idStock,
-              service_id: serviceDemandeur,
-            }
-          })
-        } else {
-          await tx.stock_lot.updateMany({
-            where: { id: { in: listLot }, },
-            data: {
-              is_deleted: true,
-            }
-          })
-          await tx.stock_carton.updateMany({
-            where: { lot_id: { in: listLot }, },
-            data: {
-              is_deleted: true,
-            }
-          })
-          await tx.serial_numbers.updateMany({
-            where: { lot_id: { in: listLot }, },
-            data: {
-              is_deleted: true,
-            }
-          })
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-        await tx.demandes.update({
-          where: { id: parseInt(demande_id) },
-          data: {
-            stock_id: +stock_id,
-            demande_livree: true,
-            nomenclature,
-            type_demande: typeMouvement,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-          },
-        });
-
-        const livraisonForm = await tx.forms.create({
-          data: {
-            type: 'livraison_stock',
-            created_by: user.id_user,
-            created_at: dateAction,
-            last_modified_at: dateAction,
-            nom_user: user.fullname,
-            commentaire,
-          }
-        })
-
-        const livraison = await tx.livraison_piece.create({
-          data: {
-            demande_id: demande.id,
-            details_demande: JSON.stringify(detailsMouvement),
-            details_demandeur: JSON.stringify(detailsEntree),
-            form_id: livraisonForm.id,
-            stock_id: parseInt(stock_id),
-          }
-        })
-
-        return {
-          livraisonForm,
-          livraison,
-          serialNumbers,
-        }
-      })
-    }
-
-    /*****************      GESTION PARC TPE       *****************/
-    let allTpes = null
-    if (piece.type.toUpperCase() == 'TERMINAL' && (typeMouvement == 1 || typeMouvement == 2 || typeMouvement == 4) && detailsMouvement.listeSn && detailsMouvement.listeSn.length > 0) {
-      // Récupérer les SN de la liste
-      const serials = mouvementStock.serialNumbers.map(item => item.serial_number);
-
-      // Écritures du parc regroupées dans une transaction (statut + modèle + historique)
-      allTpes = await prisma.$transaction(async (tx) => {
-        // 1. Créer les TPE manquants avec le modèle du stock (serial_numbers.model_id, sinon celui de la demande)
-        //    et compléter le modèle des TPE existants sans modèle
-        await creerTpesEtCompleterModeles(tx, mouvementStock.serialNumbers.map((item) => ({
-          serial: item.serial_number,
-          modelId: toModelId(item.model_id) || toModelId(modelPiece),
-        })), {
-          created_by: user.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          statut_id: 4,
-        });
-
-        // 2. Update ALL (existing + newly created)
-        await tx.parc_tpe.updateMany({
-          where: {
-            serial_number: { in: serials }
-          },
-          data: {
-            updated_by: user.id_user,
-            updated_at: dateAction,
-            last_modified_at: dateAction,
-            statut_id: 4,
-          }
-        });
-
-        // Récupérer tous les TPE du parc maintenant qu'ils sont créés ou updated
-        const tpes = await tx.parc_tpe.findMany({
-          where: {
-            serial_number: { in: serials }
-          },
-          select: {
-            id: true,
-            serial_number: true
-          }
-        });
-
-        // Créer les nouveaux historiques pour chaque TPE mis à jour ou nouvellement créé
-        await tx.history_tpe.createMany({
-          data: tpes.map(tpe => ({
-            id_tpe: tpe.id,
-            created_by: user.id_user,
-            created_at: dateAction,
-            statut_id: 4,
-            form_id: mouvementStock.livraisonForm.id,
-          }))
-        });
-        return tpes
-      })
-    }
-
-    /****************    GESTION DES MAILS     *****************/
-    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
-    try {
-      const userService = await prisma.user_services.findMany({
-        where: { service_id: parseInt(demande.service_demandeur) },
-        include: { users: true }
-      })
-
-      const mouvement = await prisma.type_mouvement_stock.findUnique({
-        where: { id: detailsMouvement.typeMouvement }
-      })
-
-      const service_users = userService.map(us => us.users.email)
-
-      const motif = demande.motif_demande
-      const nomPiece = piece.nom_piece.toUpperCase()
-
-      const nomServiceDemandeur = service.nom_service.toUpperCase();
-
-      const quantite = stock;
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-      const url = GENERAL_URL
-      const demandeLink = `${url}/demande-details/${demande.id}`;
-      const subject = `SYSLIS - LIVRAISON STOCK DE ${nomPiece}`;
-      const html = `
-        <p>Bonjour,</p>
-        <p>La demande ${demande.id} a été livrée.</p>
-        <ul>
-          <li><strong>Motif :</strong> ${motif}</li>
-          <li><strong>${mouvement.titre}</strong></li>
-          <li><strong>Quantité :</strong> ${quantite}</li>
-        </ul>
-        <ul>
-          <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-          <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
-        </ul>
-        <br>
-        <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-        `;
-
-      // Le demandeur n'était déjà plus destinataire (envoi commenté) : seuls les utilisateurs du service le reçoivent.
-      const destinataires = [...new Set(service_users.filter(Boolean))];
-      await sendMail({
-        to: configEmail,
-        bcc: destinataires,
-        subject,
-        html,
-      });
-    } catch (mailError) {
-      console.error("Erreur lors de l'envoi des mails :", mailError);
-    }
-
-    console.log('Livraison de stock éffectuée avec succès !')
-    return res.status(201).json({
-      message: 'Livraison de stock éffectuée avec succès !',
-      data: mouvementStock,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Erreur serveur." });
-  }
-};
-
-const livraisonPiece = async (req, res) => {
-  try {
-    const {
-      demande_id,
-      user_id,
-      commentaire,
-      stock_id,
-      nomenclature,
-      detailsDemande,
-      detailsDemandeur,
-      itemId,
-    } = req.body;
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demande_id) },
-    });
-
-    if (!demande) {
-      console.error(`Demande avec ID ${demande_id} non trouvée.`);
+    const demande = await prisma.demandes.findUnique({ where: { id: idDemande } });
+    if (!demande || demande.is_deleted) {
       return res.status(404).json({ message: "Demande introuvable." });
     }
-
-    if (demande.demande_livree == true) {
-      console.error(`Demande avec ID ${demande_id} a déjà été livrée.`);
-      return res.status(400).json({ message: "Demande déjà livrée." });
+    if (!STATUTS_LIVRABLES.includes(demande.statut_demande)) {
+      return res.status(400).json({ message: "La demande doit être validée avant d'être livrée." });
+    }
+    if (demande.demande_livree) {
+      return res.status(400).json({ message: "Demande déjà entièrement livrée." });
     }
 
-    if (!user_id) {
-      console.error("ID utilisateur non fourni.");
-      return res.status(403).json({ message: "Utilisateur non authentifié." });
-    }
-
-    const user = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
+    const user = await prisma.users.findUnique({ where: { id_user: idUser } });
     if (!user) {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const detailsMouvement = typeof detailsDemande === "string" ? JSON.parse(detailsDemande) : detailsDemande;
-    const detailsEntree = typeof detailsDemandeur === "string" ? JSON.parse(detailsDemandeur) : detailsDemandeur;
-    const typeMouvement = detailsMouvement.typeMouvement
-    let dataMouvement = null
-    let initial = 0
-    let stock = 0
-    let final = 0
-    let finalPiece = Number(detailsMouvement.stockFinalPiece)
-    let finalPieceLot = 0
-    let mouvement_stock = null
-    const modelPiece = parseInt(detailsMouvement.model)
-    const servicePiece = parseInt(detailsMouvement.service)
-    const pieceId = itemId
+    const stock = await prisma.stocks.findUnique({
+      where: { id: idStock },
+      include: { stock_owners: true },
+    });
+    if (!stock || stock.is_deleted) {
+      return res.status(404).json({ message: "Stock introuvable ou supprimé." });
+    }
+    if (stock.piece_id !== demande.item_id) {
+      return res.status(400).json({ message: "Le stock choisi ne correspond pas à la pièce demandée." });
+    }
+    if (!estResponsableStock(stock, user.id_user)) {
+      return res.status(403).json({ message: "Vous n'êtes ni propriétaire, ni co-propriétaire, ni créateur de ce stock." });
+    }
 
-    let dataEntree = null
-    let initialDemandeur = 0
-    let finalDemandeur = 0
-    const finalPieceDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-    let mouvement_stock_demandeur = null
-    const serviceDemandeur = demande.service_demandeur
+    const selection = parseJson(detailsDemande, {}) || {}
+    const typeMouvement = toInt(selection.typeMouvement)
+    if (!TYPES_MOUVEMENT.includes(typeMouvement)) {
+      return res.status(400).json({ message: "Type de mouvement invalide !" });
+    }
 
-    let updatedQuantiteDemandeur = null
-
-    const selectedStock = await prisma.stocks.findUnique({
-      where: {
-        id: parseInt(stock_id)
+    let dateAction = new Date()
+    if (isReg) {
+      dateAction = new Date(date_livraison)
+      if (!date_livraison || isNaN(dateAction.getTime())) {
+        return res.status(400).json({ message: "Date de livraison invalide !" });
       }
-    })
+    }
 
-    const dateAction = new Date();
+    // Détails de la demande sans les clés écrites par une livraison précédente
+    const detailsDemandeOrigine = detailsSansLivraison(parseJson(demande.details_demande, {}) || {})
 
-    const mouvementStock = await prisma.$transaction(async (tx) => {
-      initial = Number(detailsMouvement.stockInitialPiece)
-      stock = Number(detailsMouvement.quantiteMouvement)
-      final = Number(detailsMouvement.stockFinalPiece)
-      dataMouvement = {
-        type: 'sortie',
-        mouvement: 5,
-        demande_id: demande.id,
-        stock_id: parseInt(stock_id),
-        piece_id: parseInt(itemId),
-        service_origine: servicePiece,
-        service_destination: parseInt(demande.service_demandeur),
-        model_id: modelPiece,
-        stock_initial: initial,
-        quantite: stock,
-        stock_final: final,
-        quantite_totale_piece: final,
-        motif: demande.motif_demande,
-        commentaire,
-        details_mouvement: JSON.stringify(detailsMouvement),
+    const resultat = await prisma.$transaction(async (tx) => {
+      // Verrou sur la demande (UPDATE en premier) puis relecture : deux livraisons simultanées passent l'une après l'autre
+      await tx.demandes.update({ where: { id: demande.id }, data: { type_demande: typeMouvement } })
+      const demandeVerrouillee = await tx.demandes.findUnique({ where: { id: demande.id } })
+      if (demandeVerrouillee.demande_livree || !STATUTS_LIVRABLES.includes(demandeVerrouillee.statut_demande)) {
+        throw new HttpError(409, "La demande a déjà été livrée ou son statut a changé.")
       }
-      mouvement_stock = await prisma.mouvement_stock.create({
-        data: dataMouvement,
+
+      const sortie = await debiterStockLivraison(tx, {
+        stockId: stock.id,
+        typeMouvement,
+        selection,
+        userId: user.id_user,
+        dateAction,
       })
 
-      const dataStock = {
-        quantite_piece: final,
-        last_update: dateAction,
-      }
-
-      const stockDonneur = await tx.stocks.update({
-        where: {
-          id: parseInt(stock_id),
-        },
-        data: dataStock,
+      // Quantité livrée dans l'unité de la demande, comparée à la quantité validée
+      const validation = await tx.validation_demande.findFirst({
+        where: { id_demande: demande.id, statut_validation_demande: 'valide' },
+        orderBy: { id_validation_demande: 'desc' },
       })
-
-      initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-      finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-      const stockDemandeur = await tx.stocks.findFirst({
-        where: {
-          code_stock: stockDonneur.code_stock,
-          piece_id: 1,
-          service_id: 3,
-        }
+      const livraisonsPrecedentes = await tx.livraison_piece.findMany({
+        where: { demande_id: demande.id },
+        select: { details_demande: true },
       })
-      let idStock = stockDemandeur ? stockDemandeur.id : null
-      if (!stockDemandeur) {
-        const stockDemandeur = await tx.stocks.create({
-          data: {
-            code_stock: stockDonneur.code_stock,
-            piece_id: 1,
-            model_id: modelPiece,
-            service_id: 3,
-            quantite_lot: 0,
-            quantite_carton: 0,
-            quantite_piece: finalPieceDemandeur,
-            created_at: dateAction,
-            created_by: user.id_user,
-            last_update: dateAction,
-            updated_by: user.id_user,
-          }
-        })
-        idStock = stockDemandeur.id
-      } else {
-        const updatedStockDemandeur = await tx.stocks.update({
-          where: {
-            id: idStock,
-          },
-          data: {
-            quantite_piece: finalDemandeur,
-            last_update: dateAction,
-          },
-        })
-        idStock = updatedStockDemandeur.id
-      }
-      dataEntree = {
-        type: 'entree',
-        mouvement: 5,
-        demande_id: demande.id,
-        stock_id: idStock,
-        piece_id: parseInt(itemId),
-        service_origine: servicePiece,
-        service_destination: parseInt(demande.service_demandeur),
-        model_id: modelPiece,
-        stock_initial: initialDemandeur,
-        quantite: stock,
-        stock_final: finalDemandeur,
-        quantite_totale_piece: finalPieceDemandeur,
-        motif: demande.motif_demande,
-        commentaire,
-        details_mouvement: JSON.stringify(detailsEntree),
-      }
-
-      mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        data: dataEntree,
+      const bilanAvant = bilanLivraisons({
+        detailsDemande: detailsDemandeOrigine,
+        quantiteValidee: validation ? validation.quantite_validee : null,
+        livraisons: livraisonsPrecedentes,
       })
+      const quantiteUnite = quantiteDansUnite(sortie.contenuLivre, bilanAvant.unite)
+      const mesurable = bilanAvant.unite !== null && bilanAvant.quantiteValidee !== null && quantiteUnite !== null
+      if (mesurable && quantiteUnite > bilanAvant.reste) {
+        throw new HttpError(409, `Quantité supérieure au reste à livrer : ${bilanAvant.reste} ${bilanAvant.libelleUnite} sur ${bilanAvant.quantiteValidee} validé(s), cette livraison en compte ${quantiteUnite}.`)
+      }
+      const quantiteLivreeApres = bilanAvant.quantiteLivree + (quantiteUnite ?? 0)
+      const quantiteAtteinte = mesurable && quantiteLivreeApres >= bilanAvant.quantiteValidee
+      const livraisonFinale = quantiteAtteinte || cloturerDemande
+      const bilan = {
+        unite: bilanAvant.unite,
+        libelleUnite: bilanAvant.libelleUnite,
+        quantiteValidee: bilanAvant.quantiteValidee,
+        quantiteCetteLivraison: quantiteUnite,
+        quantiteLivree: quantiteLivreeApres,
+        reste: bilanAvant.quantiteValidee !== null && bilanAvant.unite ? Math.max(0, bilanAvant.quantiteValidee - quantiteLivreeApres) : null,
+        mesurable,
+        livraisonFinale,
+        cloturee: !quantiteAtteinte && cloturerDemande,
+        numero: livraisonsPrecedentes.length + 1,
+      }
+      Object.assign(sortie.contenuLivre, { unite: bilanAvant.unite, quantiteUnite })
 
-      await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
+      const details = construireDetailsLivraison({
+        detailsDemande: detailsDemandeOrigine,
+        typeMouvement,
+        selection,
+        ...sortie,
+      })
+      details.livraison = bilan
+
+      const mouvement = await tx.mouvement_stock.create({
         data: {
-          stock_id: +stock_id,
-          demande_livree: true,
+          type: 'sortie',
+          mouvement: typeMouvement,
+          demande_id: demande.id,
+          created_at: dateAction,
+          stock_id: stock.id,
+          piece_id: stock.piece_id,
+          service_origine: stock.service_id,
+          service_destination: demande.service_demandeur,
+          model_id: stock.model_id,
+          stock_initial: sortie.unites.initial,
+          quantite: sortie.unites.quantite,
+          stock_final: sortie.unites.final,
+          quantite_totale_piece: sortie.stockApres.quantite_piece,
+          motif: demande.motif_demande,
+          commentaire,
+          details_mouvement: JSON.stringify(details),
+          created_by: user.id_user,
+        }
+      })
+
+      // Livraison partielle : statut « partiel », la demande reste ouverte à d'autres livraisons
+      await tx.demandes.update({
+        where: { id: demande.id },
+        data: {
+          stock_id: stock.id,
           nomenclature,
           type_demande: typeMouvement,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
+          details_demande: JSON.stringify(details),
+          details_demandeur: null,
+          statut_demande: livraisonFinale ? 'valide' : 'partiel',
+          demande_livree: livraisonFinale,
         },
       });
 
@@ -2292,34 +1242,175 @@ const livraisonPiece = async (req, res) => {
           last_modified_at: dateAction,
           nom_user: user.fullname,
           commentaire,
+          ...(isReg ? { is_reg: true } : {}),
         }
       })
 
       const livraison = await tx.livraison_piece.create({
         data: {
           demande_id: demande.id,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
+          details_demande: JSON.stringify(details),
           form_id: livraisonForm.id,
-          stock_id: parseInt(stock_id),
+          stock_id: stock.id,
         }
       })
 
       return {
         livraisonForm,
         livraison,
+        mouvement,
+        contenuLivre: sortie.contenuLivre,
+        serialNumbers: sortie.serialNumbers,
+        quantite: sortie.unites.quantite,
+        bilan,
       }
-    })
+    }, OPTIONS_TRANSACTION_STOCK)
 
-    console.log('Livraison de stock éffectuée avec succès !')
+    /*****************      GESTION PARC TPE       *****************/
+    // Terminaux livrés par lot / carton : statut 4 + historique.
+    // Régularisation antidatée : le statut n'est changé que pour les TPE dont le dernier changement est plus ancien
+    // (sinon historique seul), comme pour le décommissionnement.
+    let allTpes = null
+    const piece = await prisma.items.findUnique({ where: { id_piece: stock.piece_id } })
+    const estTerminal = String(piece?.type || '').toUpperCase() == 'TERMINAL'
+    if (estTerminal && resultat.serialNumbers.length > 0) {
+      const parc = await prisma.$transaction((tx) => appliquerStatutParc(tx, {
+        items: resultat.serialNumbers.map((item) => ({
+          serial: item.serial_number,
+          modelId: toModelId(item.model_id) || toModelId(stock.model_id),
+        })),
+        statutId: 4,
+        userId: user.id_user,
+        dateAction,
+        formId: resultat.livraisonForm.id,
+      }))
+      allTpes = parc.tpes
+    }
+
+    /****************    GESTION DES MAILS     *****************/
+    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
+    try {
+      const userService = await prisma.user_services.findMany({
+        where: { service_id: demande.service_demandeur },
+        include: { users: true }
+      })
+      const service = await prisma.services.findUnique({ where: { id: demande.service_demandeur } })
+      const mouvement = await prisma.type_mouvement_stock.findUnique({ where: { id: typeMouvement } })
+
+      const service_users = userService.map(us => us.users.email)
+      const nomPiece = String(piece?.nom_piece || '').toUpperCase()
+      const nomServiceDemandeur = String(service?.nom_service || '').toUpperCase();
+      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const demandeLink = `${GENERAL_URL}/demande-details/${demande.id}`;
+      const subject = isReg ? `SYSLIS - REGULARISATION LIVRAISON STOCK DE ${nomPiece}` : `SYSLIS - LIVRAISON STOCK DE ${nomPiece}`;
+      const html = `
+        <p>Bonjour,</p>
+        <p>La demande ${demande.id} a été livrée${resultat.bilan.livraisonFinale ? '' : ' partiellement'}.</p>
+        <ul>
+          <li><strong>Motif :</strong> ${demande.motif_demande}</li>
+          <li><strong>${mouvement ? mouvement.titre : ''}</strong></li>
+          <li><strong>Quantité :</strong> ${resultat.quantite} (${resultat.contenuLivre.quantitePiece} pièce(s))</li>
+          ${resultat.bilan.livraisonFinale
+            ? `<li><strong>Livraison finale${resultat.bilan.numero > 1 ? ` (livraison n°${resultat.bilan.numero})` : ''}</strong>${resultat.bilan.cloturee ? ' : demande clôturée par le livreur' : ''}</li>`
+            : `<li><strong>Livraison partielle n°${resultat.bilan.numero}</strong>${resultat.bilan.reste !== null ? ` : reste ${resultat.bilan.reste} ${resultat.bilan.libelleUnite} à livrer` : ''}</li>`}
+        </ul>
+        <ul>
+          <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
+          <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        </ul>
+        <br>
+        <p>Commentaire : ${commentaire_mail}<p>
+        <p>À la réception, vous pourrez créer un nouveau stock, alimenter un de vos stocks ou ne pas mettre les pièces en stock.</p>
+        <br>
+        <p>Retrouvez la demande à ce lien :
+            <span>
+            <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
+                Cliquez ici !
+            </a>
+            </span>
+        </p>
+        <br><br>
+        <p>Green - Pay vous remercie.</p>
+        `;
+
+      const destinataires = [...new Set(service_users.filter(Boolean))];
+      if (destinataires.length > 0) {
+        await sendMail({
+          to: configEmail,
+          bcc: destinataires,
+          subject,
+          html,
+        });
+      }
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
+    }
+
+    console.log(`${libelle} effectuée avec succès !`)
     return res.status(201).json({
-      message: 'Livraison de stock éffectuée avec succès !',
-      data: mouvementStock,
+      message: `${libelle} effectuée avec succès !`,
+      data: {
+        livraisonForm: resultat.livraisonForm,
+        livraison: resultat.livraison,
+        mouvement: resultat.mouvement,
+        contenuLivre: resultat.contenuLivre,
+        bilan: resultat.bilan,
+        tpe: allTpes,
+      },
     });
-
   } catch (error) {
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
+const livraisonDemande = (req, res) => traiterLivraison(req, res, { isReg: false })
+const regLivraisonDemande = (req, res) => traiterLivraison(req, res, { isReg: true })
+
+// Stocks depuis lesquels l'utilisateur peut livrer une demande :
+// même pièce, même service (et même modèle si la demande en précise un), non vides, dont il est owner / sub-owner / créateur.
+const getStocksLivraison = async (req, res) => {
+  try {
+    const idDemande = toInt(req.params.demandeId)
+    const idUser = toInt(req.params.userId)
+    if (!idDemande || !idUser) {
+      return res.status(400).json({ message: "Paramètres invalides." });
+    }
+    const demande = await prisma.demandes.findUnique({ where: { id: idDemande } })
+    if (!demande) {
+      return res.status(404).json({ message: "Demande introuvable." });
+    }
+    const details = parseJson(demande.details_demande, {}) || {}
+    const modelId = toInt(details.selectedModel ?? details.model)
+    const serviceId = toInt(details.selectedServicePiece ?? details.service)
+
+    const stocks = await prisma.stocks.findMany({
+      where: {
+        piece_id: demande.item_id,
+        is_deleted: false,
+        quantite_piece: { gt: 0 },
+        ...(modelId ? { model_id: modelId } : {}),
+        ...(serviceId ? { service_id: serviceId } : {}),
+        OR: [
+          { owner: idUser },
+          { owner: null, created_by: idUser }, // créateur : seulement pour un stock sans propriétaire
+          { stock_owners: { some: { user_id: idUser } } },
+        ],
+      },
+      include: {
+        services: true,
+        model_piece: true,
+      },
+      orderBy: { id: 'desc' },
+    })
+    return res.status(200).json(stocks)
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Erreur lors de la récupération des stocks de livraison." })
   }
 }
 
@@ -2336,8 +1427,8 @@ const returnDemande = async (req, res) => {
 
     if (!demande) return res.status(404).json({ message: "Demande introuvable." });
 
-    if (demande.statut_demande === "valide") {
-      return res.status(400).json({ message: "Demande déjà validée." });
+    if (demande.statut_demande !== "en_cours") {
+      return res.status(400).json({ message: demande.statut_demande === "valide" ? "Demande déjà validée." : "Seule une demande en cours peut être retournée." });
     }
 
     if (!commentaire_return) {
@@ -2354,22 +1445,29 @@ const returnDemande = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const newValidation = await prisma.validation_demande.create({
-      data: {
-        id_demande: parseInt(demande_id),
-        commentaire: commentaire_return,
-        id_user: user_id ? parseInt(user_id) : null,
-        nom_validateur: user.fullname,
-        date_validation_demande: new Date(),
-        signature: 'retournée',
-        statut_validation_demande: "retourne",
-      },
+    const newValidation = await prisma.$transaction(async (tx) => {
+      const garde = await tx.demandes.updateMany({
+        where: { id: demande.id, statut_demande: 'en_cours' },
+        data: { statut_demande: 'retourne' },
+      });
+      if (garde.count !== 1) {
+        throw new HttpError(409, "La demande a déjà été traitée.")
+      }
+      return tx.validation_demande.create({
+        data: {
+          id_demande: demande.id,
+          commentaire: commentaire_return,
+          id_user: parseInt(user_id),
+          nom_validateur: user.fullname,
+          date_validation_demande: new Date(),
+          signature: 'retournée',
+          statut_validation_demande: "retourne",
+        },
+      });
     });
 
-    await prisma.demandes.update({
-      where: { id: parseInt(demande_id) },
-      data: { statut_demande: 'retourne' },
-    });
+    // Mail au demandeur et à son service : une erreur ici ne doit pas faire échouer l'opération
+    try {
 
     /************************************     GESTION MAILS     **************************************/
 
@@ -2436,18 +1534,20 @@ const returnDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-      // await sendMail({
-      //   to: demandeur.email,
-      //   subject,
-      //   html,
-      // });
-      // for (const service_user of service_users) {
-      //   await sendMail({
-      //     to: service_user.email,
-      //     subject,
-      //     html,
-      //   });
-      // }
+      // Demandeur + utilisateurs du service demandeur, en CCI (dédoublonnés)
+      const destinataires = [...new Set([demandeur?.email, ...service_users.map((us) => us?.email)].filter(Boolean))];
+      if (destinataires.length > 0) {
+        await sendMail({
+          to: configEmail,
+          bcc: destinataires,
+          subject,
+          html,
+        });
+      }
+    }
+
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json({
@@ -2455,6 +1555,10 @@ const returnDemande = async (req, res) => {
       newValidation,
     });
   } catch (error) {
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
   }
@@ -2473,8 +1577,8 @@ const cancelDemande = async (req, res) => {
 
     if (!demande) return res.status(404).json({ message: "Demande introuvable." });
 
-    if (demande.statut_demande === "valide") {
-      return res.status(400).json({ message: "Demande déjà validée." });
+    if (demande.statut_demande !== "en_cours") {
+      return res.status(400).json({ message: demande.statut_demande === "valide" ? "Demande déjà validée." : "Seule une demande en cours peut être refusée." });
     }
 
     if (!commentaire_refus) {
@@ -2491,22 +1595,29 @@ const cancelDemande = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    const newValidation = await prisma.validation_demande.create({
-      data: {
-        id_demande: parseInt(demande_id),
-        commentaire: commentaire_refus,
-        id_user: user_id ? parseInt(user_id) : null,
-        nom_validateur: user.fullname,
-        date_validation_demande: new Date(),
-        signature: 'refusée',
-        statut_validation_demande: "refuse",
-      },
+    const newValidation = await prisma.$transaction(async (tx) => {
+      const garde = await tx.demandes.updateMany({
+        where: { id: demande.id, statut_demande: 'en_cours' },
+        data: { statut_demande: 'refuse' },
+      });
+      if (garde.count !== 1) {
+        throw new HttpError(409, "La demande a déjà été traitée.")
+      }
+      return tx.validation_demande.create({
+        data: {
+          id_demande: demande.id,
+          commentaire: commentaire_refus,
+          id_user: parseInt(user_id),
+          nom_validateur: user.fullname,
+          date_validation_demande: new Date(),
+          signature: 'refusée',
+          statut_validation_demande: "refuse",
+        },
+      });
     });
 
-    await prisma.demandes.update({
-      where: { id: parseInt(demande_id) },
-      data: { statut_demande: 'refuse' },
-    });
+    // Mail au demandeur et à son service : une erreur ici ne doit pas faire échouer l'opération
+    try {
 
 
     /************************************     GESTION MAILS     **************************************/
@@ -2575,18 +1686,20 @@ const cancelDemande = async (req, res) => {
       <br><br>
       <p>Green - Pay vous remercie.</p>
       `;
-      // await sendMail({
-      //   to: demandeur.email,
-      //   subject,
-      //   html,
-      // });
-      // for (const service_user of service_users) {
-      //   await sendMail({
-      //     to: service_user.email,
-      //     subject,
-      //     html,
-      //   });
-      // }
+      // Demandeur + utilisateurs du service demandeur, en CCI (dédoublonnés)
+      const destinataires = [...new Set([demandeur?.email, ...service_users.map((us) => us?.email)].filter(Boolean))];
+      if (destinataires.length > 0) {
+        await sendMail({
+          to: configEmail,
+          bcc: destinataires,
+          subject,
+          html,
+        });
+      }
+    }
+
+    } catch (mailError) {
+      console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
     return res.status(201).json({
@@ -2596,6 +1709,10 @@ const cancelDemande = async (req, res) => {
 
 
   } catch (error) {
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
   }
@@ -2603,6 +1720,8 @@ const cancelDemande = async (req, res) => {
 
 const updateDemande = async (req, res) => {
   try {
+    if (!(await appliquerSaisieDemande(req, res))) return
+
     const { id } = req.params
     const {
       detailsDemande,
@@ -2667,12 +1786,27 @@ const updateDemande = async (req, res) => {
       console.error("Demande non trouvée pour l'ID :", id);
       return res.status(404).json({ message: "Demande non trouvée" });
     }
+    if (demande.demande_livree || !['en_cours', 'retourne'].includes(demande.statut_demande)) {
+      console.error("Demande non modifiable, statut :", demande.statut_demande);
+      return res.status(400).json({ message: "Seule une demande en cours ou retournée peut être modifiée." });
+    }
 
-    const demandeForm = await prisma.forms.findUnique({
+    // Droits : créateur, demandeur, membre du service demandeur, ou super administrateur
+    const membreService = demande.service_demandeur
+      ? await prisma.user_services.findFirst({ where: { user_id: utilisateur.id_user, service_id: demande.service_demandeur } })
+      : null
+    const autorise = [demande.user_id, demande.id_demandeur].includes(utilisateur.id_user) ||
+      !!membreService ||
+      await estSuperAdmin(prisma, utilisateur.id_user)
+    if (!autorise) {
+      return res.status(403).json({ message: "Vous ne pouvez modifier que les demandes de votre service." });
+    }
+
+    const demandeForm = demande.form_id ? await prisma.forms.findUnique({
       where: {
         id: demande.form_id
       }
-    })
+    }) : null
     if (!demandeForm) {
       console.error("Formulaire de demande non trouvé pour l'ID :", demande.form_id);
     }
@@ -2681,7 +1815,7 @@ const updateDemande = async (req, res) => {
 
     const updateDemande = await prisma.$transaction(async (tx) => {
       // Update du formulaire lié à la demande s'il existe
-      const updatedForm = await tx.forms.update({
+      const updatedForm = !demandeForm ? null : await tx.forms.update({
         where: {
           id: demande.form_id,
         },
@@ -2699,13 +1833,12 @@ const updateDemande = async (req, res) => {
           id: demande.id,
         },
         data: {
+          // date_demande et user_id (créateur) sont conservés : la modification est tracée dans forms (updated_at / updated_by)
           nom_demandeur: nomUser,
-          date_demande: dateAction,
           commentaire,
           qte_total_demande: +quantite,
           details_demande: JSON.stringify(details),
           statut_demande: 'en_cours',
-          user_id: parseInt(userId),
           item_id: piece.id_piece,
           id_demandeur: parseInt(selectedUser),
           motif_demande: motif,
@@ -2724,7 +1857,7 @@ const updateDemande = async (req, res) => {
             mimeType: fichier.type,
             size: fichier.size,
             uploaded_by: +userId,
-            form_id: demandeForm.id,
+            form_id: demandeForm ? demandeForm.id : null,
             demande_id: demande.id,
             type_formulaire: 'demande',
             role: 'demandeur',
@@ -2820,53 +1953,133 @@ const updateDemande = async (req, res) => {
   }
 };
 
-const receivePiece = async (req, res) => {
+/************************************************************************************************
+ *  RÉCEPTION D'UNE DEMANDE DE STOCK
+ *  Le demandeur choisit : créer un nouveau stock, alimenter un de ses stocks existants
+ *  (même pièce, même modèle, même service) ou ne pas mettre les pièces en stock.
+ ************************************************************************************************/
+const LIBELLES_ACTION_RECEPTION = {
+  nouveau_stock: 'Nouveau stock créé',
+  stock_existant: 'Stock existant alimenté',
+  ignore: 'Pièces non mises en stock',
+}
+
+// Livraisons d'une demande pas encore réceptionnées (la plus ancienne d'abord).
+// Demande déjà marquée reçue (anciennes réceptions sans livraison_id) : plus rien à réceptionner.
+const livraisonsAReceptionner = (db, demande) => demande.demande_recue
+  ? Promise.resolve([])
+  : db.livraison_piece.findMany({
+    where: { demande_id: demande.id, reception_piece: { is: null } },
+    orderBy: { id: 'asc' },
+    include: { forms: true },
+  })
+
+const traiterReception = async (req, res, { isReg }) => {
+  const libelle = isReg ? 'Réception régularisée' : 'Stock réceptionné'
   try {
     const {
-      itemId,
       demandeId,
       commentaire,
       user_id,
+      date_reception,
+      actionStock,
+      stockId,
+      codeStock,
+      livraisonId,
     } = req.body;
 
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demandeId) },
-    })
+    const idDemande = toInt(demandeId)
+    const idUser = toInt(user_id)
+    if (!idUser) {
+      return res.status(403).json({ message: "Utilisateur non authentifié." });
+    }
+    if (!idDemande) {
+      return res.status(400).json({ message: "Demande invalide." });
+    }
 
-    if (!demande) {
-      console.log("Demande introuvable.")
+    const demande = await prisma.demandes.findUnique({ where: { id: idDemande } })
+    if (!demande || demande.is_deleted) {
       return res.status(404).json({ message: "Demande introuvable." });
     }
-    if (demande.demande_recue == true) {
-      console.log("Demande déjà réceptionnée")
+    if (!STATUTS_LIVRABLES.includes(demande.statut_demande)) {
+      return res.status(400).json({ message: "La demande n'a pas encore été livrée." });
+    }
+    if (demande.demande_recue) {
       return res.status(400).json({ message: "Demande déjà réceptionnée." });
     }
-    const signature = req.files?.signature?.[0] || null;
-    if (!signature) {
-      console.error('Signature manquante !')
-      return res.status(404).json({ message: "Signature introuvable !" });
+
+    // Livraison à réceptionner : celle choisie, sinon la plus ancienne en attente
+    const enAttente = await livraisonsAReceptionner(prisma, demande)
+    if (enAttente.length === 0) {
+      return res.status(400).json({ message: "Aucune livraison en attente de réception pour cette demande." });
+    }
+    const idLivraison = toInt(livraisonId)
+    const livraison = idLivraison ? enAttente.find((l) => l.id === idLivraison) : enAttente[0]
+    if (!livraison) {
+      return res.status(400).json({ message: "Cette livraison est déjà réceptionnée ou n'appartient pas à la demande." });
     }
 
-    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
-      folder: "greenpay/signatures",
-    });
-    const signatureCloud = uploadResult.secure_url;
+    const signature = req.files?.signature?.[0] || null;
+    if (!signature) {
+      return res.status(400).json({ message: "Signature introuvable !" });
+    }
 
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
-
-    const utilisateur = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
+    const utilisateur = await prisma.users.findUnique({ where: { id_user: idUser } });
     if (!utilisateur) {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
-    let nom_recepteur = utilisateur.fullname
+    const action = actionStock || 'ignore'
+    if (!ACTIONS_RECEPTION.includes(action)) {
+      return res.status(400).json({ message: "Choix de mise en stock invalide." });
+    }
 
-    const dateAction = new Date()
+    const contenu = lireContenuLivre(livraison)
+    if (action !== 'ignore' && !contenu) {
+      return res.status(400).json({
+        message: "Cette demande a été livrée avant la mise en place de la mise en stock à la réception : seule l'option « ne pas mettre en stock » est possible."
+      });
+    }
+
+    let dateAction = new Date()
+    if (isReg) {
+      dateAction = new Date(date_reception)
+      if (!date_reception || isNaN(dateAction.getTime())) {
+        return res.status(400).json({ message: "Date de réception invalide !" });
+      }
+    }
+
+    // Upload hors transaction (appel réseau)
+    const uploadResult = await cloudinary.uploader.upload(signature.path, {
+      folder: "greenpay/signatures",
+    });
+    const signatureCloud = uploadResult.secure_url;
+
+    const piece = await prisma.items.findUnique({ where: { id_piece: demande.item_id } })
+    const estTerminal = String(piece?.type || '').toUpperCase() == 'TERMINAL'
 
     const reception = await prisma.$transaction(async (tx) => {
+      // Verrou sur la demande puis relecture (réceptions simultanées de deux livraisons)
+      await tx.demandes.update({ where: { id: demande.id }, data: { demande_recue: false } })
+      const dejaRecue = await tx.reception_piece.findFirst({ where: { livraison_id: livraison.id } })
+      if (dejaRecue) {
+        throw new HttpError(409, "Cette livraison a déjà été réceptionnée.")
+      }
+
+      let miseEnStock = null
+      if (action !== 'ignore') {
+        miseEnStock = await mettreEnStockReception(tx, {
+          demande,
+          contenu,
+          action,
+          stockId,
+          codeStock,
+          user: utilisateur,
+          dateAction,
+          commentaire,
+        })
+      }
+
       const receptionForm = await tx.forms.create({
         data: {
           type: 'reception_stock',
@@ -2875,92 +2088,101 @@ const receivePiece = async (req, res) => {
           last_modified_at: dateAction,
           nom_user: utilisateur.fullname,
           commentaire,
+          ...(isReg ? { is_reg: true } : {}),
         }
       })
+
       const newReception = await tx.reception_piece.create({
         data: {
-          item_id: parseInt(itemId),
-          user_id: parseInt(user_id),
-          demande_id: parseInt(demandeId),
+          item_id: demande.item_id,
+          user_id: utilisateur.id_user,
+          demande_id: demande.id,
           created_at: dateAction,
-          signature_recepteur: signatureCloud ? signatureCloud : '',
-          nom_recepteur,
+          signature_recepteur: signatureCloud,
+          nom_recepteur: utilisateur.fullname,
           commentaire,
           form_id: receptionForm.id,
+          action_stock: action,
+          stock_id: miseEnStock ? miseEnStock.stock.id : null,
+          livraison_id: livraison.id,
         }
       })
+
+      // Demande entièrement livrée et toutes ses livraisons réceptionnées : demande reçue
+      const demandeVerrouillee = await tx.demandes.findUnique({ where: { id: demande.id } })
+      const restantes = await tx.livraison_piece.count({
+        where: { demande_id: demande.id, reception_piece: { is: null } },
+      })
+      const demandeRecue = demandeVerrouillee.demande_livree && restantes === 0
+      if (demandeRecue) {
+        await tx.demandes.update({ where: { id: demande.id }, data: { demande_recue: true } })
+      }
+
+      // Terminaux mis en stock : retour au statut 1 au parc (régularisation antidatée : historique seul si besoin)
+      if (miseEnStock && estTerminal && (contenu.snIds || []).length > 0) {
+        const sns = await tx.serial_numbers.findMany({
+          where: { id: { in: contenu.snIds } },
+          select: { serial_number: true, model_id: true },
+        })
+        await appliquerStatutParc(tx, {
+          items: sns.map((sn) => ({ serial: sn.serial_number, modelId: sn.model_id })),
+          statutId: 1,
+          userId: utilisateur.id_user,
+          dateAction,
+          formId: receptionForm.id,
+        })
+      }
 
       await tx.form_signatures.create({
         data: {
           form_id: receptionForm.id,
-          signature_url: signature.path,
+          signature_url: signatureCloud,
           signed_by: utilisateur.id_user,
           signed_at: dateAction,
           role: 'receveur',
         },
       })
 
-      await tx.demandes.update({
-        where: { id: demande.id },
-        data: { demande_recue: true },
-      })
-
       return {
         receptionForm,
         newReception,
+        stock: miseEnStock ? miseEnStock.stock : null,
+        mouvement: miseEnStock ? miseEnStock.mouvement : null,
+        demandeRecue,
+        livraisonsRestantes: restantes,
       }
-    })
+    }, OPTIONS_TRANSACTION_STOCK)
 
     /****************    GESTION DES MAILS     *****************/
-    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
     try {
-      const livraisonPiece = await prisma.livraison_piece.findFirst({
-        where: { demande_id: demande.id },
-        include: { forms: true },
-      })
+      const livreur = livraison?.forms?.created_by
+        ? await prisma.users.findUnique({ where: { id_user: livraison.forms.created_by } })
+        : null
+      const service = await prisma.services.findUnique({ where: { id: demande.service_demandeur } })
+      const typeMouvement = demande.type_demande
+        ? await prisma.type_mouvement_stock.findUnique({ where: { id: demande.type_demande } })
+        : null
+      const piece = await prisma.items.findUnique({ where: { id_piece: demande.item_id } })
 
-      // La réception est déjà enregistrée : sans livraison liée, on n'envoie simplement pas de mail.
-      if (!livraisonPiece || !livraisonPiece.forms) {
-        throw new Error("Livraison liée à la demande introuvable ou formulaire de livraison manquant.");
-      }
-
-      const livreurId = livraisonPiece.forms.created_by
-      const livreur = await prisma.users.findUnique({
-        where: { id_user: livreurId }
-      })
-
-      const service = await prisma.services.findUnique({
-        where: { id: parseInt(demande.service_demandeur) }
-      })
-
-      const serviceReception = service.nom_service
-
-      const typeMouvement = await prisma.type_mouvement_stock.findUnique({
-        where: { id: demande.type_demande }
-      })
-
-      const piece = await prisma.items.findUnique({
-        where: { id_piece: demande.item_id }
-      })
-
-      const quantiteProduits = demande.qte_total_demande
       const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
-      const url = GENERAL_URL
-      const deliveryLink = `${url}/demande-details/${demande.id}`;
+      const deliveryLink = `${GENERAL_URL}/demande-details/${demande.id}`;
+      const ligneStock = reception.stock
+        ? `${LIBELLES_ACTION_RECEPTION[action]} : ${reception.stock.code_stock}`
+        : LIBELLES_ACTION_RECEPTION[action]
       const subject = `SYSLIS - RECEPTION DE STOCK`;
       const html = `
       <p>Bonjour,</p>
       <p>La demande de stock ${demande.id} a été réceptionnée.</p>
       <ul>
-        <li><strong>Pièce demandée:</strong> ${piece.nom_piece}</li>
-        <li><strong>Nombre de produits:</strong> ${quantiteProduits} ${typeMouvement.titre}</li>
-        <li><strong>Service:</strong> ${serviceReception}</li>
+        <li><strong>Pièce demandée:</strong> ${piece ? piece.nom_piece : ''}</li>
+        <li><strong>Livraison:</strong> ${contenu ? contenu.quantitePiece + ' pièce(s)' : demande.qte_total_demande} ${typeMouvement ? '- ' + typeMouvement.titre : ''}</li>
+        <li><strong>Service:</strong> ${service ? service.nom_service : ''}</li>
+        <li><strong>Mise en stock:</strong> ${ligneStock}</li>
       </ul>
       <br>
         <p>Commentaire : ${commentaire_mail}</p>
       <br>
-      <p>Retrouvez la demande à ce lien : 
+      <p>Retrouvez la demande à ce lien :
         <span>
           <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
             Cliquez ici !
@@ -2972,25 +2194,119 @@ const receivePiece = async (req, res) => {
     `;
 
       const destinataires = [...new Set([livreur?.email].filter(Boolean))];
-      await sendMail({
-        to: configEmail,
-        bcc: destinataires,
-        subject,
-        html,
-      });
+      if (destinataires.length > 0) {
+        await sendMail({
+          to: configEmail,
+          bcc: destinataires,
+          subject,
+          html,
+        });
+      }
     } catch (mailError) {
       console.error("Erreur lors de l'envoi des mails :", mailError);
     }
 
-    console.log('Stock réceptionné avec succès !')
+    console.log(`${libelle} avec succès !`)
     return res.status(201).json({
-      message: 'Stock réceptionné avec succès',
+      message: `${libelle} avec succès`,
       data: reception,
     });
 
   } catch (error) {
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
+  }
+}
+
+const receivePiece = (req, res) => traiterReception(req, res, { isReg: false })
+const regReceptionDemande = (req, res) => traiterReception(req, res, { isReg: true })
+
+// Informations pour la modale de réception : contenu livré, stocks alimentables, choix possibles
+const getOptionsReception = async (req, res) => {
+  try {
+    const idDemande = toInt(req.params.demandeId)
+    const idUser = toInt(req.params.userId)
+    if (!idDemande || !idUser) {
+      return res.status(400).json({ message: "Paramètres invalides." });
+    }
+    const demande = await prisma.demandes.findUnique({ where: { id: idDemande } })
+    if (!demande) {
+      return res.status(404).json({ message: "Demande introuvable." });
+    }
+
+    const service = demande.service_demandeur
+      ? await prisma.services.findUnique({ where: { id: demande.service_demandeur } })
+      : null
+
+    // Une entrée par livraison en attente de réception (la plus ancienne d'abord)
+    const enAttente = await livraisonsAReceptionner(prisma, demande)
+    const modeles = new Map()
+    const stocksParModele = new Map()
+    const livraisons = []
+    for (const livraison of enAttente) {
+      const contenu = lireContenuLivre(livraison)
+      let stocks = []
+      let nomModel = null
+      if (contenu && demande.service_demandeur) {
+        if (!modeles.has(contenu.modelId)) {
+          const model = await prisma.model_piece.findUnique({ where: { id_model: contenu.modelId } })
+          modeles.set(contenu.modelId, model ? model.nom_model : null)
+          stocksParModele.set(contenu.modelId, await prisma.stocks.findMany({
+            where: whereStocksAlimentables({
+              pieceId: contenu.pieceId,
+              modelId: contenu.modelId,
+              serviceId: demande.service_demandeur,
+              userId: idUser,
+            }),
+            select: {
+              id: true,
+              code_stock: true,
+              quantite_piece: true,
+              quantite_carton: true,
+              quantite_lot: true,
+              service_id: true,
+              model_id: true,
+            },
+            orderBy: { id: 'desc' },
+          }))
+        }
+        nomModel = modeles.get(contenu.modelId)
+        stocks = stocksParModele.get(contenu.modelId)
+      }
+      livraisons.push({
+        id: livraison.id,
+        date: livraison.forms ? livraison.forms.created_at : null,
+        miseEnStockPossible: !!contenu && !!demande.service_demandeur,
+        contenu: contenu ? {
+          typeMouvement: contenu.typeMouvement,
+          quantitePiece: contenu.quantitePiece,
+          quantiteCarton: contenu.quantiteCarton,
+          quantiteLot: contenu.quantiteLot,
+          quantiteSn: (contenu.snIds || []).length,
+          codeStockOrigine: contenu.codeStockOrigine,
+          modelId: contenu.modelId,
+          nomModel,
+        } : null,
+        stocks,
+      })
+    }
+
+    // Champs de premier niveau = livraison la plus ancienne (compatibilité)
+    const premiere = livraisons[0] || null
+    return res.status(200).json({
+      livraisons,
+      miseEnStockPossible: premiere ? premiere.miseEnStockPossible : false,
+      contenu: premiere ? premiere.contenu : null,
+      stocks: premiere ? premiere.stocks : [],
+      serviceDemandeur: service ? { id: service.id, nom_service: service.nom_service } : null,
+    })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({ message: "Erreur lors de la récupération des options de réception." })
   }
 }
 
@@ -3006,6 +2322,50 @@ const getAllReceptionsPiece = async (req, res) => {
   }
 }
 
+// Échappement HTML des textes insérés dans les PDF
+const echapperHtml = (valeur) => String(valeur ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+// Tableau des livraisons d'une demande pour le PDF (une ligne par livraison, avec sa réception)
+const construireTableauLivraisonsPdf = (demande, suivi) => {
+  if (!suivi.livraisons.length) return ''
+  const e = echapperHtml
+  const libelleContenu = (c) => c ? [
+    c.quantiteLot ? `${c.quantiteLot} lot(s)` : null,
+    c.quantiteCarton ? `${c.quantiteCarton} carton(s)` : null,
+    `${c.quantitePiece ?? 0} pièce(s)`,
+    c.quantiteSn ? `${c.quantiteSn} SN` : null,
+  ].filter(Boolean).join(' - ') : '—'
+  const libelleMiseEnStock = (r) => {
+    if (!r || !r.actionStock) return ''
+    if (r.actionStock === 'nouveau_stock') return ` - nouveau stock ${r.codeStock || ''}`
+    if (r.actionStock === 'stock_existant') return ` - ajout au stock ${r.codeStock || ''}`
+    return ' - non mis en stock'
+  }
+  const lignes = suivi.livraisons.map((l) => {
+    const livraison = (demande.livraison_piece || []).find((x) => x.id === l.id)
+    const livreur = livraison && livraison.forms ? livraison.forms.nom_user : null
+    const reception = l.reception ? (demande.reception_piece || []).find((x) => x.id === l.reception.id) : null
+    const texteReception = l.reception
+      ? `Reçue le ${l.reception.date ? formatDate(l.reception.date) : '—'}${reception && reception.nom_recepteur ? ` par ${reception.nom_recepteur}` : ''}${libelleMiseEnStock(l.reception)}`
+      : (l.enAttenteReception ? 'En attente de réception' : '—')
+    return `<tr><td>${l.numero}</td><td>${l.date ? formatDate(l.date) : '—'}</td><td>${e(livreur || '—')}</td>` +
+      `<td>${e(libelleContenu(l.contenu))}</td><td>${e((l.contenu && l.contenu.codeStockOrigine) || '—')}</td><td>${e(texteReception)}</td></tr>`
+  }).join('\n')
+  let bilan = ''
+  if (suivi.unite && suivi.quantiteValidee !== null) {
+    bilan = `Validé : ${suivi.quantiteValidee} ${suivi.libelleUnite} - livré : ${suivi.quantiteLivree} - reste : ${suivi.reste}`
+    if (demande.demande_livree && suivi.reste > 0) bilan += ' (demande clôturée)'
+  }
+  return `<div class="livraisons"><strong>Livraisons (${suivi.livraisons.length})</strong>${bilan ? `<div>${e(bilan)}</div>` : ''}` +
+    `<table class="tableau-livraisons"><thead><tr><th>N°</th><th>Date</th><th>Livreur</th><th>Contenu</th><th>Stock d'origine</th><th>Réception</th></tr></thead>` +
+    `<tbody>${lignes}</tbody></table></div>`
+}
+
 const generateDemandePDF = async (req, res) => {
   const { id } = req.params;
 
@@ -3014,7 +2374,8 @@ const generateDemandePDF = async (req, res) => {
       where: { id: parseInt(id) },
       include: {
         validation_demande: true,
-        reception_piece: true,
+        livraison_piece: { include: { forms: true }, orderBy: { id: 'asc' } },
+        reception_piece: { include: { forms: true, stocks: { select: { code_stock: true } } }, orderBy: { id: 'asc' } },
       }
     });
 
@@ -3038,7 +2399,14 @@ const generateDemandePDF = async (req, res) => {
       }
     })
 
-    const champsAutres = JSON.parse(demande_data.champs_autre)
+    // champs_autre peut être vide (demande sans champ supplémentaire)
+    let champsAutres = []
+    try {
+      const valeur = JSON.parse(demande_data.champs_autre || '[]')
+      champsAutres = Array.isArray(valeur) ? valeur : []
+    } catch (e) {
+      champsAutres = []
+    }
 
     // 🔎 Récupération de l'agent qui a fait la demande (si user_id défini)
     let nomDemandeur = "N/A";
@@ -3076,7 +2444,7 @@ const generateDemandePDF = async (req, res) => {
 
     const autresChamps = champsAutres.map((data, index) => {
       let row = ""
-      row = `<tr><th>${data.titre}</th><th>${data.information}</th></tr>`
+      row = `<tr><th>${echapperHtml(data.titre)}</th><th>${echapperHtml(data.information)}</th></tr>`
 
       if ((index + 1) % 20 === 0) {
         row += `<tr class="page-break"></tr>`;
@@ -3153,9 +2521,26 @@ const generateDemandePDF = async (req, res) => {
     let commentaire_reception = 'N/A'
     let quantite_livraison = 'N/A'
 
+    // Suivi des livraisons (une ou plusieurs) : tableau détaillé + quantité livrée cumulée
+    const suivi = suiviLivraisons(demande_data)
+    const nbLivraisons = suivi.livraisons.length
+    if (nbLivraisons > 0) {
+      templateFile = templatesMap[2]
+    }
+    if (nbLivraisons > 1) {
+      // Les stocks initial / final n'ont de sens que pour une livraison : le détail est dans le tableau
+      stock_depart = '—'
+      stock_final = '—'
+    }
+    if (suivi.unite && nbLivraisons > 0) {
+      quantite_livree = `${suivi.quantiteLivree} ${suivi.libelleUnite}${nbLivraisons > 1 ? ` (${nbLivraisons} livraisons)` : ''}`
+    } else if (nbLivraisons > 1) {
+      quantite_livree = `${quantite_livree} (dernière des ${nbLivraisons} livraisons)`
+    }
+    const tableauLivraisons = construireTableauLivraisonsPdf(demande_data, suivi)
+
     if (demandeLivraison) {
       templateFile = templatesMap[2]
-      signature_livraison = demandeLivraison.signature_recepteur
       date_reception = demandeLivraison.created_at
       signature_reception = demandeLivraison.signature_recepteur
       nom_recepteur = demandeLivraison.nom_recepteur
@@ -3165,47 +2550,55 @@ const generateDemandePDF = async (req, res) => {
     const filePath = path.join(__dirname, "../../statics/templates/", templateFile);
     let html = fs.readFileSync(filePath, "utf8");
 
+    // Textes saisis par les utilisateurs échappés (ils sont insérés dans le HTML du PDF) ; dates absentes -> vide
+    const e = echapperHtml
+    const dateOuVide = (d) => (d && d !== 'N/A' ? formatDate(d) : '')
     html = html
-      .replaceAll("{{commentaire}}", demande.commentaire)
-      .replaceAll("{{commentaire_validation}}", commentaire_validation)
-      .replaceAll("{{commentaire_livraison}}", commentaire_livraison)
-      .replaceAll("{{commentaire_reception}}", commentaire_reception)
-      .replaceAll("{{date_demande}}", formatDate(demande.date_demande))
-      .replaceAll("{{pieces_demandees}}", piece.nom_piece.toUpperCase())
-      .replaceAll("{{motif_demande}}", demande.motif_demande)
-      .replaceAll("{{service_donneur}}", service_donneur)
-      .replaceAll("{{mouvement}}", typeMouvement)
-      .replaceAll("{{nom_validateur}}", nomValidateur)
-      .replaceAll("{{nom_demandeur}}", nomDemandeur)
-      .replaceAll("{{service_demandeur}}", service_demandeur)
-      .replaceAll("{{quantite}}", quantite)
-      .replaceAll("{{quantite_validee}}", quantite_validee)
-      .replaceAll("{{quantite_livree}}", quantite_livree)
-      .replaceAll("{{quantite_livraison}}", quantite_livraison)
-      .replaceAll("{{stock_initial}}", stock_depart)
-      .replaceAll("{{stock_final}}", stock_final)
-      .replaceAll("{{signature}}", signature_validation ? signature_validation : '#')
-      .replaceAll("{{date_validation_demande}}", formatDate(date_validation))
-      .replaceAll("{{nom_livreur}}", nom_livreur)
-      .replaceAll("{{signature_livraison}}", signature_livraison ? signature_livraison : '#')
-      .replaceAll("{{date_livraison}}", formatDate(date_livraison))
-      .replaceAll("{{nom_recepteur}}", nom_recepteur)
-      .replaceAll("{{signature_reception}}", signature_reception ? signature_reception : '#')
-      .replaceAll("{{date_reception}}", formatDate(date_reception))
+      .replaceAll("{{commentaire}}", e(demande.commentaire || ''))
+      .replaceAll("{{commentaire_validation}}", e(commentaire_validation || ''))
+      .replaceAll("{{commentaire_livraison}}", e(commentaire_livraison))
+      .replaceAll("{{commentaire_reception}}", e(commentaire_reception || ''))
+      .replaceAll("{{date_demande}}", dateOuVide(demande.date_demande))
+      .replaceAll("{{pieces_demandees}}", e(piece.nom_piece.toUpperCase()))
+      .replaceAll("{{motif_demande}}", e(demande.motif_demande || ''))
+      .replaceAll("{{service_donneur}}", e(service_donneur))
+      .replaceAll("{{mouvement}}", e(typeMouvement || ''))
+      .replaceAll("{{nom_validateur}}", e(nomValidateur || ''))
+      .replaceAll("{{nom_demandeur}}", e(nomDemandeur))
+      .replaceAll("{{service_demandeur}}", e(service_demandeur))
+      .replaceAll("{{quantite}}", e(quantite))
+      .replaceAll("{{quantite_validee}}", e(quantite_validee))
+      .replaceAll("{{quantite_livree}}", e(quantite_livree))
+      .replaceAll("{{quantite_livraison}}", e(quantite_livraison))
+      .replaceAll("{{stock_initial}}", e(stock_depart ?? ''))
+      .replaceAll("{{stock_final}}", e(stock_final ?? ''))
+      .replaceAll("{{signature}}", signature_validation ? e(signature_validation) : '#')
+      .replaceAll("{{date_validation_demande}}", dateOuVide(date_validation))
+      .replaceAll("{{nom_livreur}}", e(nom_livreur))
+      .replaceAll("{{signature_livraison}}", signature_livraison && signature_livraison !== 'N/A' ? e(signature_livraison) : '#')
+      .replaceAll("{{date_livraison}}", dateOuVide(date_livraison))
+      .replaceAll("{{nom_recepteur}}", e(nom_recepteur || ''))
+      .replaceAll("{{signature_reception}}", signature_reception && signature_reception !== 'N/A' ? e(signature_reception) : '#')
+      .replaceAll("{{date_reception}}", dateOuVide(date_reception))
       .replace("{{autre_champs}}", autresChamps ? autresChamps : '')
-      .replace("{{autre_champs_livraison}}", autresChampsLivraison ? autresChampsLivraison : '')
+      .replace("{{autre_champs_livraison}}", '')
+      .replace("{{tableau_livraisons}}", tableauLivraisons)
 
     // 🖨️ Génération PDF
+    // Le navigateur est toujours fermé, même si la génération échoue (sinon un process Chrome reste ouvert à chaque erreur)
     const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    let pdfBuffer
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle0" });
 
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-    });
-
-    await browser.close();
+      pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+      });
+    } finally {
+      await browser.close();
+    }
 
     res.set({
       "Content-Type": "application/pdf",
@@ -3318,7 +2711,7 @@ const getDemandesValideesNonLivrees = async (req, res) => {
   try {
     const demandes = await prisma.demandes.findMany({
       where: {
-        statut_demande: 'valide',
+        statut_demande: { in: STATUTS_LIVRABLES },
         demande_livree: false,
       },
       orderBy: { date_demande: 'desc' },
@@ -3339,6 +2732,15 @@ const getDemandesValideesNonLivrees = async (req, res) => {
 // Fonction de régularisation des demandes de stock: faire une demande de stock en précisant la date.
 const regularisationDemande = async (req, res) => {
   try {
+    if (!(await appliquerSaisieDemande(req, res))) return
+    const dateDemandeReg = new Date(req.body.date_demande)
+    if (!req.body.date_demande || isNaN(dateDemandeReg.getTime())) {
+      return res.status(400).json({ message: "Date de la demande invalide !" })
+    }
+    if (dateDemandeReg.getTime() > Date.now()) {
+      return res.status(400).json({ message: "La date de la demande ne peut pas être dans le futur." })
+    }
+
     const {
       detailsDemande,
       userId,
@@ -3549,17 +2951,27 @@ const regValidateDemande = async (req, res) => {
 
     if (!demande) return res.status(404).json({ message: "Demande introuvable." });
 
-    if (demande.statut_demande === "valide") {
-      return res.status(400).json({ message: "Demande déjà validée." });
+    if (demande.statut_demande !== "en_cours") {
+      return res.status(400).json({ message: demande.statut_demande === "valide" ? "Demande déjà validée." : "Seule une demande en cours peut être validée." });
     }
 
     const signature = req.files?.signature?.[0] || null;
     if (!signature) {
       console.error('Signature manquante !')
-      return res.status(404).json({ message: "Signature introuvable !" });
+      return res.status(400).json({ message: "Signature introuvable !" });
     }
 
     if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
+
+    const quantite = toInt(quantiteValidee)
+    if (!quantite || quantite < 1) {
+      return res.status(400).json({ message: "Quantité validée invalide." });
+    }
+
+    const dateValidation = new Date(date_validation)
+    if (!date_validation || isNaN(dateValidation.getTime())) {
+      return res.status(400).json({ message: "Date de validation invalide !" });
+    }
 
     const user = await prisma.users.findUnique({
       where: { id_user: parseInt(user_id) },
@@ -3569,26 +2981,29 @@ const regValidateDemande = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
     }
 
+    // Upload hors transaction (appel réseau)
+    const uploadResult = await cloudinary.uploader.upload(signature.path, {
+      folder: "greenpay/signatures",
+    });
+    const signatureCloud = uploadResult.secure_url;
+
     const validation = await prisma.$transaction(async (tx) => {
-
-      const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
-        folder: "greenpay/signatures",
-      });
-
-      const signatureCloud = uploadResult.secure_url;
-      await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
+      const garde = await tx.demandes.updateMany({
+        where: { id: demande.id, statut_demande: "en_cours" },
         data: {
           statut_demande: "valide",
         },
       });
+      if (garde.count !== 1) {
+        throw new HttpError(409, "La demande a déjà été traitée.")
+      }
 
       const validationForm = await tx.forms.create({
         data: {
           type: 'validation_stock',
           created_by: user.id_user,
-          created_at: new Date(date_validation),
-          last_modified_at: new Date(date_validation),
+          created_at: dateValidation,
+          last_modified_at: dateValidation,
           nom_user: user.fullname,
           commentaire,
           is_reg: true,
@@ -3597,7 +3012,7 @@ const regValidateDemande = async (req, res) => {
       await tx.form_signatures.create({
         data: {
           form_id: validationForm.id,
-          signature_url: signature.path,
+          signature_url: signatureCloud,
           signed_by: user.id_user,
           signed_at: new Date(),
           role: 'validateur',
@@ -3610,10 +3025,10 @@ const regValidateDemande = async (req, res) => {
           commentaire,
           id_user: user_id ? parseInt(user_id) : null,
           nom_validateur: user.fullname,
-          date_validation_demande: new Date(date_validation),
+          date_validation_demande: dateValidation,
           signature: signatureCloud,
           statut_validation_demande: "valide",
-          quantite_validee: +quantiteValidee,
+          quantite_validee: quantite,
           form_id: validationForm.id
         },
       });
@@ -3640,15 +3055,7 @@ const regValidateDemande = async (req, res) => {
         include: { users: true }
       })
 
-      const ownersList = new Array(owners).map((item) => {
-        return parseInt(item)
-      })
-      let stockOwners = []
-      if (ownersList && ownersList.length > 0) {
-        stockOwners = await prisma.users.findMany({
-          where: { id_user: { in: ownersList } }
-        })
-      }
+      const stockOwners = await responsablesStocksDemande(demande)
 
       const proprietaires = stockOwners.map(us => us.email)
       const service_users = userService.map(us => us.users.email)
@@ -3706,1213 +3113,10 @@ const regValidateDemande = async (req, res) => {
       data: validation,
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Erreur serveur." });
-  }
-}
-
-const regLivraisonDemande = async (req, res) => {
-  try {
-    const {
-      demande_id,
-      user_id,
-      commentaire,
-      stock_id,
-      nomenclature,
-      detailsDemande,
-      detailsDemandeur,
-      itemId,
-      date_livraison,
-    } = req.body;
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demande_id) },
-    });
-
-    if (!demande) return res.status(404).json({ message: "Demande introuvable." });
-
-    if (demande.demande_livree == true) {
-      return res.status(400).json({ message: "Demande déjà livrée." });
+    if (error instanceof HttpError) {
+      console.error(error.message)
+      return res.status(error.status).json({ message: error.message });
     }
-
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
-
-    const user = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
-    }
-
-    /************************************     GESTION MOUVEMENT DE STOCK     *****************************/
-
-    const detailsMouvement = typeof detailsDemande === "string" ? JSON.parse(detailsDemande) : detailsDemande;
-    const detailsEntree = typeof detailsDemandeur === "string" ? JSON.parse(detailsDemandeur) : detailsDemandeur;
-    const typeMouvement = detailsMouvement.typeMouvement
-    let dataMouvement = null
-    let initial = 0
-    let stock = 0
-    let final = 0
-    let finalPiece = Number(detailsMouvement.stockFinalPiece)
-    let finalPieceLot = 0
-    let mouvement_stock = null
-    const modelPiece = parseInt(detailsMouvement.model)
-    const servicePiece = parseInt(detailsMouvement.service)
-    const pieceId = itemId
-
-    let dataEntree = null
-    let initialDemandeur = 0
-    let finalDemandeur = 0
-    const finalPieceDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-    let mouvement_stock_demandeur = null
-    const serviceDemandeur = demande.service_demandeur
-
-    let updatedQuantiteDemandeur = null
-
-    const selectedStock = await prisma.stocks.findUnique({
-      where: {
-        id: parseInt(stock_id)
-      }
-    })
-
-    const mouvementStock = await prisma.$transaction(async (tx) => {
-      if (typeMouvement == 5) {
-        initial = Number(detailsMouvement.stockInitialPiece)
-        stock = Number(detailsMouvement.quantiteMouvement)
-        final = Number(detailsMouvement.stockFinalPiece)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 5,
-          demande_id: demande.id,
-          created_at: new Date(date_livraison),
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: final,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await prisma.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_piece: final,
-          last_update: new Date(date_livraison),
-        }
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(date_livraison),
-                created_by: user.id_user,
-                last_update: new Date(date_livraison),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-                last_update: new Date(date_livraison),
-              },
-              data: {
-                quantite_piece: finalDemandeur,
-                last_update: new Date(date_livraison),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            created_at: new Date(date_livraison),
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-      } else if (typeMouvement == 4) {
-        initial = Number(detailsMouvement.stockInitialCarton)
-        stock = Number(detailsMouvement.quantiteMouvementCarton)
-        final = Number(detailsMouvement.stockFinalCarton)
-
-        const listCarton = detailsMouvement.cartons
-
-        let serialNumbers = null
-        for (let id of listCarton) {
-          serialNumbers = await tx.serial_numbers.findMany({
-            where: {
-              carton_id: parseInt(id)
-            }
-          })
-        }
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 4,
-          demande_id: demande.id,
-          created_at: new Date(date_livraison),
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_carton: final,
-          quantite_piece: finalPiece,
-          last_update: new Date(date_livraison),
-        }
-
-        initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-
-          initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-          finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(date_livraison),
-                created_by: user.id_user,
-                last_update: new Date(date_livraison),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-                last_update: new Date(date_livraison),
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                quantite_carton: finalDemandeur
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            created_at: new Date(date_livraison),
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-
-          for (let id of listCarton) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-          }
-        } else {
-          for (let id of listCarton) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                carton_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      } else if (typeMouvement == 3) {
-        initial = Number(detailsMouvement.stockInitialPieceCarton)
-        stock = Number(detailsMouvement.quantiteMouvementPieceCarton)
-        final = Number(detailsMouvement.stockFinalPieceCarton)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 3,
-          demande_id: demande.id,
-          created_at: new Date(date_livraison),
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const dataStock = {
-          quantite_piece: finalPiece,
-          last_update: new Date(date_livraison),
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        await tx.stock_carton.update({
-          where: { id: parseInt(detailsMouvement.selectedCarton) },
-          data: {
-            quantite_totale_piece: final
-          },
-        })
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        initialDemandeur = Number(detailsMouvement.stockInitialPieceDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalPieceDemandeur)
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: 0,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(date_livraison),
-                created_by: user.id_user,
-                last_update: new Date(date_livraison),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(date_livraison),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 5,
-            demande_id: demande.id,
-            created_at: new Date(date_livraison),
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        }
-
-        if (final == 0) {
-          await tx.stock_carton.update({
-            where: { id: parseInt(detailsMouvement.selectedCarton) },
-            data: {
-              quantite_totale_piece: final,
-              is_deleted: true,
-            },
-          })
-          const quantiteCartonStock = selectedStock.quantite_carton
-          tx.stocks.update({
-            where: {
-              id: parseInt(stock_id),
-            },
-            data: {
-              quantite_carton: quantiteCartonStock - 1
-            }
-          })
-        }
-
-        if (detailsMouvement.selectedLot) {
-          const finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-          let updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot)
-            },
-            data: {
-              quantite_piece: finalPieceLot,
-            }
-          })
-          if (final == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: updatedLot.quantite_carton - 1,
-              },
-            })
-          }
-          if (updatedLot.quantite_carton == 0) {
-            updatedLot = await tx.stock_lot.update({
-              where: {
-                id: parseInt(detailsMouvement.selectedLot)
-              },
-              data: {
-                quantite_piece: finalPieceLot,
-                quantite_carton: 0,
-                is_deleted: true
-              }
-            })
-            const quantiteLotStock = selectedStock.quantite_lot
-            tx.stocks.update({
-              where: {
-                id: parseInt(stock_id),
-              },
-              data: {
-                quantite_lot: quantiteLotStock - 1
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      } else if (typeMouvement == 2) {
-        initial = Number(detailsMouvement.stockInitialCartonLot)
-        stock = Number(detailsMouvement.quantiteMouvementCartonLot)
-        final = Number(detailsMouvement.stockFinalCartonLot)
-        finalPieceLot = Number(detailsMouvement.stockFinalPieceLot)
-
-        const listCartonLot = detailsMouvement.cartons
-
-        let serialNumbers = null
-        for (let id of listCartonLot) {
-          serialNumbers = await tx.serial_numbers.findMany({
-            where: {
-              carton_id: parseInt(id)
-            }
-          })
-        }
-        detailsMouvement.listeSn = serialNumbers ? serialNumbers : null
-
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 2,
-          demande_id: demande.id,
-          created_at: new Date(date_livraison),
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_carton: quantiteCartonStock - stock,
-          quantite_piece: finalPiece,
-          last_update: new Date(date_livraison),
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        let updatedLot = await tx.stock_lot.update({
-          where: {
-            id: parseInt(detailsMouvement.selectedLot),
-          },
-          data: {
-            quantite_carton: final,
-            quantite_piece: finalPieceLot,
-          },
-        })
-
-        if (final == 0) {
-          updatedLot = await tx.stock_lot.update({
-            where: {
-              id: parseInt(detailsMouvement.selectedLot),
-            },
-            data: {
-              quantite_carton: final,
-              quantite_piece: finalPieceLot,
-              is_deleted: true,
-            },
-          })
-          const quantiteLotStock = selectedStock.quantite_lot
-          tx.stocks.update({
-            where: {
-              id: parseInt(stock_id),
-            },
-            data: {
-              quantite_lot: quantiteLotStock - 1
-            }
-          })
-        }
-
-        // const listCartonLot = detailsMouvement.cartons
-
-        initialDemandeur = Number(detailsMouvement.stockInitialCartonDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalCartonDemandeur)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: 0,
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(date_livraison),
-                created_by: user.id_user,
-                last_update: new Date(date_livraison),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_carton: finalDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(date_livraison),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-                lot_id: updatedLot.id,
-              },
-              data: {
-                service_id: serviceDemandeur,
-                lot_id: null
-              }
-            })
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 4,
-            demande_id: demande.id,
-            created_at: new Date(date_livraison),
-            stock_id: idStock,
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-        } else {
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                carton_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-
-      } else if (typeMouvement == 1) {
-        initial = Number(detailsMouvement.stockInitialLot)
-        stock = Number(detailsMouvement.quantiteMouvementLot)
-        final = Number(detailsMouvement.stockFinalLot)
-        dataMouvement = {
-          type: 'sortie',
-          mouvement: 1,
-          demande_id: demande.id,
-          created_at: new Date(date_livraison),
-          stock_id: parseInt(stock_id),
-          piece_id: parseInt(itemId),
-          service_origine: servicePiece,
-          service_destination: parseInt(demande.service_demandeur),
-          model_id: modelPiece,
-          stock_initial: initial,
-          quantite: stock,
-          stock_final: final,
-          quantite_totale_piece: finalPiece,
-          motif: demande.motif_demande,
-          commentaire,
-          details_mouvement: JSON.stringify(detailsMouvement),
-        }
-        mouvement_stock = await tx.mouvement_stock.create({
-          data: dataMouvement,
-        })
-
-        const quantiteCartonStock = selectedStock.quantite_carton
-        const dataStock = {
-          quantite_lot: final,
-          quantite_carton: quantiteCartonStock - Number(detailsMouvement.quantiteMouvementCarton),
-          quantite_piece: finalPiece,
-          last_update: new Date(date_livraison),
-        }
-
-        await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        const listLot = detailsMouvement.listeLots
-
-        initialDemandeur = Number(detailsMouvement.stockInitialLotDemandeur)
-        finalDemandeur = Number(detailsMouvement.stockFinalLotDemandeur)
-        const finalCartonDemandeur = Number(detailsMouvement.quantiteMouvementCarton)
-
-        const stockDonneur = await tx.stocks.update({
-          where: {
-            id: parseInt(stock_id),
-          },
-          data: dataStock,
-        })
-
-        if (pieceId == 1 && servicePiece == 5 && demande.service_demandeur == 3) {
-          const stockDemandeur = await tx.stocks.findFirst({
-            where: {
-              code_stock: stockDonneur.code_stock,
-              piece_id: 1,
-              service_id: 3,
-            }
-          })
-          let idStock = stockDemandeur ? stockDemandeur.id : null
-          if (!stockDemandeur) {
-            const stockDemandeur = await tx.stocks.create({
-              data: {
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                model_id: modelPiece,
-                service_id: 3,
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                created_at: new Date(date_livraison),
-                created_by: user.id_user,
-                last_update: new Date(date_livraison),
-                updated_by: user.id_user,
-              }
-            })
-            idStock = stockDemandeur.id
-          } else {
-            const updatedStockDemandeur = await tx.stocks.update({
-              where: {
-                id: idStock,
-                code_stock: stockDonneur.code_stock,
-                piece_id: 1,
-                service_id: 3,
-              },
-              data: {
-                quantite_lot: finalDemandeur,
-                quantite_carton: finalCartonDemandeur,
-                quantite_piece: finalPieceDemandeur,
-                last_update: new Date(date_livraison),
-              },
-            })
-            idStock = updatedStockDemandeur.id
-          }
-
-          for (let id of listCartonLot) {
-            await tx.stock_carton.update({
-              where: {
-                id: parseInt(id),
-                lot_id: updatedLot.id,
-              },
-              data: {
-                service_id: serviceDemandeur,
-                lot_id: null
-              }
-            })
-          }
-
-          dataEntree = {
-            type: 'entree',
-            mouvement: 1,
-            stock_id: idStock,
-            demande_id: demande.id,
-            created_at: new Date(date_livraison),
-            piece_id: parseInt(itemId),
-            service_origine: servicePiece,
-            service_destination: parseInt(demande.service_demandeur),
-            model_id: modelPiece,
-            stock_initial: initialDemandeur,
-            quantite: stock,
-            stock_final: finalDemandeur,
-            quantite_totale_piece: finalPieceDemandeur,
-            motif: demande.motif_demande,
-            commentaire,
-            details_mouvement: JSON.stringify(detailsEntree),
-          }
-          mouvement_stock_demandeur = await tx.mouvement_stock.create({
-            data: dataEntree,
-          })
-
-          for (let id of listLot) {
-            await tx.stock_lot.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-            await tx.stock_carton.updateMany({
-              where: {
-                lot_id: parseInt(id)
-              },
-              data: {
-                stock_id: idStock,
-                service_id: serviceDemandeur,
-              }
-            })
-          }
-        } else {
-          for (let id of listLot) {
-            await tx.stock_lot.update({
-              where: {
-                id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.stock_carton.updateMany({
-              where: {
-                lot_id: parseInt(id)
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-            await tx.serial_numbers.updateMany({
-              where: {
-                lot_id: parseInt(id),
-              },
-              data: {
-                is_deleted: true,
-              }
-            })
-          }
-          // for (let id of listCartonLot) {
-          //   await tx.stock_carton.update({
-          //     where: {
-          //       id: parseInt(id),
-          //       lot_id: updatedLot.id,
-          //     },
-          //     data: {
-          //       is_deleted: true,
-          //     }
-          //   })
-          // }
-        }
-
-        // mouvement_stock_demandeur = await tx.mouvement_stock.create({
-        //   data: dataEntree,
-        // })
-      }
-      await tx.demandes.update({
-        where: { id: parseInt(demande_id) },
-        data: {
-          stock_id: +stock_id,
-          demande_livree: true,
-          nomenclature,
-          type_demande: typeMouvement,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-        },
-      });
-
-      const livraisonForm = await tx.forms.create({
-        data: {
-          type: 'livraison_stock',
-          created_by: user.id_user,
-          created_at: new Date(date_livraison),
-          last_modified_at: new Date(date_livraison),
-          nom_user: user.fullname,
-          commentaire,
-          is_reg: true,
-        }
-      })
-
-      const livraison = await tx.livraison_piece.create({
-        data: {
-          demande_id: demande.id,
-          details_demande: JSON.stringify(detailsMouvement),
-          details_demandeur: JSON.stringify(detailsEntree),
-          form_id: livraisonForm.id,
-          stock_id: parseInt(stock_id),
-        }
-      })
-      return {
-        livraisonForm,
-        livraison,
-      }
-      // {
-      //   timeout: 10000 // 10 seconds instead of 5
-      // }
-    })
-
-    /****************    GESTION DES MAILS     *****************/
-    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
-    try {
-      const piece = await prisma.items.findUnique({
-        where: { id_piece: parseInt(demande.item_id) }
-      });
-
-      const service = await prisma.services.findUnique({
-        where: { id: parseInt(demande.service_demandeur) }
-      })
-
-      const userService = await prisma.user_services.findMany({
-        where: { service_id: parseInt(demande.service_demandeur) },
-        include: { users: true }
-      })
-
-      const mouvement = await prisma.type_mouvement_stock.findUnique({
-        where: { id: detailsMouvement.typeMouvement }
-      })
-
-      const service_users = userService.map(us => us.users.email)
-
-      const motif = demande.motif_demande
-      const nomPiece = piece.nom_piece.toUpperCase()
-
-      const nomServiceDemandeur = service.nom_service.toUpperCase();
-
-      const quantite = stock;
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-      const url = GENERAL_URL
-      const demandeLink = `${url}/demande-details/${demande.id}`;
-
-      const subject = `SYSLIS - REGULARISATION LIVRAISON STOCK DE ${nomPiece}`;
-      const html = `
-        <p>Bonjour,</p>
-        <p>La livraison pour la demande ${demande.id} a été régularisée.</p>
-        <ul>
-          <li><strong>Motif :</strong> ${motif}</li>
-          <li><strong>${mouvement.titre}</strong></li>
-          <li><strong>Quantité :</strong> ${quantite}</li>
-        </ul>
-        <ul>
-          <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-          <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
-        </ul>
-        <br>
-        <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la demande à ce lien : 
-            <span>
-            <a href="${demandeLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-                Cliquez ici !
-            </a>
-            </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-        `;
-
-      // Le demandeur n'était déjà plus destinataire (envoi commenté) : seuls les utilisateurs du service le reçoivent.
-      const destinataires = [...new Set(service_users.filter(Boolean))];
-      await sendMail({
-        to: configEmail,
-        bcc: destinataires,
-        subject,
-        html,
-      });
-    } catch (mailError) {
-      console.error("Erreur lors de l'envoi des mails :", mailError);
-    }
-
-    console.log('Livraison de stock éffectuée avec succès !')
-    return res.status(201).json({
-      message: 'Livraison de stock éffectuée avec succès !',
-      data: mouvementStock,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Erreur serveur." });
-  }
-}
-
-const regReceptionDemande = async (req, res) => {
-  try {
-    const {
-      itemId,
-      demandeId,
-      commentaire,
-      user_id,
-      date_reception,
-    } = req.body;
-
-    const demande = await prisma.demandes.findUnique({
-      where: { id: parseInt(demandeId) },
-    })
-
-    if (!demande) {
-      console.log("Demande introuvable.")
-      return res.status(404).json({ message: "Demande introuvable." });
-    }
-    if (demande.demande_recue == true) {
-      console.log("Demande déjà réceptionnée")
-      return res.status(400).json({ message: "Demande déjà réceptionnée." });
-    }
-    const signature = req.files?.signature?.[0] || null;
-    if (!signature) {
-      console.error('Signature manquante !')
-      return res.status(404).json({ message: "Signature introuvable !" });
-    }
-
-    const uploadResult = await cloudinary.uploader.upload(req.files?.signature?.[0].path, {
-      folder: "greenpay/signatures",
-    });
-    const signatureCloud = uploadResult.secure_url;
-
-    if (!user_id) return res.status(403).json({ message: "Utilisateur non authentifié." });
-
-    const utilisateur = await prisma.users.findUnique({
-      where: { id_user: parseInt(user_id) },
-    });
-
-    if (!utilisateur) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
-    }
-
-    let nom_recepteur = utilisateur.fullname
-
-    const dateAction = new Date(date_reception)
-
-    const reception = await prisma.$transaction(async (tx) => {
-      const receptionForm = await tx.forms.create({
-        data: {
-          type: 'reception_stock',
-          created_by: utilisateur.id_user,
-          created_at: dateAction,
-          last_modified_at: dateAction,
-          nom_user: utilisateur.fullname,
-          commentaire,
-        }
-      })
-      const newReception = await tx.reception_piece.create({
-        data: {
-          item_id: parseInt(itemId),
-          user_id: parseInt(user_id),
-          demande_id: parseInt(demandeId),
-          created_at: dateAction,
-          signature_recepteur: signatureCloud ? signatureCloud : '',
-          nom_recepteur,
-          commentaire,
-          form_id: receptionForm.id,
-        }
-      })
-
-      await tx.form_signatures.create({
-        data: {
-          form_id: receptionForm.id,
-          signature_url: signature.path,
-          signed_by: utilisateur.id_user,
-          signed_at: dateAction,
-          role: 'receveur',
-        },
-      })
-
-      await tx.demandes.update({
-        where: { id: demande.id },
-        data: { demande_recue: true },
-      })
-
-      return {
-        receptionForm,
-        newReception,
-      }
-    })
-
-    /****************    GESTION DES MAILS     *****************/
-    // Le mail est envoyé après la transaction : un échec d'envoi ne doit pas annuler l'opération.
-    try {
-      const livraisonPiece = await prisma.livraison_piece.findFirst({
-        where: { demande_id: demande.id },
-        include: { forms: true },
-      })
-
-      const livreurId = livraisonPiece.forms.created_by
-      const livreur = await prisma.users.findUnique({
-        where: { id_user: livreurId }
-      })
-
-      const typeMouvement = await prisma.type_mouvement_stock.findUnique({
-        where: { id: demande.type_demande }
-      })
-
-      const service = await prisma.services.findUnique({
-        where: { id: parseInt(demande.service_demandeur) }
-      })
-
-      const serviceReception = service.nom_service
-
-      const piece = await prisma.items.findUnique({
-        where: { id_piece: demande.item_id }
-      })
-
-      const quantiteProduits = demande.qte_total_demande
-      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
-      const url = GENERAL_URL
-      const deliveryLink = `${url}/demande-details/${demande.id}`;
-
-      const subject = `SYSLIS - REGULARISATION RECEPTION DE STOCK`;
-      const html = `
-        <p>Bonjour,</p>
-        <p>La réception du stock de la ${demande.id} a été régularisée.</p>
-        <ul>
-          <li><strong>Pièce demandée:</strong> ${piece.nom_piece}</li>
-          <li><strong>Nombre de produits:</strong> ${quantiteProduits} ${typeMouvement.titre}</li>
-          <li><strong>Service:</strong> ${serviceReception}</li>
-        </ul>
-        <br>
-          <p>Commentaire : ${commentaire_mail}<p>
-        <br>
-        <p>Retrouvez la demande à ce lien : 
-          <span>
-            <a href="${deliveryLink}" target="_blank" style="background-color: #73dced; color: white; padding: 7px 12px; text-decoration: none; border-radius: 5px;">
-              Cliquez ici !
-            </a>
-          </span>
-        </p>
-        <br><br>
-        <p>Green - Pay vous remercie.</p>
-      `;
-
-      const destinataires = [...new Set([livreur?.email].filter(Boolean))];
-      await sendMail({
-        to: configEmail,
-        bcc: destinataires,
-        subject,
-        html,
-      });
-    } catch (mailError) {
-      console.error("Erreur lors de l'envoi des mails :", mailError);
-    }
-
-    console.log('Stock réceptionné avec succès !')
-    return res.status(201).json({
-      message: 'Stock réceptionné avec succès',
-      data: reception,
-    });
-
-  } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Erreur serveur." });
   }
@@ -4937,5 +3141,6 @@ module.exports = {
   regValidateDemande,
   regLivraisonDemande,
   regReceptionDemande,
-  livraisonPiece,
+  getStocksLivraison,
+  getOptionsReception,
 }

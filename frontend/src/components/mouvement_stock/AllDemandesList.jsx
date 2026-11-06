@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 
 import { Demandes } from "../../backend/demandes/Demandes";
@@ -54,12 +54,14 @@ export default function AllDemandesList() {
     const statusOptions = [
         { label: 'En cours', value: 'en_cours' },
         { label: 'Validée', value: 'valide' },
+        { label: 'Partiellement livrée', value: 'partiel' },
         { label: 'Retournée', value: 'retourne' },
         { label: 'Refusée', value: 'refuse' },
     ];
     const [selectedStatusReception, setSelectedStatusReception] = useState(savedFilters?.selectedStatusReception || [])
     const statusReception = [
         { label: 'En cours', value: 'en_cours' },
+        { label: 'Partielle', value: 'partielle' },
         { label: 'Réceptionnée', value: 'réceptionnée' },
     ];
     const [selectedItems, setSelectedItems] = useState(savedFilters?.selectedItems || []);
@@ -83,8 +85,6 @@ export default function AllDemandesList() {
     const [selectedModels, setSelectedModels] = useState(savedFilters?.selectedModels || []);
 
     const [typesMouvement, setTypesMouvement] = useState([])
-
-    const [stocks, setStocks] = useState([])
 
     const [isReg, setIsReg] = useState(savedFilters?.isReg || false)
 
@@ -112,7 +112,6 @@ export default function AllDemandesList() {
                     return item.is_deleted == false
                 })
                 setDemandeForms(demande_data)
-                console.log(demande_data)
                 const models_data = await stock.getAllModels()
                 const options_model = models_data.map((item) => ({
                     value: item.id_model,
@@ -142,12 +141,6 @@ export default function AllDemandesList() {
                 const typesMouvement_data = await stock.getAllTypeMouvementStock()
                 setTypesMouvement(typesMouvement_data)
 
-                const stocks_data_all = await stock.getAllStocks()
-                const stocks_data = stocks_data_all.filter((item) => {
-                    return item.is_deleted == false
-                })
-                setStocks(stocks_data)
-
             } catch (error) {
                 console.log('Error fetching data ', error)
             } finally {
@@ -160,7 +153,7 @@ export default function AllDemandesList() {
     const handlePageChange = (e) => {
         setFirst(e.first);
         setRows(e.rows);
-        sessionStorage.setItem("demandesP   aginationState", JSON.stringify({ first: e.first, rows: e.rows }));
+        sessionStorage.setItem("demandesPaginationState", JSON.stringify({ first: e.first, rows: e.rows }));
     };
 
     const formatDate = (date) => {
@@ -206,17 +199,11 @@ export default function AllDemandesList() {
         )
     }
     const titleTemplate = (demandeForms) => {
-        console.log(demandeForms)
         let linkSee = `/demande-details/${demandeForms.id}`;
         let titleClass = 'font-bold text-sm'
         let motif = `${demandeForms.motif_demande}`
         const piece = demandeForms.items
         const nomPiece = piece ? piece.nom_piece : ''
-
-        const stock = stocks.find((item) => {
-            return item.id == demandeForms.stock_id
-        })
-        const nomStock = stock ? stock.code_stock : 'N/A'
 
         return (
             <span className="">
@@ -262,7 +249,8 @@ export default function AllDemandesList() {
         if (demandeForms.statut_demande == 'en_cours') {
             statut = 'en cours';
             statutClass = 'grid text-center text-xs rounded-xl p-0.5 bg-orange-300'
-        } else if (demandeForms.statut_demande == 'valide') {
+        } else if (['valide', 'partiel'].includes(demandeForms.statut_demande)) {
+            // « partiel » = validée et partiellement livrée (détail dans la colonne livraison)
             statut = 'validée';
             statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-green-300'
         } else if (demandeForms.statut_demande == 'retourne') {
@@ -287,7 +275,7 @@ export default function AllDemandesList() {
                         <i className="pi pi-eye"></i>
                     </button>
                 </Link>
-                {demandeForms.statut_demande == 'valide' ?
+                {['valide', 'partiel'].includes(demandeForms.statut_demande) ?
                     (
                         <>
                             {printingId === demandeForms.id ? (
@@ -318,27 +306,55 @@ export default function AllDemandesList() {
             </span>
         )
     }
+    const derniereReception = (demandeForms) => {
+        const receptions = demandeForms.reception_piece || []
+        return receptions.length > 0 ? receptions[receptions.length - 1] : null
+    }
+    // Ce que le demandeur a fait des pièces à la réception (création / alimentation d'un stock ou rien)
+    const libelleMiseEnStock = (reception) => {
+        if (!reception || !reception.action_stock) return ''
+        const code = reception.stocks ? reception.stocks.code_stock : ''
+        if (reception.action_stock === 'nouveau_stock') return `Nouveau stock ${code}`
+        if (reception.action_stock === 'stock_existant') return `Ajout au stock ${code}`
+        return 'Non mis en stock'
+    }
+    // Réception : réceptionnée, partielle (une partie des livraisons reçue) ou en cours (livraison(s) non reçues)
+    const statutReceptionDemande = (demandeForms) => {
+        if (demandeForms.demande_recue) return 'réceptionnée'
+        const nbLivraisons = (demandeForms.livraison_piece || []).length
+        if (nbLivraisons === 0) return null
+        return (demandeForms.reception_piece || []).length > 0 ? 'partielle' : 'en_cours'
+    }
     const statutReceptionTemplate = (demandeForms) => {
         let statutClass = 'text-xs'
         let statut = 'N/A'
-        if (demandeForms.demande_livree == true) {
-            if (demandeForms.demande_recue == false) {
-                statut = 'en cours'
-                statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-orange-300'
-            } else if (demandeForms.demande_recue == true) {
-                statut = 'réceptionnée';
-                statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-green-300'
-            }
+        let miseEnStock = ''
+        const statutReception = statutReceptionDemande(demandeForms)
+        if (statutReception === 'en_cours') {
+            statut = 'en cours'
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-orange-300'
+        } else if (statutReception === 'partielle') {
+            statut = 'partielle'
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-yellow-200'
+            miseEnStock = libelleMiseEnStock(derniereReception(demandeForms))
+        } else if (statutReception === 'réceptionnée') {
+            statut = 'réceptionnée';
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-green-300'
+            miseEnStock = libelleMiseEnStock(derniereReception(demandeForms))
         }
         return (
-            <span className={statutClass}>{statut}</span>
+            <span className="flex flex-col">
+                <span className={statutClass}>{statut}</span>
+                {miseEnStock ? (
+                    <span style={{ fontSize: '10px' }} className="text-center text-gray-500 mt-0.5">{miseEnStock}</span>
+                ) : null}
+            </span>
         )
     }
     const dateReceptionTemplate = (demandeForms) => {
-        if (demandeForms.reception_piece.length > 0 && demandeForms.demande_livree == true) {
-            let index = demandeForms.reception_piece.length - 1
-            const reception = demandeForms.reception_piece[index]
-            return (<span className="text-theme-xs text-gray-700 font-medium dark:text-gray-400">{formatDate(reception.created_at)}</span>)
+        const reception = derniereReception(demandeForms)
+        if (reception) {
+            return (<span className="font-semibold text-xs dark:text-gray-400">{formatDate(reception.created_at)}</span>)
         } else {
             return (<span className="text-xs">N/A</span>)
         }
@@ -347,7 +363,7 @@ export default function AllDemandesList() {
         const indexValidation = demandeForms.validation_demande.length - 1
         const validation = demandeForms.validation_demande[indexValidation]
         let quantite = 'N/A'
-        if (validation && demandeForms.statut_demande == 'valide') {
+        if (validation && ['valide', 'partiel'].includes(demandeForms.statut_demande)) {
             quantite = validation.quantite_validee
         }
         return (
@@ -359,7 +375,10 @@ export default function AllDemandesList() {
         let statut = 'N/A'
         const indexLivraison = demandeForms.livraison_piece.length - 1
         const livraison = demandeForms.livraison_piece[indexLivraison]
-        if (demandeForms.statut_demande == 'valide' && !demandeForms.demande_livree) {
+        if (demandeForms.statut_demande == 'partiel' && !demandeForms.demande_livree) {
+            statut = `partielle (${demandeForms.livraison_piece.length})`
+            statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-yellow-200'
+        } else if (demandeForms.statut_demande == 'valide' && !demandeForms.demande_livree) {
             statut = 'en cours'
             statutClass = 'grid grid-cols-1 text-center text-xs rounded-xl p-0.5 bg-orange-300'
         } else if (demandeForms.demande_livree == true) {
@@ -375,7 +394,7 @@ export default function AllDemandesList() {
         const indexLivraison = demandeForms.livraison_piece.length - 1
         const livraison = demandeForms.livraison_piece[indexLivraison]
         const livraisonForm = livraison ? livraison.forms : null
-        if (livraisonForm && demandeForms.demande_livree == true) {
+        if (livraisonForm) {
             date = formatDate(livraisonForm.last_modified_at)
         }
         return (<span className="font-semibold text-xs dark:text-gray-400">{date}</span>)
@@ -395,6 +414,25 @@ export default function AllDemandesList() {
         sessionStorage.removeItem(FILTERS_KEY);
     }
 
+    // Texte de recherche calculé une fois par chargement (au lieu de JSON.stringify de chaque demande à chaque frappe)
+    const texteRecherche = useMemo(() => {
+        const textes = new Map()
+        demandeForms.forEach((item) => {
+            textes.set(item.id, [
+                item.id,
+                item.items ? item.items.nom_piece : '',
+                item.motif_demande,
+                item.nom_demandeur,
+                item.commentaire,
+                item.statut_demande,
+                item.nomenclature,
+                item.details_demande,
+                item.champs_autre,
+            ].filter(Boolean).join(' ').toLowerCase())
+        })
+        return textes
+    }, [demandeForms])
+
     const filteredDemandeForms = demandeForms.filter((item) => {
         let itemDate = new Date(item.date_demande);
         let validation
@@ -404,13 +442,7 @@ export default function AllDemandesList() {
             validation = item.validation_demande[index]
             itemDate = new Date(item.validation_demande[index].date_validation_demande)
             if (validation.statut_validation_demande == 'valide') {
-                if(item.demande_livree){
-                    if (item.demande_recue) {
-                        statutReception = 'réceptionnée'
-                    } else {
-                        statutReception = 'en_cours'
-                    }
-                }
+                statutReception = statutReceptionDemande(item)
             }
         }
         const detailsDemande = JSON.parse(item.details_demande)
@@ -421,12 +453,15 @@ export default function AllDemandesList() {
         const matchesStartDate = startDate ? itemDate >= startDate : true;
         const matchesEndDate = endDate ? itemDate <= endDate : true;
         const matchesServiceDemandeur = serviceDemandeurs.length > 0 ? serviceDemandeurs.includes(item.service_demandeur) : true;
-        const matchesModel = selectedModels.length > 0 ? selectedModels.includes(detailsDemande.model) : true;
-        const matchesServicesPieces = servicesPieces.length > 0 ? servicesPieces.includes(detailsDemande.service) : true;
+        // Avant livraison, le modèle et le service pièce sont dans selectedModel / selectedServicePiece
+        const modelDemande = Number(detailsDemande.selectedModel ?? detailsDemande.model)
+        const servicePieceDemande = Number(detailsDemande.selectedServicePiece ?? detailsDemande.service)
+        const matchesModel = selectedModels.length > 0 ? selectedModels.map(Number).includes(modelDemande) : true;
+        const matchesServicesPieces = servicesPieces.length > 0 ? servicesPieces.map(Number).includes(servicePieceDemande) : true;
         const matchesStatusReception = selectedStatusReception.length > 0 ? selectedStatusReception.includes(statutReception) : true
         const matchesReg = isReg ? form?.is_reg == true : true
         const matchesGlobalFilter = globalFilter
-            ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
+            ? (texteRecherche.get(item.id) || '').includes(globalFilter.toLowerCase())
             : true;
         return matchesStatus && matchesItems && matchesStartDate && matchesEndDate && matchesServiceDemandeur && matchesModel && matchesServicesPieces && matchesStatusReception && matchesReg && matchesGlobalFilter;
     });
@@ -589,6 +624,8 @@ export default function AllDemandesList() {
                         {/* <Column header="Date Livraison" body={dateLivraisonTemplate}></Column> */}
                         <Column header="Statut Livraison" body={statutLivraisonTemplate}></Column>
                         <Column header="Date Livraison" body={dateLivraisonTemplate}></Column>
+                        <Column header="Statut Réception" body={statutReceptionTemplate}></Column>
+                        <Column header="Date Réception" body={dateReceptionTemplate}></Column>
                         <Column header="Actions" body={actionTemplate}></Column>
                     </DataTable>
                 </div>

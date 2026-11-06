@@ -176,7 +176,8 @@ export default function SousDashboardStocks() {
             // Compute stats
             const computedStats: Stats = {
               total: filteredDemandes.length,
-              valide: filteredDemandes.filter(d => d.statut_demande === 'valide').length,
+              // validées, y compris partiellement livrées
+              valide: filteredDemandes.filter(d => d.statut_demande === 'valide' || d.statut_demande === 'partiel').length,
               en_cours: filteredDemandes.filter(d => d.statut_demande === 'en_cours').length,
               refuse: filteredDemandes.filter(d => d.statut_demande === 'refuse').length,
               // retourne: filteredDemandes.filter(d => d.statut_demande === 'retourne').length,

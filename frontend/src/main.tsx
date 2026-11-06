@@ -6,6 +6,9 @@ import 'primereact/resources/primereact.min.css';
 import 'primeicons/primeicons.css';
 import "swiper/swiper-bundle.css";
 import "flatpickr/dist/flatpickr.css";
+// Token de connexion sur tous les appels API (doit être importé avant les pages)
+// @ts-ignore
+import "./backend/authHttp";
 import App from "./App.tsx";
 import { AppWrapper } from "./components/common/PageMeta.tsx";
 import { ThemeProvider } from "./context/ThemeContext.tsx";

@@ -195,6 +195,7 @@ model livraison_piece {
   forms             forms?    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_3")
   stocks            stocks?   @relation(fields: [stock_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_4")
   demandes          demandes? @relation(fields: [demande_id], references: [id], onDelete: Restrict, map: "livraison_piece_ibfk_5")
+  reception_piece   reception_piece?
 
   @@index([stock_id], map: "stock_id")
   @@index([form_id], map: "form_id")
@@ -484,6 +485,7 @@ model users {
   remplacements                         remplacements[]
   stocks_stocks_created_byTousers       stocks[]                       @relation("stocks_created_byTousers")
   stocks_stocks_updated_byTousers       stocks[]                       @relation("stocks_updated_byTousers")
+  stocks_stocks_deleted_byTousers       stocks[]                       @relation("stocks_deleted_byTousers")
   type_livraison_commerciale            type_livraison_commerciale[]
   user_roles                            user_roles[]
   user_services                         user_services[]
@@ -584,6 +586,11 @@ model stocks {
   updated_by                     Int?
   owner                          Int?
   is_deleted                     Boolean              @default(false)
+  // Suppression (logique) et fusion : qui, quand, pourquoi ; stock qui a absorbé celui-ci
+  deleted_at                     DateTime?            @db.DateTime(0)
+  deleted_by                     Int?
+  motif_suppression              String?              @db.Text
+  fusionne_dans                  Int?
   demandes                       demandes[]
   livraison                      livraison[]
   livraison_piece                livraison_piece[]
@@ -597,9 +604,13 @@ model stocks {
   users_stocks_created_byTousers users?               @relation("stocks_created_byTousers", fields: [created_by], references: [id_user], map: "stocks_ibfk_4")
   users_stocks_updated_byTousers users?               @relation("stocks_updated_byTousers", fields: [updated_by], references: [id_user], map: "stocks_ibfk_5")
   stockOwner                     users?               @relation(fields: [owner], references: [id_user], map: "stocks_ibfk_6")
+  users_stocks_deleted_byTousers users?               @relation("stocks_deleted_byTousers", fields: [deleted_by], references: [id_user], map: "stocks_ibfk_7")
+  stock_fusion                   stocks?              @relation("stocks_fusion", fields: [fusionne_dans], references: [id], onDelete: SetNull, map: "stocks_ibfk_8")
+  stocks_fusionnes               stocks[]             @relation("stocks_fusion")
   validation_demande             validation_demande[]
   history_tpe                    history_tpe[]
   stock_owners                   stock_owners[]
+  reception_piece                reception_piece[]
 
   @@index([created_by], map: "created_by")
   @@index([model_id], map: "model_id")
@@ -607,6 +618,16 @@ model stocks {
   @@index([service_id], map: "service_id")
   @@index([updated_by], map: "updated_by")
   @@index([owner], map: "owner")
+  @@index([deleted_by], map: "deleted_by")
+  @@index([fusionne_dans], map: "fusionne_dans")
+  @@index([code_stock], map: "code_stock")
+}
+
+// Verrous applicatifs : une ligne par ressource à sérialiser (ex. 'code_stock' : unicité des codes de stock actifs).
+// Une transaction « prend » le verrou en écrivant la ligne ; il est relâché au commit / rollback.
+model verrous_applicatifs {
+  nom String   @id @db.VarChar(64)
+  maj DateTime @default(now()) @db.DateTime(0)
 }
 
 model reception_piece {
@@ -623,11 +644,19 @@ model reception_piece {
   users               users     @relation(fields: [user_id], references: [id_user], onDelete: Cascade, map: "reception_piece_ibfk_2")
   demandes            demandes? @relation(fields: [demande_id], references: [id], onDelete: Cascade, map: "reception_piece_ibfk_3")
   forms               forms?    @relation(fields: [form_id], references: [id], onDelete: Restrict, map: "reception_piece_ibfk_4")
+  // Choix fait à la réception : stock créé / stock alimenté (stock_id) ou pièces non mises en stock
+  stock_id            Int?
+  action_stock        reception_piece_action_stock?
+  stocks              stocks?   @relation(fields: [stock_id], references: [id], onDelete: SetNull, map: "reception_piece_ibfk_5")
+  // Livraison réceptionnée (une réception par livraison ; null pour les réceptions antérieures aux livraisons partielles)
+  livraison_id        Int?      @unique(map: "livraison_id")
+  livraison_piece     livraison_piece? @relation(fields: [livraison_id], references: [id], onDelete: SetNull, map: "reception_piece_ibfk_6")
 
   @@index([demande_id], map: "demande_id")
   @@index([item_id], map: "item_id")
   @@index([user_id], map: "user_id")
   @@index([form_id], map: "form_id")
+  @@index([stock_id], map: "stock_id")
 }
 
 model serial_numbers {
@@ -1631,6 +1660,12 @@ enum type_retour_demande_qr {
   suspension
   retour_generation
   annulation_suspension
+}
+
+enum reception_piece_action_stock {
+  nouveau_stock
+  stock_existant
+  ignore
 }
 
 enum type_stock_owner {

@@ -194,13 +194,23 @@ export class Demandes {
     }
   }
 
-  // Livraison de stock par pièce (unité)
-  async livraisonPiece(payload) {
+  // Stocks depuis lesquels l'utilisateur peut livrer la demande (owner / sub-owner / créateur)
+  async getStocksLivraison(demandeId, userId) {
     try {
-      const response = await axios.post(`${urlBase}/api/demandes/livraisonPiece`, payload)
+      const response = await axios.get(`${urlBase}/api/demandes/getStocksLivraison/${demandeId}/${userId}`)
       return response.data;
     } catch (error) {
-      throw error.response.data;
+      throw error.response ? error.response.data : error;
+    }
+  }
+
+  // Contenu livré + stocks que le demandeur peut alimenter à la réception
+  async getOptionsReception(demandeId, userId) {
+    try {
+      const response = await axios.get(`${urlBase}/api/demandes/getOptionsReception/${demandeId}/${userId}`)
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : error;
     }
   }
 }

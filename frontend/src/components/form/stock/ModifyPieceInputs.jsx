@@ -155,10 +155,9 @@ export default function ModifyPieceInputs() {
             console.log('error : ', error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur s'est produite lors de la modification",
+                text: error?.message || "Une erreur s'est produite lors de la modification",
                 icon: "warning"
             });
-            navigate('/voir-items')
         } finally {
             setLoadingModif(false)
         }

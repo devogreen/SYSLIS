@@ -133,13 +133,9 @@ export default function LivraisonDemandeInputs() {
     const [loadingValidation, setLoadingValidation] = useState(false)
 
     const [detailsDemande, setDetailsDemande] = useState([])
-    const [detailsDemandeur, setDetailsDemandeur] = useState([])
 
     const [quantite, setQuantite] = useState(0)
 
-    const [quantitePieceDemandeur, setQuantitePieceDemandeur] = useState(0)
-    const [quantiteCartonDemandeur, setQuantiteCartonDemandeur] = useState(0)
-    const [quantiteLotDemandeur, setQuantiteLotDemandeur] = useState(0)
 
     const [stocks, setStocks] = useState([])
     const [optionsStocks, setOptionsStocks] = useState([])
@@ -168,6 +164,10 @@ export default function LivraisonDemandeInputs() {
     const [dateValidation, setDateValidation] = useState(null)
 
     const [selectedDateLivraison, setSelectedDateLivraison] = useState(null)
+
+    // Livraisons partielles : bilan validé / déjà livré / reste (unité de la demande) et clôture anticipée
+    const [suiviLivraison, setSuiviLivraison] = useState(null)
+    const [cloturer, setCloturer] = useState(false)
 
     const isOnlyDigits = (str) => /^\d+$/.test(str);
 
@@ -249,15 +249,10 @@ export default function LivraisonDemandeInputs() {
 
                 setQuantiteDemande(demande_data.qte_total_demande)
                 setTypeDemande(detailsDemande.typeDemande)
+                setSuiviLivraison(demande_data.suiviLivraison || null)
 
-                const stocks_data_all = await stockData.getAllStocks()
-                const stocks_data = stocks_data_all.filter((item) => {
-                    return item.is_deleted == false &&
-                        item.piece_id == demande_data.item_id &&
-                        item.quantite_piece > 0 &&
-                        item.created_by == +userId &&
-                        item.service_id == detailsDemande.selectedServicePiece
-                })
+                // Stocks dont l'utilisateur est owner / sub-owner / créateur (même pièce, modèle et service que la demande)
+                const stocks_data = await demandeData.getStocksLivraison(idDemande, userId)
                 console.log("Stocks data: ", stocks_data)
                 setStocks(stocks_data)
                 const options_stocks = stocks_data.map((item) => {
@@ -267,7 +262,7 @@ export default function LivraisonDemandeInputs() {
                     const nomService = serviceStock ? serviceStock.nom_service : ''
                     return ({
                         value: item.id,
-                        label: `${item.code_stock} - ${nomService}`
+                        label: `${item.code_stock} - ${nomService} - ${item.quantite_piece} pièces | ${item.model_piece.nom_model}`,
                     })
                 })
 
@@ -425,26 +420,6 @@ export default function LivraisonDemandeInputs() {
                 setHasLot(false)
             }
 
-            if (stock && stock.piece_id == 1 && stock.service_id == 5) {
-                const stock_demandeur = stocks.find((item) => {
-                    return item.service_id == 3 && item.piece_id == 1 && item.code_stock == stock.code_stock
-                })
-                if (stock_demandeur) {
-                    setQuantitePieceDemandeur(stock_demandeur.quantite_piece)
-
-                    const stock_carton_all = await stockData.getCartonStock(stock_demandeur.id)
-                    const stock_carton = stock_carton_all.filter((item) => {
-                        return item.is_deleted == false
-                    })
-                    setQuantiteCartonDemandeur(stock_carton.length)
-
-                    const stock_lot_all = await stockData.getLotStock(stock_demandeur.id)
-                    const stock_lot = stock_lot_all.filter((item) => {
-                        return item.is_deleted == false
-                    })
-                    setQuantiteLotDemandeur(stock_lot.length)
-                }
-            }
         }
 
         const pieceId = stock ? stock.piece_id : null
@@ -643,10 +618,6 @@ export default function LivraisonDemandeInputs() {
         setSortieParLotModalOpen(true)
         setError('')
 
-        const finalStockLotDemandeur = quantiteLotDemandeur + selectedLots.length
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + destockCarton
-
         const listeLots = selectedLots ? selectedLots : []
         setQuantite(selectedLots.length)
         const details = {
@@ -665,29 +636,8 @@ export default function LivraisonDemandeInputs() {
             stockFinalCarton: quantiteCarton - destockCarton,
             quantiteCartonLot: quantiteCartonLot ? quantiteCartonLot : 0,
             listeLots,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialLotDemandeur: quantiteLotDemandeur ? quantiteLotDemandeur : 0,
-            stockFinalLotDemandeur: finalStockLotDemandeur,
         }
         setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 1,
-            stockInitialLot: quantiteLotDemandeur ? quantiteLotDemandeur : 0,
-            quantiteMouvementLot: selectedLots.length,
-            stockFinalLot: finalStockLotDemandeur,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: destockCarton,
-            stockFinalCarton: finalStockCartonDemandeur,
-            quantiteCartonLot: quantiteCartonLot ? quantiteCartonLot : 0,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            listeLots,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
 
     // FONCTIONS POUR MOUVEMENT PAR CARTONS LOT
@@ -722,9 +672,6 @@ export default function LivraisonDemandeInputs() {
         setSortieParCartonLotModalOpen(true)
         setError('')
 
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + selectedCartons.length
-
         const cartons = selectedCartons ? selectedCartons : []
         setQuantite(selectedCartons.length)
         const details = {
@@ -745,25 +692,8 @@ export default function LivraisonDemandeInputs() {
             stockFinalPieceLot: stockPieceLot - destockPiece,
             cartons,
             selectedLot,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialCartonDemandeur: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            stockFinalCartonDemandeur: finalStockCartonDemandeur,
         }
         setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 4,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: finalStockCartonDemandeur,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            cartons,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
 
     // FONCTIONS POUR MOUVEMENT PAR PIECES CARTON
@@ -792,15 +722,13 @@ export default function LivraisonDemandeInputs() {
 
         const finalPieceLot = stockPieceLot - newStockPiece
 
-        const finalStockPieceDemandeur = quantitePieceDemandeur + newStockPiece
-
         setQuantite(newStockPiece)
         const details = {
             model: selectedModel,
             service: selectedServicePiece,
             typeMouvement: 3,
             stockInitialPieceCarton: stockPieceCarton,
-            quantiteMouvementPieceCarton: newStockPiece,
+            quantiteMouvementPieceCarton: Number(newStockPiece),
             stockFinalPieceCarton: stockPieceCarton - newStockPiece,
             stockInitialPiece: quantitePiece ? quantitePiece : 0,
             quantiteMouvementPiece: newStockPiece,
@@ -810,21 +738,8 @@ export default function LivraisonDemandeInputs() {
             stockInitialPieceLot: stockPieceLot ? stockPieceLot : null,
             stockFinalPieceLot: finalPieceLot ? finalPieceLot : null,
             selectedLot: selectedLot ? selectedLot : null,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
         }
         setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: selectedServicePiece,
-            typeMouvement: 5,
-            stockInitial: quantitePiece ? quantitePiece : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinal: final,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
 
     // FONCTIONS POUR MOUVEMENT PAR CARTON
@@ -853,9 +768,6 @@ export default function LivraisonDemandeInputs() {
         setSortieParCartonModalOpen(true)
         setError('')
 
-        const finalStockPieceDemandeur = quantitePieceDemandeur + destockPiece
-        const finalStockCartonDemandeur = quantiteCartonDemandeur + selectedCartons.length
-
         const cartons = selectedCartons ? selectedCartons : []
         setQuantite(selectedCartons.length)
         const details = {
@@ -870,25 +782,8 @@ export default function LivraisonDemandeInputs() {
             stockFinalPiece: quantitePiece - destockPiece,
             quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
             cartons,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
-            stockInitialCartonDemandeur: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            stockFinalCartonDemandeur: finalStockCartonDemandeur,
         }
         setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 4,
-            stockInitialCarton: quantiteCartonDemandeur ? quantiteCartonDemandeur : 0,
-            quantiteMouvementCarton: selectedCartons.length,
-            stockFinalCarton: finalStockCartonDemandeur,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvementPiece: destockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-            quantitePieceCarton: quantitePieceCarton ? quantitePieceCarton : 0,
-            cartons,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
 
     // FONCTIONS POUR MOUVEMENT STOCK PAR PIECE
@@ -909,36 +804,54 @@ export default function LivraisonDemandeInputs() {
         setFinaleStockPiece(final)
         setError('')
 
-        const finalStockPieceDemandeur = quantitePieceDemandeur + newStockPiece
-
         setQuantite(newStockPiece)
         const details = {
             model: selectedModel,
             service: selectedServicePiece,
             typeMouvement: 5,
             stockInitialPiece: quantitePiece ? quantitePiece : 0,
-            quantiteMouvement: newStockPiece,
+            quantiteMouvement: Number(newStockPiece),
             stockFinalPiece: final,
-            stockInitialPieceDemandeur: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            stockFinalPieceDemandeur: finalStockPieceDemandeur,
         }
         setDetailsDemande(details)
-        const details_demandeur = {
-            model: selectedModel,
-            service: serviceUser,
-            typeMouvement: 5,
-            stockInitialPiece: quantitePieceDemandeur ? quantitePieceDemandeur : 0,
-            quantiteMouvement: newStockPiece,
-            stockFinalPiece: finalStockPieceDemandeur,
-        }
-        setDetailsDemandeur(details_demandeur)
     }
+
+    // Quantité de la sortie en cours dans l'unité de la demande (même règle que le serveur), null si non mesurable
+    const quantiteDansUniteDemande = (details) => {
+        const unite = suiviLivraison ? suiviLivraison.unite : null
+        if (!details || !unite) return null
+        const type = details.typeMouvement
+        if (unite === 'piece') {
+            if (type === 5) return Number(details.quantiteMouvement) || 0
+            if (type === 3) return Number(details.quantiteMouvementPieceCarton) || 0
+            return Number(details.quantiteMouvementPiece) || 0
+        }
+        if (unite === 'carton') return [1, 2, 4].includes(type) ? Number(details.quantiteMouvementCarton) || 0 : null
+        if (unite === 'lot') return type === 1 ? Number(details.quantiteMouvementLot) || 0 : null
+        return null
+    }
+
+    const quantiteCetteLivraison = quantiteDansUniteDemande(detailsDemande)
+    const resteALivrer = suiviLivraison && suiviLivraison.reste !== null && suiviLivraison.reste !== undefined ? suiviLivraison.reste : null
+    const livraisonMesurable = quantiteCetteLivraison !== null && resteALivrer !== null
+    const livraisonFinaleAuto = livraisonMesurable && quantiteCetteLivraison >= resteALivrer
 
     const handleClear = () => {
         signature.clear()
     }
 
     const handleConfirmSign = () => {
+        // Pas plus que le reste à livrer quand la sortie se mesure dans l'unité de la demande
+        if (livraisonMesurable && quantiteCetteLivraison > resteALivrer) {
+            Swal.fire({
+                title: "Attention",
+                text: `Quantité supérieure au reste à livrer : ${resteALivrer} ${suiviLivraison.libelleUnite} restant(s), cette livraison en compte ${quantiteCetteLivraison}.`,
+                icon: "warning"
+            })
+            return
+        }
+        // Sortie non mesurable dans l'unité de la demande : la clôture est proposée cochée
+        setCloturer(!livraisonMesurable)
         setSortieParPieceModalOpen(false)
         setSortieParCartonModalOpen(false)
         setSortieParPieceCartonModalOpen(false)
@@ -982,24 +895,30 @@ export default function LivraisonDemandeInputs() {
             const payload = {
                 demande_id: idDemande,
                 user_id: userId,
-                commentaire,
+                commentaire: [commentaire, message].filter(Boolean).join(' - '),
                 stock_id: selectedStock,
                 nomenclature,
                 detailsDemande: JSON.stringify(detailsDemande),
-                detailsDemandeur: JSON.stringify(detailsDemandeur),
                 itemId: selectedPiece,
                 date_livraison: new Date(selectedDateLivraison),
+                cloturer: livraisonFinaleAuto || cloturer,
             }
             setLoadingValidation(true)
-            if (isReg) {
-                await demandeData.regLivraisonDemande(payload)
-            } else {
-                await demandeData.livraisonDemande(payload)
-            }
+            const resultat = isReg
+                ? await demandeData.regLivraisonDemande(payload)
+                : await demandeData.livraisonDemande(payload)
 
+            const bilan = resultat?.data?.bilan
+            let texte = "Stock livré avec succès !"
+            if (bilan && !bilan.livraisonFinale) {
+                texte = `Livraison partielle n°${bilan.numero} enregistrée.` +
+                    (bilan.reste !== null ? ` Reste à livrer : ${bilan.reste} ${bilan.libelleUnite}.` : '')
+            } else if (bilan && bilan.cloturee) {
+                texte = "Livraison enregistrée, demande clôturée."
+            }
             Swal.fire({
                 title: "Succès",
-                text: "Stock livré avec succès !",
+                text: texte,
                 icon: "success"
             })
             navigate('/toutes-les-demandes')
@@ -1007,7 +926,7 @@ export default function LivraisonDemandeInputs() {
         } catch (error) {
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la livraison !",
+                text: error?.message || "Une erreur est survenue lors de la livraison !",
                 icon: "warning"
             })
             navigate(`/demande-details/${idDemande}`)
@@ -1089,6 +1008,25 @@ export default function LivraisonDemandeInputs() {
                                                         <span className="text-green-600">{quantiteValidee}</span>
                                                     </div>
                                                 </div>
+                                                {suiviLivraison && suiviLivraison.livraisons && suiviLivraison.livraisons.length > 0 ? (
+                                                    <div className="grid grid-cols-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold">Déjà livré</span>
+                                                            <span>
+                                                                {suiviLivraison.livraisons.length} livraison(s)
+                                                                {suiviLivraison.unite ? ` - ${suiviLivraison.quantiteLivree} ${suiviLivraison.libelleUnite}` : ''}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col text-right">
+                                                            <span className="font-bold text-orange-600">Reste à livrer</span>
+                                                            <span className="text-orange-500">
+                                                                {resteALivrer !== null ? `${resteALivrer} ${suiviLivraison.libelleUnite}` : 'non mesurable'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <></>
+                                                )}
                                                 <div className="flex flex-col">
                                                     <span className="font-bold">Commentaire</span>
                                                     {commentaireValidation ? (
@@ -1958,6 +1896,35 @@ export default function LivraisonDemandeInputs() {
                     <div className='text-center mb-3 text-xs'>
                         <span>Signez manuellement pour valider la demande</span>
                     </div>
+                    {suiviLivraison ? (
+                        <div className='mb-3 text-xs rounded border border-gray-200 p-2 space-y-2'>
+                            {livraisonMesurable ? (
+                                <div>
+                                    Cette livraison : <strong>{quantiteCetteLivraison} {suiviLivraison.libelleUnite}</strong>
+                                    {' '}sur un reste de {resteALivrer}.{' '}
+                                    {livraisonFinaleAuto
+                                        ? <span className="text-green-600">La demande sera entièrement livrée.</span>
+                                        : <span className="text-orange-500">Livraison partielle : il restera {resteALivrer - quantiteCetteLivraison} {suiviLivraison.libelleUnite}.</span>}
+                                </div>
+                            ) : (
+                                <div className="text-orange-500">
+                                    Cette sortie ne se mesure pas dans l'unité de la demande ({typeDemande || 'non précisée'}) :
+                                    indiquez si elle termine la demande.
+                                </div>
+                            )}
+                            {!livraisonFinaleAuto ? (
+                                <Checkbox
+                                    checked={cloturer}
+                                    onChange={() => setCloturer(!cloturer)}
+                                    label="Clôturer la demande avec cette livraison"
+                                />
+                            ) : (
+                                <></>
+                            )}
+                        </div>
+                    ) : (
+                        <></>
+                    )}
                     <div className='flex flex-col justify-center items-center'>
                         <SignatureCanvas
                             ref={data => setSignature(data)}

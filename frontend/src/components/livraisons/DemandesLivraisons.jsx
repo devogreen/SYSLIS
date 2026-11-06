@@ -21,7 +21,7 @@ export default function DemandesLivraisons() {
                 let data = await demandes.getAllDemandes()
 
                 const demandesNonLivrees = data.filter(item => {
-                    return item.statut_demande === "valide" && item.demande_livree == false;
+                    return ["valide", "partiel"].includes(item.statut_demande) && item.demande_livree == false;
                 });
                 setCount(demandesNonLivrees.length);
             } catch(error){

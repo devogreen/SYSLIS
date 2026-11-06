@@ -517,10 +517,9 @@ export default function RegularisationDemandeInputs() {
         } catch (error) {
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la demande !",
+                text: error?.message || "Une erreur est survenue lors de la demande !",
                 icon: "warning"
             })
-            navigate('/toutes-les-demandes')
         } finally {
             setLoadingValidation(false)
         }

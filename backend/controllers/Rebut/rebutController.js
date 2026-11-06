@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
 const { toModelId, verifierModelesExistants, creerTpesEtCompleterModeles } = require("../../utils/parcTpeModele");
+const { reserverCodeStock } = require("../../utils/gestionStock");
 const cloudinary = require("../../config/clouddinaryConifg");
 const { get } = require("http");
 const { urlToHttpOptions } = require("url");
@@ -1212,6 +1213,8 @@ const createStockFromRebut = async (req, res) => {
             let mouvement = null
 
             if (mode === 'nouveau') {
+                // Verrou + unicité du code dans la transaction (le contrôle d'avant reste pour un refus rapide)
+                await reserverCodeStock(tx, code)
                 stock = await tx.stocks.create({
                     data: {
                         code_stock: code,
@@ -1338,7 +1341,7 @@ const createStockFromRebut = async (req, res) => {
                 mouvement,
                 terminaux: detailsBase.pieces,
             }
-        }, { maxWait: 10000, timeout: 60000 })
+        }, { maxWait: 10000, timeout: 60000, isolationLevel: 'ReadCommitted' })
 
         const message = mode === 'nouveau'
             ? `Stock ${resultat.stock.code_stock} créé avec ${nombre} pièce(s) issues du rebut par ${utilisateur.username}`
@@ -1350,7 +1353,8 @@ const createStockFromRebut = async (req, res) => {
             data: resultat,
         });
     } catch (error) {
-        if (error instanceof HttpError) {
+        // HttpError locale, ou celle des utilitaires de stock (reserverCodeStock)
+        if (error instanceof HttpError || error.status) {
             console.error(error.message)
             return res.status(error.status).json({ message: error.message });
         }

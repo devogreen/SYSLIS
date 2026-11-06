@@ -70,6 +70,10 @@
         margin-top: 30px; 
         font-size: 12px; 
         font-style: italic; }
+        /* Détail des livraisons (livraisons partielles) */
+        .livraisons { margin-top: 12px; font-size: 12px; }
+        .livraisons strong { display: block; margin-bottom: 4px; }
+        .tableau-livraisons th, .tableau-livraisons td { font-size: 11px; padding: 4px; text-align: left; }
     </style>
 </head>
 <body>
@@ -125,7 +129,7 @@
                     <th>{{quantite_validee}}</th>
                 </tr>
                 <tr>
-                    <th>Stock initiale</th>
+                    <th>Stock initial</th>
                     <th>{{stock_initial}}</th>
                 </tr>
                 <tr>
@@ -143,6 +147,7 @@
                 </tr>
             </tbody>
         </table>
+        {{tableau_livraisons}}
         <div class="date-demande"><strong>Date de l'opération :</strong> {{date_demande}}</div>
         <br>
         <div class="footer">

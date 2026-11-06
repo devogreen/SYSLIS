@@ -120,7 +120,7 @@ const register = async (req, res) => {
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await prisma.users.findFirst({ where: { email } });
+        const user = await prisma.users.findFirst({ where: { email }, omit: { password: false } });
 
         if (!user) return res.status(404).json({ message: "Utilisateur non enregistré." });
 
@@ -129,7 +129,9 @@ const login = async (req, res) => {
 
         const token = jwt.sign({ id_user: user.id_user }, process.env.JWT_SECRET, { expiresIn: "2h" });
 
-        res.status(200).json({ message: "Connexion réussie.", token, user });
+        // Le hash du mot de passe ne doit pas être renvoyé au navigateur
+        const { password: _password, ...userSansMotDePasse } = user;
+        res.status(200).json({ message: "Connexion réussie.", token, user: userSansMotDePasse });
     } catch (error) {
         console.log(error)
         res.status(500).json({ message: "Erreur serveur.", error });
@@ -320,6 +322,7 @@ const changePassword = async (req, res) => {
         // 🔹 Find the user
         const user = await prisma.users.findUnique({
             where: { id_user: parseInt(userId) },
+            omit: { password: false },
         });
 
         if (!user) {

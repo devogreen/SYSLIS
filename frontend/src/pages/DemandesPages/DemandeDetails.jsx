@@ -16,6 +16,7 @@ import { FilesHandler } from '../../backend/filesHandler/FilesHandler';
 import Input from '../../components/form/input/InputField';
 
 import { Calendar } from 'primereact/calendar';
+import { Dropdown } from 'primereact/dropdown';
 import { addLocale } from "primereact/api";
 
 addLocale('fr', {
@@ -116,6 +117,17 @@ export default function DemandeDetails() {
     const [commentaireReception, setCommentaireReception] = useState('')
     const [nomRecepteur, setNomRecepteur] = useState('')
     const [isReceived, setIsReceived] = useState(false)
+    const [miseEnStockReception, setMiseEnStockReception] = useState('')
+    // Livraisons partielles : suivi (validé / livré / reste) et livraison choisie à la réception
+    const [suiviLivraison, setSuiviLivraison] = useState(null)
+    const [livraisonReceptionId, setLivraisonReceptionId] = useState(null)
+
+    // Choix de mise en stock à la réception
+    const [optionsReception, setOptionsReception] = useState(null)
+    const [loadingOptionsReception, setLoadingOptionsReception] = useState(false)
+    const [actionStock, setActionStock] = useState('')
+    const [stockReceptionId, setStockReceptionId] = useState(null)
+    const [codeStockReception, setCodeStockReception] = useState('')
 
     const [otherFields, setOtherFields] = useState([])
     const [otherFieldsLivraison, setOtherFieldsLivraison] = useState([])
@@ -192,13 +204,7 @@ export default function DemandeDetails() {
                     setCommentaireDemandeur(demandeData.commentaire)
                     const details = JSON.parse(demandeData.details_demande)
 
-                    const modelId = details.selectedModel ? details.selectedModel : details.model
-                    const servicePieceId = details.selectedServicePiece ? details.selectedServicePiece : details.service
 
-                    const ownersData = await stock.getAllUserTypeStocks(demandeData.item_id, modelId, servicePieceId)
-                    const ownersId = ownersData.map((item) => {
-                        return item.id_user
-                    })
 
                     const services_data = await usersData.getAllServices()
                     const service = services_data.find((item) => {
@@ -213,7 +219,6 @@ export default function DemandeDetails() {
                     const selectedStock = stock_data.find((item) => {
                         return item.id == demandeData.stock_id
                     })
-                    console.log(stock_data)
                     const stocks = stock_data.filter((item) => {
                         return item.piece_id == demandeData.item_id &&
                             item.is_deleted == false &&
@@ -221,14 +226,11 @@ export default function DemandeDetails() {
                             (item.service_id == details.selectedServicePiece || item.service_id == details.service) &&
                             item.quantite_piece > 0
                     })
-                    console.log("Stocks trouvés : ", stocks)
-                    console.log("Demande data : ", demandeData)
                     setStocksPiece(stocks)
                     if (roles_id.includes(7) && stocks.length == 0) {
                         setIsGestionStock(true)
                     }
 
-                    console.log(demandeData)
 
                     const indexLivraison = demandeData.livraison_piece.length - 1
                     const livraison = demandeData.livraison_piece[indexLivraison]
@@ -244,24 +246,35 @@ export default function DemandeDetails() {
                             setIsDemandeur(true)
                         }
                         setAttente(true)
-                    } else if (demandeData.statut_demande == 'valide') {
+                    } else if (['valide', 'partiel'].includes(demandeData.statut_demande)) {
                         setActionButtons(true)
-                        setStatutDemande('Validée')
                         setAttente(false)
                         setValide(true)
-                        setStatutClass('text-sm rounded-xl p-1 bg-green-100 text-green-500 font-bold')
+                        if (demandeData.statut_demande == 'partiel') {
+                            setStatutDemande('Partiellement livrée')
+                            setStatutClass('text-sm rounded-xl p-1 bg-yellow-100 text-yellow-700 font-bold')
+                        } else {
+                            setStatutDemande('Validée')
+                            setStatutClass('text-sm rounded-xl p-1 bg-green-100 text-green-500 font-bold')
+                        }
                         setRecu(true)
                         index = demandeData.validation_demande.length - 1
                         setCommentaireValidateur(demandeData.validation_demande[index].commentaire)
                         setIsCompleted(true)
                         const validation = demandeData.validation_demande[index]
                         setQuantiteValidee(validation.quantite_validee)
+                        const suivi = demandeData.suiviLivraison || null
+                        setSuiviLivraison(suivi)
                         if (!demandeData.demande_livree) {
-                            if (ownersId.includes(+user_id) && stocks.length > 0) {
+                            // Livreur : owner / sub-owner / créateur d'un stock non vide de la pièce demandée
+                            const stocksLivraison = await demandes.getStocksLivraison(id, user_id)
+                            if (stocksLivraison.length > 0) {
                                 setIsLivreur(true)
                             }
-                        } else {
-                            const livraisonForm = livraison ? livraison.forms : null
+                        }
+                        // Au moins une livraison (partielle ou finale) : suivi de réception
+                        if (livraison) {
+                            const livraisonForm = livraison.forms
                             if (livraisonForm) {
                                 setDateLivraison(livraisonForm.last_modified_at)
                             }
@@ -272,14 +285,19 @@ export default function DemandeDetails() {
                                 index_reception = demandeData.reception_piece.length - 1
                                 setCommentaireReception(demandeData.reception_piece[index_reception].commentaire)
                                 setNomRecepteur(demandeData.reception_piece[index_reception].nom_recepteur)
+                                setMiseEnStockReception(libelleMiseEnStock(demandeData.reception_piece[index_reception]))
                                 setStatutLivraison('Reçu')
                                 setStatutClassLivraison('text-sm rounded-xl p-1 bg-green-100 text-green-500 font-bold')
                                 const receptionForm = reception.forms
                             } else {
-                                if (roles_id.includes(12)) {
+                                const enAttente = suivi ? suivi.enAttente : 1
+                                if (roles_id.includes(12) && enAttente > 0) {
                                     setIsReception(true)
                                 }
-
+                                if (demandeData.reception_piece.length > 0) {
+                                    setStatutLivraison(enAttente > 0 ? 'Partiellement reçue' : 'Reçu (livraison en cours)')
+                                    setStatutClassLivraison('text-sm rounded-xl p-1 bg-yellow-100 text-yellow-700 font-bold')
+                                }
                             }
                         }
 
@@ -467,7 +485,196 @@ export default function DemandeDetails() {
     };
 
     const handleClearValidation = () => {
-        signature.clear()
+        signatureValidation.clear()
+    }
+
+    const libelleMiseEnStock = (reception) => {
+        if (!reception || !reception.action_stock) return ''
+        const code = reception.stocks ? reception.stocks.code_stock : ''
+        if (reception.action_stock === 'nouveau_stock') return `Nouveau stock ${code}`
+        if (reception.action_stock === 'stock_existant') return `Ajout au stock ${code}`
+        return 'Non mis en stock'
+    }
+
+    // Ouvre la modale de réception après avoir chargé le contenu livré et les stocks alimentables
+    const ouvrirReception = async (estReg) => {
+        setErrorSignReception('')
+        setActionStock('')
+        setStockReceptionId(null)
+        setCodeStockReception('')
+        setOptionsReception(null)
+        setLivraisonReceptionId(null)
+        if (estReg) {
+            setIsModalRegReceptionOpen(true)
+        } else {
+            setIsModalReceptionOpen(true)
+        }
+        try {
+            setLoadingOptionsReception(true)
+            const options = await demandes.getOptionsReception(id, user_id)
+            setOptionsReception(options)
+            // Livraison à réceptionner : la plus ancienne en attente par défaut
+            const premiere = options.livraisons && options.livraisons.length > 0 ? options.livraisons[0] : null
+            if (premiere) {
+                choisirLivraisonReception(premiere)
+            } else if (!options.miseEnStockPossible) {
+                setActionStock('ignore')
+            }
+        } catch (error) {
+            console.log(error)
+            setOptionsReception({ miseEnStockPossible: false, contenu: null, stocks: [] })
+            setActionStock('ignore')
+        } finally {
+            setLoadingOptionsReception(false)
+        }
+    }
+
+    const choisirLivraisonReception = (livraison) => {
+        setLivraisonReceptionId(livraison.id)
+        setStockReceptionId(null)
+        setActionStock(livraison.miseEnStockPossible ? '' : 'ignore')
+        setErrorSignReception('')
+    }
+
+    // Livraison sélectionnée dans la modale de réception (ou options de premier niveau pour un ancien serveur)
+    const livraisonReception = () => {
+        if (!optionsReception) return null
+        const liste = optionsReception.livraisons || []
+        return liste.find((l) => l.id === livraisonReceptionId) || null
+    }
+
+    // Vérifie le choix de mise en stock et l'ajoute au FormData. Renvoie false si le choix est incomplet.
+    const ajouterChoixStock = (fd) => {
+        if (!actionStock) {
+            setErrorSignReception('Choisissez ce que vous faites des pièces reçues !')
+            return false
+        }
+        if (actionStock === 'nouveau_stock' && !codeStockReception.trim()) {
+            setErrorSignReception('Donnez un code au nouveau stock !')
+            return false
+        }
+        if (actionStock === 'stock_existant' && !stockReceptionId) {
+            setErrorSignReception('Choisissez le stock à alimenter !')
+            return false
+        }
+        if (livraisonReceptionId) fd.append('livraisonId', livraisonReceptionId)
+        fd.append('actionStock', actionStock)
+        if (actionStock === 'nouveau_stock') fd.append('codeStock', codeStockReception.trim())
+        if (actionStock === 'stock_existant') fd.append('stockId', stockReceptionId)
+        return true
+    }
+
+    const libelleContenu = (contenu) => {
+        if (!contenu) return ''
+        const parties = []
+        if (contenu.quantiteLot) parties.push(`${contenu.quantiteLot} lot(s)`)
+        if (contenu.quantiteCarton) parties.push(`${contenu.quantiteCarton} carton(s)`)
+        parties.push(`${contenu.quantitePiece} pièce(s)`)
+        return parties.join(' - ')
+    }
+
+    const choixStockReception = () => {
+        if (loadingOptionsReception) {
+            return (
+                <div className='w-full text-center'>
+                    <ProgressSpinner style={{ width: '20px', height: '20px' }} strokeWidth="8" animationDuration=".5s" />
+                </div>
+            )
+        }
+        if (!optionsReception) return null
+        const listeLivraisons = optionsReception.livraisons || []
+        const { contenu, stocks: stocksReception, miseEnStockPossible } = livraisonReception() || optionsReception
+        const optionsStocks = (stocksReception || []).map((item) => ({
+            value: item.id,
+            label: `${item.code_stock} - ${item.quantite_piece ?? 0} pièce(s)`,
+        }))
+        const choix = [
+            { value: 'nouveau_stock', label: 'Créer un nouveau stock', disabled: !miseEnStockPossible },
+            { value: 'stock_existant', label: 'Ajouter à un de mes stocks', disabled: !miseEnStockPossible || optionsStocks.length === 0 },
+            { value: 'ignore', label: 'Ne pas mettre en stock', disabled: false },
+        ]
+        return (
+            <div className='w-full space-y-2'>
+                {listeLivraisons.length > 1 ? (
+                    <div>
+                        <Label>Livraison réceptionnée <span className="text-red-700">*</span></Label>
+                        <Dropdown
+                            value={livraisonReceptionId}
+                            options={listeLivraisons.map((l, i) => ({
+                                value: l.id,
+                                label: `Livraison du ${l.date ? new Date(l.date).toLocaleDateString('fr-FR') : '?'}${l.contenu ? ` - ${libelleContenu(l.contenu)}` : ''}`,
+                            }))}
+                            onChange={(e) => {
+                                const choisie = listeLivraisons.find((l) => l.id === e.value)
+                                if (choisie) choisirLivraisonReception(choisie)
+                            }}
+                            className="w-full"
+                        />
+                        <span className='text-xs text-gray-500'>{listeLivraisons.length} livraisons en attente de réception</span>
+                    </div>
+                ) : null}
+                <Label>Mise en stock <span className="text-red-700">*</span></Label>
+                {contenu ? (
+                    <div className='text-xs text-gray-600'>
+                        Reçu : {libelleContenu(contenu)}
+                        {contenu.nomModel ? ` - modèle ${contenu.nomModel}` : ''}
+                        {contenu.codeStockOrigine ? ` (stock ${contenu.codeStockOrigine})` : ''}
+                    </div>
+                ) : (
+                    <div className='text-xs text-warning-500'>
+                        Livraison antérieure à la mise en stock à la réception : les pièces ne peuvent pas être mises en stock ici.
+                    </div>
+                )}
+                <div className='flex flex-col space-y-1'>
+                    {choix.map((item) => (
+                        <label key={item.value} className={`flex items-center text-sm ${item.disabled ? 'opacity-40' : 'cursor-pointer'}`}>
+                            <input
+                                type="radio"
+                                name="actionStock"
+                                className='mr-2'
+                                value={item.value}
+                                checked={actionStock === item.value}
+                                disabled={item.disabled}
+                                onChange={() => {
+                                    setActionStock(item.value)
+                                    setErrorSignReception('')
+                                }}
+                            />
+                            {item.label}
+                            {item.value === 'stock_existant' && miseEnStockPossible && optionsStocks.length === 0 ? (
+                                <span className='ml-1 text-xs'>(aucun stock compatible)</span>
+                            ) : null}
+                        </label>
+                    ))}
+                </div>
+                {actionStock === 'nouveau_stock' ? (
+                    <div>
+                        <Label>Code du nouveau stock <span className="text-red-700">*</span></Label>
+                        <Input
+                            type="text"
+                            value={codeStockReception}
+                            onChange={(e) => setCodeStockReception(e.target.value)}
+                            placeholder="Code stock"
+                        />
+                        {optionsReception.serviceDemandeur ? (
+                            <span className='text-xs text-gray-500'>Service : {optionsReception.serviceDemandeur.nom_service}</span>
+                        ) : null}
+                    </div>
+                ) : null}
+                {actionStock === 'stock_existant' ? (
+                    <div>
+                        <Label>Stock à alimenter <span className="text-red-700">*</span></Label>
+                        <Dropdown
+                            value={stockReceptionId}
+                            options={optionsStocks}
+                            onChange={(e) => setStockReceptionId(e.value)}
+                            placeholder="Choisir un stock"
+                            className="w-full"
+                        />
+                    </div>
+                ) : null}
+            </div>
+        )
     }
 
     const handleClearReception = () => {
@@ -476,11 +683,11 @@ export default function DemandeDetails() {
 
     const handleValidate = async (e) => {
         e.preventDefault();
-        if (signature.isEmpty()) {
+        if (signatureValidation.isEmpty()) {
             setErrorSign('Vous devez signer pour valider !')
             return;
         }
-        const sign = signature.toDataURL('image/png')
+        const sign = signatureValidation.toDataURL('image/png')
         let commentaire = message
         try {
             setLoadingDemande(true);
@@ -490,6 +697,7 @@ export default function DemandeDetails() {
             fd.append('user_id', user_id);
             fd.append('commentaire', commentaire);
             fd.append('stock_id', stockId);
+            fd.append('quantiteValidee', demandeDetails.qte_total_demande);
 
             if (sign) {
                 const blob = await fetch(sign).then(res => res.blob());
@@ -602,11 +810,14 @@ export default function DemandeDetails() {
             setErrorSignReception('Vous devez signer pour valider !')
             return;
         }
+        const fd = new FormData();
+        if (!ajouterChoixStock(fd)) {
+            return;
+        }
         try {
             setLoadingReception(true);
             setIsModalReceptionOpen(false)
             const sign = signatureReception.toDataURL('image/png')
-            const fd = new FormData();
 
             fd.append('itemId', pieceId);
             fd.append('demandeId', id);
@@ -633,7 +844,7 @@ export default function DemandeDetails() {
             console.log(error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur s'est produite lors de la réception",
+                text: error?.message || "Une erreur s'est produite lors de la réception",
                 icon: "warning"
             });
             navigate('/toutes-les-demandes');
@@ -644,26 +855,25 @@ export default function DemandeDetails() {
 
     const handleReturnLivraison = async (e) => {
         e.preventDefault();
-        if (!commentaire_return) {
+        if (!messageReturnLivraison) {
             setErrorReturnLivraison("Ajoutez un commentaire avant de retourner une livraison!")
             return;
         }
         const payload = {
             userId: user_id,
             livraison_id: livraisonID,
-            commentaire_return: messageReturn,
+            commentaire_return: messageReturnLivraison,
         }
         try {
             setLoadingReception(true);
             setIsModalReturnLivraisonOpen(false);
             console.log("Sending payload: ", payload);
-            // const response = await reception.returnDelivery(payload);
+            // Aucun endpoint de retour de livraison n'existe encore côté backend
             Swal.fire({
-                title: "Succès",
-                text: "Livraison retournée avec succès",
-                icon: "success"
+                title: "Indisponible",
+                text: "Le retour d'une livraison n'est pas encore disponible.",
+                icon: "info"
             });
-            // console.log(response)
             navigate('/toutes-les-demandes');
         } catch (error) {
             console.log(error)
@@ -672,7 +882,6 @@ export default function DemandeDetails() {
                 text: "Une erreur s'est produite lors du retour de la livraison",
                 icon: "warning"
             });
-            console.log(response)
             navigate('/toutes-les-demandes');
         } finally {
             setLoadingReception(false)
@@ -689,11 +898,14 @@ export default function DemandeDetails() {
             setErrorSignReception('Vous devez sélectionner une date de réception !')
             return;
         }
+        const fd = new FormData();
+        if (!ajouterChoixStock(fd)) {
+            return;
+        }
         try {
             setLoadingReception(true);
             setIsModalRegReceptionOpen(false)
             const sign = signatureReception.toDataURL('image/png')
-            const fd = new FormData();
 
             fd.append('itemId', pieceId);
             fd.append('demandeId', id);
@@ -707,7 +919,7 @@ export default function DemandeDetails() {
             for (let [key, value] of fd.entries()) {
                 console.log(`${key}:`, value);
             }
-            await demandes.regReceptionDemande(fd);
+            const response = await demandes.regReceptionDemande(fd);
 
             Swal.fire({
                 title: "Succès",
@@ -721,7 +933,7 @@ export default function DemandeDetails() {
             console.log(error)
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur s'est produite lors de la réception",
+                text: error?.message || "Une erreur s'est produite lors de la réception",
                 icon: "warning"
             });
             navigate('/toutes-les-demandes');
@@ -893,9 +1105,7 @@ export default function DemandeDetails() {
                                                                     {isReg ? (
                                                                         <>
                                                                             <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                                onClick={() => {
-                                                                                    setIsModalRegReceptionOpen(true)
-                                                                                }}>
+                                                                                onClick={() => ouvrirReception(true)}>
                                                                                 <span className='mr-4'><i className="pi pi-inbox"></i></span>
                                                                                 <span className='text-sm text-gray-700 font-medium'>Reg Réception</span>
                                                                             </button>
@@ -903,9 +1113,7 @@ export default function DemandeDetails() {
                                                                     ) : (
                                                                         <>
                                                                             <button className='bg-gray-100 rounded py-3 px-5 h-8 w-full flex items-center hover:bg-gray-200'
-                                                                                onClick={() => {
-                                                                                    setIsModalReceptionOpen(true)
-                                                                                }}>
+                                                                                onClick={() => ouvrirReception(false)}>
                                                                                 <span className='mr-4'><i className="pi pi-inbox"></i></span>
                                                                                 <span className='text-sm text-gray-700 font-medium'>Réceptionner Pièces</span>
                                                                             </button>
@@ -1101,6 +1309,15 @@ export default function DemandeDetails() {
                                                     ) : (
                                                         <></>
                                                     )}
+                                                    {suiviLivraison && suiviLivraison.livraisons.length > 1 ? (
+                                                        <tr className='border h-15'>
+                                                            <th className='border w-1/2'>Total livré ({suiviLivraison.livraisons.length} livraisons)</th>
+                                                            <th className='border w-1/2'>
+                                                                {suiviLivraison.unite ? `${suiviLivraison.quantiteLivree} ${suiviLivraison.libelleUnite}` : '-'}
+                                                                {suiviLivraison.reste !== null && suiviLivraison.reste > 0 ? ` (reste ${suiviLivraison.reste})` : ''}
+                                                            </th>
+                                                        </tr>
+                                                    ) : null}
                                                     {isDelivered ? (
                                                         <>
                                                             <tr className='border h-15'>
@@ -1152,12 +1369,59 @@ export default function DemandeDetails() {
                                                                 <th className='border w-1/2'>Recepteur</th>
                                                                 <th className='border w-1/2'>{nomRecepteur}</th>
                                                             </tr>
+                                                            {miseEnStockReception ? (
+                                                                <tr className='border h-15'>
+                                                                    <th className='border w-1/2'>Mise en stock</th>
+                                                                    <th className='border w-1/2'>{miseEnStockReception}</th>
+                                                                </tr>
+                                                            ) : null}
                                                         </>
                                                     ) : (
                                                         <></>
                                                     )}
                                                 </tbody>
                                             </table>
+                                            {suiviLivraison && (suiviLivraison.livraisons.length > 1 || statutDemande === 'Partiellement livrée') ? (
+                                                <>
+                                                    <div className='w-full text-center my-4'>
+                                                        <span className='text-md underline'>Suivi des livraisons</span>
+                                                    </div>
+                                                    {suiviLivraison.reste !== null ? (
+                                                        <div className='text-xs text-center mb-2'>
+                                                            Validé : {suiviLivraison.quantiteValidee} {suiviLivraison.libelleUnite} - livré : {suiviLivraison.quantiteLivree} - reste : {suiviLivraison.reste}
+                                                        </div>
+                                                    ) : null}
+                                                    <table className='border w-full text-xs'>
+                                                        <thead>
+                                                            <tr className='border h-10'>
+                                                                <th className='border'>N°</th>
+                                                                <th className='border'>Date</th>
+                                                                <th className='border'>Contenu</th>
+                                                                <th className='border'>Réception</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {suiviLivraison.livraisons.map((l) => (
+                                                                <tr key={l.id} className='border h-10 text-center'>
+                                                                    <td className='border'>{l.numero}</td>
+                                                                    <td className='border'>{l.date ? new Date(l.date).toLocaleDateString('fr-FR') : '-'}</td>
+                                                                    <td className='border'>{l.contenu ? libelleContenu(l.contenu) : '-'}</td>
+                                                                    <td className='border'>
+                                                                        {l.reception ? (
+                                                                            <span className='text-green-600'>
+                                                                                Reçue{l.reception.date ? ` le ${new Date(l.reception.date).toLocaleDateString('fr-FR')}` : ''}
+                                                                                {libelleMiseEnStock({ action_stock: l.reception.actionStock, stocks: { code_stock: l.reception.codeStock } }) ? ` - ${libelleMiseEnStock({ action_stock: l.reception.actionStock, stocks: { code_stock: l.reception.codeStock } })}` : ''}
+                                                                            </span>
+                                                                        ) : l.enAttenteReception ? (
+                                                                            <span className='text-orange-500'>En attente</span>
+                                                                        ) : '-'}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </>
+                                            ) : null}
 
                                         </div>
                                     </div>
@@ -1289,6 +1553,9 @@ export default function DemandeDetails() {
                             canvasProps={{ width: 300, height: 250, className: 'sigCanvas border border-gray-300 rounded' }}
                         />
                         <div className='w-full mt-3'>
+                            {choixStockReception()}
+                        </div>
+                        <div className='w-full mt-3'>
                             <Label>Commentaire</Label>
                             <TextArea
                                 value={messageReception}
@@ -1336,7 +1603,7 @@ export default function DemandeDetails() {
                         </div>
                         <div className='w-full mt-6 flex justify-center items-center'>
                             <button
-                                onClick={'handleReturnLivraison'}
+                                onClick={handleReturnLivraison}
                                 className='w-48 mx-3 bg-red-400 rounded-2xl h-10 flex justify-center items-center'>
                                 Retourner
                             </button>
@@ -1389,11 +1656,12 @@ export default function DemandeDetails() {
                                 dateFormat="dd/mm/yy"
                                 placeholder="dd/mm/yyyy"
                                 maxDate={new Date()}
-                                minDate={new Date(dateLivraison)}
+                                minDate={new Date((livraisonReception() && livraisonReception().date) || dateLivraison)}
                                 className="w-full"
                                 style={{ fontSize: '2px' }}
                             />
                         </div>
+                        {choixStockReception()}
                         <div className='w-full'>
                             <Label>Commentaire</Label>
                             <TextArea

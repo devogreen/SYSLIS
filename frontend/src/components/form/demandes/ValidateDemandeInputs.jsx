@@ -371,7 +371,7 @@ export default function ValidateDemandeInputs() {
             fd.append('user_id', userId)
             fd.append('commentaire', commentaire)
             fd.append('quantiteValidee', quantite)
-            fd.append('owners', stockOwners)
+            stockOwners.forEach((owner) => fd.append('owners', owner))
             fd.append('date_validation', new Date(selectedDateValidation))
             if (isReg) {
                 await demandeData.regValidateDemande(fd)

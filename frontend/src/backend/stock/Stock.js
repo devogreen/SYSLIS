@@ -105,64 +105,9 @@ export class Stock {
         }
     };
 
-    async getQuantitePiece(item_id, model_id, service_id) {
-        try {
-            const response = await axios.get(`${urlBase}/api/stock/getQuantitePiece/${item_id}/${model_id}/${service_id}`)
-            console.log(response)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    }
-
     async getAllTypeMouvementStock() {
         try {
             const response = await axios.get(`${urlBase}/api/stock/getAllTypeMouvementStock`)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    };
-
-    async setStockPiece(piece_id, model_id, service_id, payload) {
-        try {
-            const response = await axios.put(`${urlBase}/api/stock/setStockPiece/${piece_id}/${model_id}/${service_id}`, payload)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    };
-
-    async setStockCarton(piece_id, model_id, service_id, payload) {
-        try {
-            const response = await axios.put(`${urlBase}/api/stock/setStockCarton/${piece_id}/${model_id}/${service_id}`, payload)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    };
-
-    async setStockPieceCarton(piece_id, model_id, service_id, payload) {
-        try {
-            const response = await axios.put(`${urlBase}/api/stock/setStockPieceCarton/${piece_id}/${model_id}/${service_id}`, payload)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    };
-
-    async setStockLot(piece_id, model_id, service_id, payload) {
-        try {
-            const response = await axios.put(`${urlBase}/api/stock/setStockLot/${piece_id}/${model_id}/${service_id}`, payload)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    };
-
-    async setStockCartonLot(piece_id, model_id, service_id, payload) {
-        try {
-            const response = await axios.put(`${urlBase}/api/stock/setStockCartonLot/${piece_id}/${model_id}/${service_id}`, payload)
             return response.data;
         } catch (error) {
             throw error.response.data
@@ -259,15 +204,6 @@ export class Stock {
         }
     }
 
-    async getAllOneQuantitePiece(id) {
-        try {
-            const response = await axios.get(`${urlBase}/api/stock/getAllOneQuantitePiece/${id}`)
-            return response.data;
-        } catch (error) {
-            throw error.response.data
-        }
-    }
-
     async setStockSn(formData) {
         try {
             const response = await axios.post(`${urlBase}/api/stock/setStockSn`, formData, {
@@ -311,6 +247,36 @@ export class Stock {
     async getAllStockSubOwners(stockId) {
         try {
             const response = await axios.get(`${urlBase}/api/stock/getAllStockSubOwners/${stockId}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    // Stocks que l'utilisateur peut associer (fusionner) à ce stock
+    async getStocksFusionnables(stockId, userId) {
+        try {
+            const response = await axios.get(`${urlBase}/api/stock/getStocksFusionnables/${stockId}/${userId}`)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    // payload : { userId, sourceIds: [], motif, commentaire }
+    async associerStocks(stockId, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/stock/associerStocks/${stockId}`, payload)
+            return response.data;
+        } catch (error) {
+            throw error.response.data
+        }
+    }
+
+    // payload : { userId, motif, confirmerSortie }
+    async supprimerStock(stockId, payload) {
+        try {
+            const response = await axios.put(`${urlBase}/api/stock/supprimerStock/${stockId}`, payload)
             return response.data;
         } catch (error) {
             throw error.response.data

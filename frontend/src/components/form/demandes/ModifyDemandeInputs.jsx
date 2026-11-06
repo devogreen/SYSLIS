@@ -471,10 +471,9 @@ export default function ModifyDemandeInputs() {
     } catch (error) {
       Swal.fire({
         title: "Attention",
-        text: "Une erreur est survenue lors de la modification !",
+        text: error?.message || "Une erreur est survenue lors de la modification !",
         icon: "warning"
       })
-      navigate('/toutes-les-demandes')
     } finally {
       setLoadingValidation(false)
     }

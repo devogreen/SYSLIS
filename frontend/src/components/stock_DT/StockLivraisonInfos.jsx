@@ -17,7 +17,7 @@ export default function StockLivraisonInfos() {
         setLoadingStock(true)
         try{
             let data;
-            data = await stock.getAllStock()
+            data = await stock.getAllStocks()
             console.log(data)
             const stock_livraison = data.filter(item =>{
                 return item.service == 3;
@@ -25,7 +25,7 @@ export default function StockLivraisonInfos() {
             setStockDT(stock_livraison)
         }catch(error){
         console.log('Error fetching data ',error)
-        setErrorForm('Erreur lors de la génération du formulaire')        
+        console.error('Erreur lors de la génération du formulaire')
         }finally{
         setLoadingStock(false)
         }

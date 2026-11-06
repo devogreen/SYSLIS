@@ -90,11 +90,9 @@ import AllDemandesMaintenance from "./pages/MaintenancePages/AllDemandesMaintena
 
 
 // @ts-ignore
-import AllDemandesDeliveries from "./pages/DeliveryPages/AllDemandesDeliveries"
+// import AllDemandesDeliveries from "./pages/DeliveryPages/AllDemandesDeliveries"
 // @ts-ignore
-import DemandeDeliveryDetails from "./pages/DeliveryPages/DemandeDeliveryDetails"
 // @ts-ignore
-import LivraisonPiecesForm from "./pages/Forms/LivraisonForms/LivraisonPiecesForm"
 // @ts-ignore
 import DeliveryChargeurDecomDetails from "./pages/DeliveryPages/DeliveryChargeurDecomDetails"
 
@@ -104,7 +102,6 @@ import AllSupportDeliveries from "./pages/SupportPages/AllSupportDeliveries"
 import ReceptionSupportDetails from "./pages/SupportPages/ReceptionSupportDetails"
 
 // @ts-ignore
-import ModifyStockForm from "./pages/Forms/StockForms/ModifyStockForm"
 // @ts-ignore
 import AjouterPieceForm from "./pages/Forms/StockForms/AjouterPieceForm"
 // @ts-ignore
@@ -133,7 +130,6 @@ import AjouterTypeLivraisonForm from "./pages/Forms/AdminForms/AjouterTypeLivrai
 import ModifyTypeLivraisonForm from "./pages/Forms/AdminForms/ModifyTypeLivraisonForm"
 
 // @ts-ignore
-import ModifyLivraisonPiecesForm from "./pages/Forms/LivraisonForms/ModifyLivraisonPiecesForm"
 
 // @ts-ignore
 import ModifyDemandeAdminForm from "./pages/Forms/AdminForms/ModifyDemandeAdminForm"
@@ -319,10 +315,7 @@ export default function App() {
               {/* Livraisons */}
               <Route path="/toutes-les-livraisons" element={<AllDeliveries/>} />
               <Route path="/formulaire/:id" element={<DeliveryDetails/>} />
-              <Route path="/toutes-les-demandes-livraison" element={<AllDemandesDeliveries />} />
-              <Route path="/demande-livraison/:id" element={<DemandeDeliveryDetails />} />
-              <Route path="/livraison-pieces/:id" element={<LivraisonPiecesForm />} />
-              <Route path="/modifier-livraison-pieces/:id" element={<ModifyLivraisonPiecesForm />} />
+              {/* <Route path="/toutes-les-demandes-livraison" element={<AllDemandesDeliveries />} /> */}
               <Route path="/regularisation-livraison" element={<RegularisationLivraisonForm />} />
 
               {/* Demandes QR CODE */}
@@ -336,7 +329,6 @@ export default function App() {
               {/* Stock */}
               <Route path="/voir-items" element={<AllItems />} />
               <Route path="/voir-piece/:id" element={<ItemDetails />} />
-              <Route path="/modifier-stock/:id" element={<ModifyStockForm />} />
               <Route path="/ajouter-stock" element={<AjouterStockForm />} />
               <Route path="/ajouter-piece" element={<AjouterPieceForm />} />
               <Route path="/ajouter-terminal" element={<AjouterTerminalForm />} />

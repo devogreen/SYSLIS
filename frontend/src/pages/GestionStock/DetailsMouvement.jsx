@@ -55,7 +55,7 @@ export default function DetailsMouvement() {
                 const type = mouvement_data.type
                 const typeCheck = type == 'entree' ? true : false
                 setIsEntree(typeCheck)
-                const date_mouvement = mouvement_data.date
+                const date_mouvement = mouvement_data.created_at
                 setDate(formatDate(date_mouvement))
                 const service_origine_id = mouvement_data.service_origine
                 const service_destination_id = mouvement_data.service_destination

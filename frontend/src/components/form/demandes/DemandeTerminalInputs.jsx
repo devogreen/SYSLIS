@@ -94,7 +94,7 @@ export default function DemandeTerminalInputs() {
         setUserRoles(roles_id)
 
         let stock_data;
-        stock_data = await stock.getAllStock()
+        stock_data = await stock.getAllStocks()
         console.log(stock_data)
         setStockDT(stock_data)
         

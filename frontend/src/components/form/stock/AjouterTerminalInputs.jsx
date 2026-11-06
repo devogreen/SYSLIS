@@ -153,10 +153,9 @@ export default function AjouterTerminalInputs() {
         } catch(error){
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la création",
+                text: error?.message || "Une erreur est survenue lors de la création",
                 icon: "warning"
             })
-            navigate('/voir-items')
         } finally{
             setLoadindCreate(false)
         }

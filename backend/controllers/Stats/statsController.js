@@ -916,7 +916,8 @@ const getGeneralStats = async (req, res) => {
                             gte: new Date(startDate + 'T00:00:00'),
                             lte: new Date(endDate + 'T23:59:59')
                         },
-                        statut_demande: 'valide',
+                        // validées ou partiellement livrées
+                        statut_demande: { in: ['valide', 'partiel'] },
                         demande_recue: false,
                         is_deleted: false
                     }
@@ -930,7 +931,7 @@ const getGeneralStats = async (req, res) => {
         } else {
             demandesValideesNonRecues = await prisma.demandes.count({
                 where: {
-                    statut_demande: 'valide',
+                    statut_demande: { in: ['valide', 'partiel'] },
                     demande_recue: false,
                     is_deleted: false
                 }
@@ -941,6 +942,8 @@ const getGeneralStats = async (req, res) => {
         }
 
 
+        // Déclarée localement (auparavant variable globale implicite, partagée entre requêtes) avec une valeur par défaut
+        let statsStocks = { _sum: { quantite_piece: 0, quantite_carton: 0, quantite_lot: 0 } }
         try {
             statsStocks = await prisma.stocks.aggregate({
                 where: { is_deleted: false },
