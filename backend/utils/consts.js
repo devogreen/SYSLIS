@@ -1,3 +1,3 @@
-const TEST_ENV = true
+const TEST_ENV = false
 
 module.exports = TEST_ENV
