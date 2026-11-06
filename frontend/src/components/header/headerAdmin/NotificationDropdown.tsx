@@ -1,111 +1,122 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { Dropdown } from "../../ui/dropdown/Dropdown";
 import { DropdownItem } from "../../ui/dropdown/DropdownItem";
-import { Link, useNavigate } from "react-router";
-
-import { ClipboardCheck, CheckCircleIcon } from "../../../icons";
 // @ts-ignore
-import { Demandes } from "../../../backend/demandes/Demandes"
-// import { formatDistanceToNow, parseISO } from 'date-fns';
+import { Notifications } from "../../../backend/notifications/Notifications";
+// @ts-ignore
+import { useNotifications } from "../../../context/NotificationsContext";
+
+// Actions en attente de l'utilisateur connecté (mêmes règles que les bulles de la barre latérale).
+// Chaque ligne mène à la page où l'action se fait.
+
+type Element = { id: number | string; titre: string; detail?: string; date?: string | null; lien: string };
+type Groupe = { cle: string; libelle: string; chemin: string; nombre: number; elements: Element[]; tronque?: boolean };
+
+const LIMITE_PAR_GROUPE = 10;
+const api = new Notifications();
+
+// Icône (primeicons) selon le module de la page
+const ICONES: Record<string, string> = {
+  "/toutes-les-demandes": "pi-box",
+  "/tous-les-decommissionnements": "pi-trash",
+  "/livraison-param-decom": "pi-cog",
+  "/livraisons-param-decom": "pi-truck",
+  "/reparation-tpe": "pi-wrench",
+  "/reparations-tpe": "pi-wrench",
+  "/toutes-livraisons-reparation": "pi-truck",
+  "/toutes-les-demandes-rebut": "pi-ban",
+  "/toutes-les-demandes-qr": "pi-qrcode",
+};
+
+const formatDate = (date?: string | null) => {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifying, setNotifying] = useState(false);
-  // @ts-ignore
-  const [demandesEnAttentes, setDemandesEnAttentes] = useState<any[]>([])
-  // @ts-ignore
-  const [demandesValidees, setDemandesValidees] = useState<any[]>([])
-  // const demandes = new Demandes();
-  const navigate = useNavigate()
+  const [groupes, setGroupes] = useState<Groupe[]>([]);
+  const [totalListe, setTotalListe] = useState<number | null>(null);
+  const [chargement, setChargement] = useState(false);
+  const [erreur, setErreur] = useState("");
+  const requete = useRef(0);
+  const synchroFaite = useRef(false);
+  const navigate = useNavigate();
 
-  function toggleDropdown() {
-    setIsOpen(!isOpen);
-  }
+  // Compteur partagé avec la barre latérale (rechargé à chaque page et toutes les 60 s)
+  const { total, rafraichir } = useNotifications() as { total: number; rafraichir: () => void };
+  const totalRef = useRef(total);
+  totalRef.current = total;
 
-  function closeDropdown() {
-    setIsOpen(false);
-  }
-  
-  const handleClick = () => {
-    toggleDropdown();
-    setNotifying(false);
+  const chargerListe = useCallback(async () => {
+    const numero = ++requete.current;
+    setChargement(true);
+    setErreur("");
+    try {
+      const data = await api.getListe(LIMITE_PAR_GROUPE);
+      if (numero !== requete.current) return; // une requête plus récente a été lancée
+      const totalRecu = Number(data?.total) || 0;
+      setGroupes(Array.isArray(data?.groupes) ? data.groupes : []);
+      setTotalListe(totalRecu);
+      // La liste est plus récente que le compteur : on resynchronise les bulles (une fois par ouverture)
+      if (totalRecu !== totalRef.current && !synchroFaite.current) {
+        synchroFaite.current = true;
+        rafraichir();
+      }
+    } catch (error: any) {
+      if (numero !== requete.current) return;
+      setErreur(error?.message || "Impossible de charger les notifications.");
+    } finally {
+      if (numero === requete.current) setChargement(false);
+    }
+  }, [rafraichir]);
+
+  // Liste chargée à l'ouverture, et rechargée si le compteur change pendant qu'elle est ouverte
+  useEffect(() => {
+    if (isOpen) chargerListe();
+  }, [isOpen, total, chargerListe]);
+
+  useEffect(() => {
+    if (!isOpen) synchroFaite.current = false;
+  }, [isOpen]);
+
+  // En-tête : total de la liste affichée (sinon celui des bulles en attendant le chargement)
+  const totalAffiche = totalListe ?? total;
+
+  const toggleDropdown = () => setIsOpen((ouvert) => !ouvert);
+  const closeDropdown = useCallback(() => setIsOpen(false), []);
+
+  const ouvrir = (lien: string) => {
+    closeDropdown();
+    navigate(lien);
   };
 
-  // @ts-ignore
-  // Fonction pour récupérer les demandes en attente
-  // const fetchDemandesEnAttente = async () => {
-  //   try {
-  //     const data = await demandes.getDemandesEnAttente();
-  //     const formattedData = data.map((item: any) => ({
-  //       ...item,
-  //       timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
-  //         day: '2-digit',
-  //         month: '2-digit',
-  //         year: 'numeric',
-  //         hour: '2-digit',
-  //         minute: '2-digit'
-  //       })
-  //     }));
-      
-  //     if (formattedData.length > 0) {
-  //       setNotifying(true);
-  //     }
-      
-  //     setDemandesEnAttentes(formattedData);
-  //   } catch (error) {
-  //     console.error('Error fetching demandes en attente:', error);
-  //   }
-  // };
-
-  // // Fonction pour récupérer les demandes validées et non livrées
-  // const fetchDemandesValidees = async () => {
-  //   try {
-  //     const data = await demandes.getDemandesValidees();
-  //     const formattedData = data.map((item: any) => ({
-  //       ...item,
-  //       timeAgo: new Date(item.date_demande).toLocaleDateString('fr-FR', {
-  //         day: '2-digit',
-  //         month: '2-digit',
-  //         year: 'numeric',
-  //         hour: '2-digit',
-  //         minute: '2-digit'
-  //       })
-  //     }));
-      
-  //     setDemandesValidees(formattedData);
-  //   } catch (error) {
-  //     console.error('Error fetching demandes validées:', error);
-  //   }
-  // };
-
-  // useEffect(() => {
-  //   // Fetch immediately on mount
-  //   fetchDemandesEnAttente();
-  //   fetchDemandesValidees();
-
-  //   // Poll every 30 seconds
-  //   const interval = setInterval(() => {
-  //     fetchDemandesEnAttente();
-  //     fetchDemandesValidees();
-  //   }, 30000);
-
-  //   // Cleanup on unmount
-  //   return () => clearInterval(interval);
-  // }, []);
+  const actualiser = () => {
+    rafraichir();
+    chargerListe();
+  };
 
   return (
     <div className="relative">
       <button
         className="relative flex items-center justify-center text-gray-500 transition-colors bg-white border border-gray-200 rounded-full dropdown-toggle hover:text-gray-700 h-11 w-11 hover:bg-gray-100 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-        onClick={handleClick}
+        onClick={toggleDropdown}
+        title={total > 0 ? `${total} action(s) en attente` : "Aucune action en attente"}
       >
-        <span
-          className={`absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400 ${
-            !notifying ? "hidden" : "flex"
-          }`}
-        >
-          <span className="absolute inline-flex w-full h-full bg-orange-400 rounded-full opacity-75 animate-ping"></span>
-        </span>
+        {total > 0 && (
+          <span className="absolute -right-1 -top-1 z-10 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-error-500 text-white text-[10px] font-semibold leading-none">
+            {total > 99 ? "99+" : total}
+          </span>
+        )}
         <svg
           className="fill-current"
           width="20"
@@ -124,132 +135,96 @@ export default function NotificationDropdown() {
       <Dropdown
         isOpen={isOpen}
         onClose={closeDropdown}
-        className="absolute -right-[240px] mt-[17px] flex h-[480px] w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[361px] lg:right-0"
+        className="absolute -right-[240px] mt-[17px] flex max-h-[520px] w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[380px] lg:right-0"
       >
-        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between pb-3 mb-2 border-b border-gray-100 dark:border-gray-700">
           <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-            Notification
+            Actions en attente
+            {totalAffiche > 0 && (
+              <span className="ml-2 text-sm font-medium text-gray-500 dark:text-gray-400">({totalAffiche})</span>
+            )}
           </h5>
-          <button
-            onClick={toggleDropdown}
-            className="text-gray-500 transition dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-          >
-            <svg
-              className="fill-current"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
+          <div className="flex items-center gap-3">
+            <button
+              onClick={actualiser}
+              title="Actualiser"
+              className="text-gray-500 transition dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M6.21967 7.28131C5.92678 6.98841 5.92678 6.51354 6.21967 6.22065C6.51256 5.92775 6.98744 5.92775 7.28033 6.22065L11.999 10.9393L16.7176 6.22078C17.0105 5.92789 17.4854 5.92788 17.7782 6.22078C18.0711 6.51367 18.0711 6.98855 17.7782 7.28144L13.0597 12L17.7782 16.7186C18.0711 17.0115 18.0711 17.4863 17.7782 17.7792C17.4854 18.0721 17.0105 18.0721 16.7176 17.7792L11.999 13.0607L7.28033 17.7794C6.98744 18.0722 6.51256 18.0722 6.21967 17.7794C5.92678 17.4865 5.92678 17.0116 6.21967 16.7187L10.9384 12L6.21967 7.28131Z"
-                fill="currentColor"
-              />
-            </svg>
-          </button>
+              <i className={`pi pi-refresh ${chargement ? "pi-spin" : ""}`} style={{ fontSize: "14px" }}></i>
+            </button>
+            <button
+              onClick={closeDropdown}
+              title="Fermer"
+              className="text-gray-500 transition dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              <i className="pi pi-times" style={{ fontSize: "14px" }}></i>
+            </button>
+          </div>
         </div>
-        
-        {/* Demandes validées et non livrées */}
-        {demandesValidees.length > 0 && (
-          <div className="mb-2 mt-2 pt-2 border-t border-gray-100">
-            <h6 className="text-xs font-semibold text-green-600 uppercase mb-2">Validées - Non livrées</h6>
-          </div>
-        )}
-        <ul className="flex flex-col h-auto overflow-y-auto custom-scrollbar">
-          {demandesValidees.map((demande: any) => {
-            const demandeTitle = demande.items?.nom_piece || 'Demande';
-            return(
-              <li key={`validee-${demande.id}`}>
-                <DropdownItem
-                  onItemClick={() => {
-                    closeDropdown();
-                    navigate(`/demande-details/${demande.id}`)
-                  }}
-                  className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
-                >
-                  <div className="flex justify-center items-center bg-green-100 w-full h-10 rounded-full z-1 max-w-10">
-                    <span className="text-2xl text-green-600"><CheckCircleIcon /></span>
-                  </div>
 
-                  <span className="block">
-                    <span className="mb-1.5 flex flex-col text-theme-sm text-gray-500 dark:text-gray-400 space-x-1">
-                      <span>
-                        <span className="font-medium">{demandeTitle}</span>
-                        <span className="ms-2.5 font-bold">#{demande.id}</span>
-                      </span>
-                      <span className="font-medium text-gray-800 dark:text-white/90">Quantité :
-                        {demande.qte_total_demande}
-                      </span>
-                      
-                    </span>
-
-                    <span className="flex items-center gap-2 text-gray-500 text-theme-xs dark:text-gray-400">
-                      <span className="text-green-600 font-medium">validée - Non livrée</span>
-                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                      <span>{demande.timeAgo}</span>
-                    </span>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {erreur ? (
+            <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              <p className="mb-3">{erreur}</p>
+              <button onClick={chargerListe} className="text-brand-500 hover:underline">Réessayer</button>
+            </div>
+          ) : chargement && groupes.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              <i className="pi pi-spin pi-spinner mr-2"></i>Chargement…
+            </div>
+          ) : groupes.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-sm text-gray-500 dark:text-gray-400">
+              <i className="pi pi-check-circle text-green-500" style={{ fontSize: "24px" }}></i>
+              <span>Aucune action en attente</span>
+            </div>
+          ) : (
+            groupes.map((groupe) => (
+              <div key={groupe.cle} className="mb-3">
+                <div className="flex items-center justify-between px-1 mb-1">
+                  <h6 className="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300">
+                    {groupe.libelle}
+                  </h6>
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-error-500 text-white text-[10px] font-semibold leading-none">
+                    {groupe.nombre}
                   </span>
-                </DropdownItem>
-              </li>
-            )
-          })}
-        </ul>
-
-        {/* Demandes en attente */}
-        {demandesEnAttentes.length > 0 && (
-          <div className="mb-2">
-            <h6 className="text-xs font-semibold text-orange-600 uppercase mb-2">En attente de validation</h6>
-          </div>
-        )}
-        <ul className="flex flex-col h-auto overflow-y-auto custom-scrollbar">
-          {demandesEnAttentes.map((demande: any) => {
-            const demandeTitle = demande.items?.nom_piece || 'Demande';
-            return(
-              <li key={`en-attente-${demande.id}`}>
-                <DropdownItem
-                  onItemClick={() => {
-                    closeDropdown();
-                    navigate(`/demande-details/${demande.id}`)
-                  }}
-                  className="flex gap-3 rounded-lg border-b border-gray-100 p-3 px-4.5 py-3 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
-                >
-                  <div className="flex justify-center items-center bg-gray-100 w-full h-10 rounded-full z-1 max-w-10">
-                    <span className="text-2xl"><ClipboardCheck /></span>
-                  </div>
-
-                  <span className="block">
-                    <span className="mb-1.5 flex flex-col text-theme-sm text-gray-500 dark:text-gray-400 space-x-1">
-                      <span>
-                        <span className="font-medium">{demandeTitle}</span>
-                        <span className="ms-2.5 font-bold">#{demande.id}</span>
-                      </span>
-                      <span className="font-medium text-gray-800 dark:text-white/90">Quantité :
-                        {demande.qte_total_demande}
-                      </span>
-                    </span>
-
-                    <span className="flex items-center gap-2 text-gray-500 text-theme-xs dark:text-gray-400">
-                      <span className="text-warning-300">en attente</span>
-                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                      <span>{demande.timeAgo}</span>
-                    </span>
-                  </span>
-                </DropdownItem>
-              </li>
-            )
-          })}
-        </ul>
-
-        <Link
-          to="/toutes-les-demandes-livraison"
-          className="block px-4 py-2 mt-3 text-sm font-medium text-center text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-        >
-          Voir toutes les demandes
-        </Link>
+                </div>
+                <ul className="flex flex-col">
+                  {groupe.elements.map((element) => (
+                    <li key={`${groupe.cle}-${element.id}`}>
+                      <DropdownItem
+                        onItemClick={() => ouvrir(element.lien)}
+                        className="flex gap-3 rounded-lg border-b border-gray-100 px-3 py-2.5 hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-white/5"
+                      >
+                        <span className="flex justify-center items-center shrink-0 bg-gray-100 w-9 h-9 rounded-full dark:bg-gray-800">
+                          <i className={`pi ${ICONES[groupe.chemin] || "pi-bell"} text-gray-600 dark:text-gray-300`} style={{ fontSize: "14px" }}></i>
+                        </span>
+                        <span className="block min-w-0">
+                          <span className="block text-theme-sm font-medium text-gray-800 dark:text-white/90 truncate">
+                            {element.titre}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-x-2 text-theme-xs text-gray-500 dark:text-gray-400">
+                            {element.detail && <span>{element.detail}</span>}
+                            {element.detail && element.date && <span className="w-1 h-1 bg-gray-400 rounded-full"></span>}
+                            {element.date && <span>{formatDate(element.date)}</span>}
+                          </span>
+                        </span>
+                      </DropdownItem>
+                    </li>
+                  ))}
+                </ul>
+                {groupe.tronque && (
+                  <button
+                    onClick={() => ouvrir(groupe.chemin)}
+                    className="w-full px-3 py-1.5 text-left text-xs font-medium text-brand-500 hover:underline"
+                  >
+                    Voir la liste complète →
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </Dropdown>
     </div>
   );
 }
-

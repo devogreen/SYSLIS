@@ -141,6 +141,7 @@ const getParcTpe = async (req, res) => {
                 users_create_tpe: true,
                 users_update_tpe: true,
                 statut_tpe: true,
+                model_piece: true,
                 history_tpe: {
                     include: {
                         users: true,
@@ -704,6 +705,7 @@ const exportTpeToExcel = async (req, res) => {
             },
             include: {
                 statut_tpe: true,
+                model_piece: true,
             },
         })
 
@@ -713,6 +715,7 @@ const exportTpeToExcel = async (req, res) => {
         const serialsHeaders = [
             "ID",
             "S/N",
+            "Modèle",
             "Statut",
             "Dernière Modification",
             "Date Création",       
@@ -733,6 +736,7 @@ const exportTpeToExcel = async (req, res) => {
             serialsSheet.addRow([
                 item.id,
                 item.serial_number,
+                item.model_piece ? item.model_piece.nom_model : "N/A",
                 item.statut_tpe.statut,
                 new Date(item.updated_at),
                 new Date(item.created_at),
@@ -830,4 +834,4 @@ module.exports = {
     changeListeStatut,
     getTpe,
     exportTpeToExcel,
-}
+}

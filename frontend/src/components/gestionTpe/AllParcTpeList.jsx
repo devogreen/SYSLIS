@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { GestionTpe } from "../../backend/gestionTpe/GestionTpe"
 
 import { DataTable } from 'primereact/datatable';
@@ -14,6 +14,7 @@ import { MultiSelect } from "primereact/multiselect";
 import Checkbox from "../form/input/Checkbox";
 import { ProgressSpinner } from "primereact/progressspinner";
 import Swal from "sweetalert2";
+import { Stock } from "../../backend/stock/Stock";
 
 export default function AllParcTpeList() {
     addLocale('fr', {
@@ -29,6 +30,7 @@ export default function AllParcTpeList() {
     });
 
     const parcData = new GestionTpe()
+    const stockData = new Stock()
     const userId = localStorage.getItem('id');
 
     const savedPagination = JSON.parse(sessionStorage.getItem("paginationStateListeParc"));
@@ -59,25 +61,42 @@ export default function AllParcTpeList() {
 
     const [loadingExport, setLoadingExport] = useState(false)
 
+    // Un range PrimeReact peut être [debut, null] pendant la sélection :
+    // on garde le null au lieu de le transformer en new Date(null) (= 01/01/1970)
     const [datesCreation, setDatesCreation] = useState(
         savedFilters?.datesCreation
-            ? savedFilters.datesCreation.map((d) => new Date(d))
+            ? savedFilters.datesCreation.map((d) => (d ? new Date(d) : null))
             : null
     );
     const [datesUpdate, setDatesUpdate] = useState(
         savedFilters?.datesUpdate
-            ? savedFilters.datesUpdate.map((d) => new Date(d))
+            ? savedFilters.datesUpdate.map((d) => (d ? new Date(d) : null))
             : null
     );
+
+    const [modelsOptions, setModelsOptions] = useState([])
+    const [selectedModels, setSelectedModels] = useState(savedFilters?.selectedModels || [])
 
     useEffect(() => {
         saveFilters({
             globalFilter,
             selectedStatus,
+            selectedModels,
             datesCreation: datesCreation?.map(d => d?.toISOString()),
             datesUpdate: datesUpdate?.map(d => d?.toISOString()),
         });
-    }, [globalFilter, selectedStatus, datesCreation, datesUpdate]);
+    }, [globalFilter, selectedStatus, selectedModels, datesCreation, datesUpdate]);
+
+    // Revenir à la 1re page quand un filtre change (sinon on peut rester sur une page vide)
+    const isFirstRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        setFirst(0);
+        sessionStorage.setItem("paginationStateListeParc", JSON.stringify({ first: 0, rows }));
+    }, [globalFilter, selectedStatus, selectedModels, datesCreation, datesUpdate]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -92,6 +111,13 @@ export default function AllParcTpeList() {
                     label: item.statut,
                 }))
                 setStatuts(statutsOptions)
+
+                const models = await stockData.getAllModels()
+                const modelsOptions = models.map((item) => ({
+                    value: item.id_model,
+                    label: item.nom_model,
+                }))
+                setModelsOptions(modelsOptions)
 
             } catch (error) {
                 console.log('Error fetching data ', error)
@@ -111,6 +137,7 @@ export default function AllParcTpeList() {
     const handleClearFilters = () => {
         setGlobalFilter("");
         setSelectedStatus([]);
+        setSelectedModels([]);
         setDatesCreation(null);
         setDatesUpdate(null);
         sessionStorage.removeItem(FILTERS_KEY);
@@ -144,6 +171,15 @@ export default function AllParcTpeList() {
                         </button>
                     </Link>
                 </span>
+            </div>
+        )
+    }
+
+    const modelTemplate = (tpe) => {
+        const nomModel = tpe.model_piece ? tpe.model_piece.nom_model : "N/A";
+        return (
+            <div>
+                <span className="font-bold">{nomModel}</span>
             </div>
         )
     }
@@ -193,7 +229,7 @@ export default function AllParcTpeList() {
     const dateModificationTemplate = (tpe) => {
         return (
             <div className="">
-                <span className="font-medium">{formatDate(tpe.last_modified_at)}</span>
+                <span className="font-medium">{formatDate(tpe.last_modified_at || tpe.created_at)}</span>
             </div>
         )
     }
@@ -278,14 +314,29 @@ export default function AllParcTpeList() {
         }
     };
 
+    // Vrai si `value` est dans [range[0] 00:00:00 ; range[1] 23:59:59.999].
+    // Si une seule date est choisie (range[1] null), on filtre sur ce jour-là.
+    const isInDateRange = (value, range) => {
+        if (!range || !range[0]) return true;   // pas de filtre
+        if (!value) return false;               // filtre actif mais pas de date sur la ligne
+        const date = new Date(value);
+        const start = new Date(range[0]);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(range[1] || range[0]);
+        end.setHours(23, 59, 59, 999);
+        return date >= start && date <= end;
+    };
+
     const filteredTpe = parcListe.filter((item) => {
+        const matchesModels = selectedModels.length > 0 ? selectedModels.includes(item.model_id) : true;
         const matchesStatus = selectedStatus.length > 0 ? selectedStatus.includes(item.statut_id) : true;
-        // const matchesDatesDecom = datesDecom ? (datesDecom[0] <= dateDecom && nextDayDecom >= dateDecom) : true;
-        // const matchesDatesReception = datesReception ? (datesReception[0] <= dateReception && nextDayReception >= dateReception) : true;
+        const matchesDatesCreation = isInDateRange(item.created_at, datesCreation);
+        // Pas encore de modification → on considère la date de création comme dernière mise à jour
+        const matchesDatesUpdate = isInDateRange(item.last_modified_at || item.created_at, datesUpdate);
         const matchesGlobalFilter = globalFilter
             ? JSON.stringify(item).toLowerCase().includes(globalFilter.toLowerCase())
             : true;
-        return matchesStatus && matchesGlobalFilter;
+        return matchesModels && matchesStatus && matchesDatesCreation && matchesDatesUpdate && matchesGlobalFilter;
     })
 
     const total = filteredTpe.length
@@ -319,6 +370,16 @@ export default function AllParcTpeList() {
                             optionLabel="label"
                             maxSelectedLabels={2}
                             placeholder="Filtrer par statut"
+                            className=""
+                        />
+                        <MultiSelect
+                            value={selectedModels}
+                            onChange={(e) => setSelectedModels(e.value)}
+                            options={modelsOptions}
+                            display="chip"
+                            optionLabel="label"
+                            maxSelectedLabels={2}
+                            placeholder="Filtrer par modèle"
                             className=""
                         />
                     </div>
@@ -398,6 +459,7 @@ export default function AllParcTpeList() {
 
                         <Column field="id" header="ID" sortable></Column>
                         <Column field="serial_number" header="S/N" body={snTemplate} sortable></Column>
+                        <Column field="model_id" header="Modèle" body={modelTemplate} sortable></Column>
                         <Column field="statut_id" header="Statut" body={statutTemplate} sortable></Column>
                         <Column field="last_modified_at" header="Dernière Modification" body={dateModificationTemplate} sortable></Column>
                         <Column field="created_at" header="Date Création" body={dateCreationTemplate} sortable></Column>

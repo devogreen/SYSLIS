@@ -1,4 +1,6 @@
 import { SidebarProvider, useSidebar } from "../../context/SidebarContext";
+// @ts-ignore
+import { NotificationsProvider } from "../../context/NotificationsContext";
 import { Outlet } from "react-router";
 import AppHeader from "./AppHeader";
 import Backdrop from "./Backdrop";
@@ -29,7 +31,10 @@ const LayoutContent: React.FC = () => {
 const AppLayout: React.FC = () => {
   return (
     <SidebarProvider>
-      <LayoutContent />
+      {/* Actions en attente : partagées entre la barre latérale et la cloche du header */}
+      <NotificationsProvider>
+        <LayoutContent />
+      </NotificationsProvider>
     </SidebarProvider>
   );
 };

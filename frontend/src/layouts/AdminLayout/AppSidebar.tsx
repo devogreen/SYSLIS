@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 // @ts-ignore
 import { useAuth } from "../../context/AuthContext"
 // @ts-ignore
 import LoadingPage from "../../components/common/LoadingPage"
+// @ts-ignore
+import { useNotifications } from "../../context/NotificationsContext"
 
 import {
   ChevronDownIcon,
@@ -168,6 +170,19 @@ const navItems: NavItem[] = [
 
 const othersItems: NavItem[] = [];
 
+type NotificationDetail = { cle: string; chemin: string; libelle: string; nombre: number };
+
+// Bulle de notification : nombre d'éléments en attente d'une action de l'utilisateur
+const Bulle = ({ nombre, titre, className = "" }: { nombre: number; titre?: string; className?: string }) =>
+  nombre > 0 ? (
+    <span
+      title={titre}
+      className={`inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-error-500 text-white text-[10px] font-semibold leading-none ${className}`}
+    >
+      {nombre > 99 ? "99+" : nombre}
+    </span>
+  ) : null;
+
 const AppSidebar: React.FC = () => {
 
   const { user, loading } = useAuth();
@@ -175,9 +190,23 @@ const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
   const location = useLocation();
 
+  // Compteurs par lien du menu (partagés avec la cloche du header ; rechargés à chaque page,
+  // toutes les 60 s et au retour sur l'onglet)
+  const { parChemin, details } = useNotifications() as {
+    parChemin: Record<string, number>;
+    details: NotificationDetail[];
+  };
+  const nombrePour = (path?: string) => (path ? parChemin[path] || 0 : 0);
+  const titrePour = (paths: (string | undefined)[]) =>
+    details
+      .filter((d) => paths.includes(d.chemin))
+      .map((d) => `${d.libelle} : ${d.nombre}`)
+      .join("\n");
+
+  // Sous-menu ouvert, repéré par le nom de l'entrée (les index changent quand le menu est filtré)
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main" | "others";
-    index: number;
+    name: string;
   } | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>(
     {}
@@ -196,40 +225,38 @@ const AppSidebar: React.FC = () => {
     return user?.roleList?.some((role) => roles.includes(role));
   };
 
-  // @ts-ignore
-  const filterNavItems = (items) =>
-    // @ts-ignore
-    items.map((item) => {
-      // Filter subItems
+  // Une entrée est visible si l'utilisateur a le rôle, OU s'il a des éléments en attente à cet endroit
+  // (ex. propriétaire d'un stock qui doit livrer une demande sans avoir le rôle du menu).
+  const filteredNavItems: NavItem[] = useMemo(() =>
+    navItems.map((item) => {
       const filteredSubItems = item.subItems
         // @ts-ignore
-        ? item.subItems.filter((sub) => hasRoleAccess(sub.roles))
+        ? item.subItems.filter((sub) => hasRoleAccess(sub.roles) || nombrePour(sub.path) > 0)
         : [];
+      const aDesNotifications = filteredSubItems.some((sub) => nombrePour(sub.path) > 0);
 
-      // Include item if:
-      // - It has no roles restriction OR user has access
-      // - It has at least one visible subItem
-      if (hasRoleAccess(item.roles)) {
+      // @ts-ignore
+      if (hasRoleAccess(item.roles) || aDesNotifications) {
         return { ...item, subItems: filteredSubItems };
       }
 
       return null;
-    }).filter(Boolean);
-
-
-  const filteredNavItems = filterNavItems(navItems);
+    }).filter(Boolean) as NavItem[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, parChemin]
+  );
 
   useEffect(() => {
     let submenuMatched = false;
     ["main", "others"].forEach((menuType) => {
       const items = menuType === "main" ? navItems : othersItems;
-      items.forEach((nav, index) => {
+      items.forEach((nav) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
             if (isActive(subItem.path)) {
               setOpenSubmenu({
                 type: menuType as "main" | "others",
-                index,
+                name: nav.name,
               });
               submenuMatched = true;
             }
@@ -243,9 +270,10 @@ const AppSidebar: React.FC = () => {
     }
   }, [location, isActive]);
 
+  // Hauteur du sous-menu ouvert : recalculée aussi quand une entrée apparaît (notification)
   useEffect(() => {
     if (openSubmenu !== null) {
-      const key = `${openSubmenu.type}-${openSubmenu.index}`;
+      const key = `${openSubmenu.type}-${openSubmenu.name}`;
       if (subMenuRefs.current[key]) {
         setSubMenuHeight((prevHeights) => ({
           ...prevHeights,
@@ -253,29 +281,35 @@ const AppSidebar: React.FC = () => {
         }));
       }
     }
-  }, [openSubmenu]);
+  }, [openSubmenu, filteredNavItems]);
 
-  const handleSubmenuToggle = (index: number, menuType: "main" | "others") => {
+  const handleSubmenuToggle = (name: string, menuType: "main" | "others") => {
     setOpenSubmenu((prevOpenSubmenu) => {
       if (
         prevOpenSubmenu &&
         prevOpenSubmenu.type === menuType &&
-        prevOpenSubmenu.index === index
+        prevOpenSubmenu.name === name
       ) {
         return null;
       }
-      return { type: menuType, index };
+      return { type: menuType, name };
     });
   };
 
   const renderMenuItems = (items: NavItem[], menuType: "main" | "others") => (
     <ul className="flex flex-col gap-4">
-      {items.map((nav, index) => (
+      {items.map((nav) => {
+        const estOuvert = openSubmenu?.type === menuType && openSubmenu?.name === nav.name;
+        const chemins = [nav.path, ...(nav.subItems || []).map((sub) => sub.path)];
+        const totalNotifications = chemins.reduce((acc, path) => acc + nombrePour(path), 0);
+        const titreNotifications = titrePour(chemins);
+        const menuDeplie = isExpanded || isHovered || isMobileOpen;
+        return (
         <li key={nav.name}>
           {nav.subItems ? (
             <button
-              onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group ${openSubmenu?.type === menuType && openSubmenu?.index === index
+              onClick={() => handleSubmenuToggle(nav.name, menuType)}
+              className={`menu-item group ${estOuvert
                   ? "menu-item-active"
                   : "menu-item-inactive"
                 } cursor-pointer ${!isExpanded && !isHovered
@@ -284,20 +318,28 @@ const AppSidebar: React.FC = () => {
                 }`}
             >
               <span
-                className={`menu-item-icon-size  ${openSubmenu?.type === menuType && openSubmenu?.index === index
+                className={`relative menu-item-icon-size  ${estOuvert
                     ? "menu-item-icon-active"
                     : "menu-item-icon-inactive"
                   }`}
               >
                 {nav.icon}
+                {!menuDeplie && totalNotifications > 0 && (
+                  <span
+                    title={titreNotifications}
+                    className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-error-500 ring-2 ring-white dark:ring-gray-900"
+                  ></span>
+                )}
               </span>
-              {(isExpanded || isHovered || isMobileOpen) && (
-                <span className="menu-item-text">{nav.name}</span>
+              {menuDeplie && (
+                <span className="menu-item-text text-left">{nav.name}</span>
               )}
-              {(isExpanded || isHovered || isMobileOpen) && (
+              {menuDeplie && (
+                <Bulle nombre={totalNotifications} titre={titreNotifications} className="ml-auto shrink-0" />
+              )}
+              {menuDeplie && (
                 <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${openSubmenu?.type === menuType &&
-                      openSubmenu?.index === index
+                  className={`${totalNotifications > 0 ? "ml-1" : "ml-auto"} w-5 h-5 transition-transform duration-200 ${estOuvert
                       ? "rotate-180 text-brand-500"
                       : ""
                     }`}
@@ -319,22 +361,25 @@ const AppSidebar: React.FC = () => {
                 >
                   {nav.icon}
                 </span>
-                {(isExpanded || isHovered || isMobileOpen) && (
+                {menuDeplie && (
                   <span className="menu-item-text">{nav.name}</span>
+                )}
+                {menuDeplie && (
+                  <Bulle nombre={totalNotifications} titre={titreNotifications} className="ml-auto" />
                 )}
               </Link>
             )
           )}
-          {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
+          {nav.subItems && menuDeplie && (
             <div
               ref={(el) => {
-                subMenuRefs.current[`${menuType}-${index}`] = el;
+                subMenuRefs.current[`${menuType}-${nav.name}`] = el;
               }}
               className="overflow-hidden transition-all duration-300"
               style={{
                 height:
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? `${subMenuHeight[`${menuType}-${index}`]}px`
+                  estOuvert
+                    ? `${subMenuHeight[`${menuType}-${nav.name}`]}px`
                     : "0px",
               }}
             >
@@ -350,6 +395,7 @@ const AppSidebar: React.FC = () => {
                     >
                       {subItem.name}
                       <span className="flex items-center gap-1 ml-auto">
+                        <Bulle nombre={nombrePour(subItem.path)} titre={titrePour([subItem.path])} />
                         {subItem.new && (
                           <span
                             className={`ml-auto ${isActive(subItem.path)
@@ -378,7 +424,8 @@ const AppSidebar: React.FC = () => {
             </div>
           )}
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 

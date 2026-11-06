@@ -21,6 +21,7 @@ const decomRoutes = require("./routes/decomRoutes")
 const filesRoutes = require("./routes/filesRoutes")
 const gestionTpeRoutes = require("./routes/gestionTpeRoutes")
 const rebutRoutes = require("./routes/rebutRoutes")
+const notificationsRoutes = require("./routes/notificationsRoutes")
 
 dotenv.config()
 
@@ -61,6 +62,7 @@ app.use('/api/decom', decomRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/gestion-tpe', gestionTpeRoutes);
 app.use('/api/rebut', rebutRoutes);
+app.use('/api/notifications', notificationsRoutes);
 // app.use('/api/stock', stockRoutes);
 
 
