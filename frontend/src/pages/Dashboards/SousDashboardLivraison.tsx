@@ -9,6 +9,7 @@ import { fr } from 'date-fns/locale';
 
 // @ts-ignore
 import urlBase from '../../backend/const.js'
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 type DateValue = string | Date | Date[];
 
@@ -197,7 +198,10 @@ export default function SousDashboardLivraison() {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold mb-8 text-gray-800">Dashboard Livraisons TPE</h1>
+      <div className="flex items-center gap-3 mb-8">
+        <h1 className="text-3xl font-bold text-gray-800">Dashboard Livraisons TPE</h1>
+        <AideGuideButton />
+      </div>
 
       {/* Date Picker */}
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">

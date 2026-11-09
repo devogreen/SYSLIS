@@ -7,6 +7,7 @@ import { startOfWeek, endOfWeek, format, getWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 // @ts-ignore
 import urlBase from '../../backend/const.js'
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 type DateValue = string | Date | Date[];
 
@@ -138,6 +139,7 @@ export default function SousDashboardRemplacement() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-8 text-gray-800 flex items-center">
         🔄 Dashboard Remplacements
+        <AideGuideButton className="ml-3" />
       </h1>
 
       {/* Date Picker */}

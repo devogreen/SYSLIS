@@ -6,6 +6,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { MultipleCogs } from "../../icons";
 import { all } from "axios";
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 export default function ItemDetails() {
 
@@ -125,6 +126,9 @@ export default function ItemDetails() {
     return (
         <>
             <div>
+                <div className="flex justify-end mb-2">
+                    <AideGuideButton />
+                </div>
                 <div className="border rounded-2xl bg-white">
                     <div>
                         <div className="p-2 space-y-4">

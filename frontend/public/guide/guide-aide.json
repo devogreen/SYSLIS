@@ -1,0 +1,448 @@
+{
+ "version": "v1.45.0",
+ "brouillon": true,
+ "pdf": "/guide/guide-utilisateur-syslis.pdf",
+ "sommaire": 3,
+ "ecrans": [
+  {
+   "route": "/modifier-mot-de-passe",
+   "section": "sec-2-1",
+   "page": 8
+  },
+  {
+   "route": "/user-profil",
+   "section": "sec-2-6",
+   "page": 12
+  },
+  {
+   "route": "/profile",
+   "section": "sec-2-6",
+   "page": 12
+  },
+  {
+   "route": "/",
+   "section": "sec-4-1",
+   "page": 32
+  },
+  {
+   "route": "/sous-dashboard-livraison",
+   "section": "sec-4-2",
+   "page": 32
+  },
+  {
+   "route": "/sous-dashboard-remplacement",
+   "section": "sec-4-2",
+   "page": 32
+  },
+  {
+   "route": "/sous-dashboard-chargeurs",
+   "section": "sec-4-2",
+   "page": 32
+  },
+  {
+   "route": "/sous-dashboard-qrcode",
+   "section": "sec-4-3",
+   "page": 33
+  },
+  {
+   "route": "/sous-dashboard-mvt-stock",
+   "section": "sec-4-4",
+   "page": 33
+  },
+  {
+   "route": "/dashboard-parc-tpe",
+   "section": "sec-4-5",
+   "page": 34
+  },
+  {
+   "route": "/decom-dashboard",
+   "section": "sec-4-6",
+   "page": 35
+  },
+  {
+   "route": "/form-livraison",
+   "section": "sec-5-1",
+   "page": 36
+  },
+  {
+   "route": "/modifier-livraison/:id",
+   "section": "sec-5-1",
+   "page": 36
+  },
+  {
+   "route": "/toutes-les-livraisons",
+   "section": "sec-5-2",
+   "page": 37
+  },
+  {
+   "route": "/formulaire/:id",
+   "section": "sec-5-2",
+   "page": 37
+  },
+  {
+   "route": "/nouveau-remplacement",
+   "section": "sec-5-3",
+   "page": 38
+  },
+  {
+   "route": "/tous-les-remplacements",
+   "section": "sec-5-3",
+   "page": 38
+  },
+  {
+   "route": "/remplacement-details/:id",
+   "section": "sec-5-3",
+   "page": 38
+  },
+  {
+   "route": "/modifier-remplacement/:id",
+   "section": "sec-5-3",
+   "page": 38
+  },
+  {
+   "route": "/voir-items",
+   "section": "sec-6-1",
+   "page": 39
+  },
+  {
+   "route": "/voir-piece/:id",
+   "section": "sec-6-1",
+   "page": 39
+  },
+  {
+   "route": "/ajouter-piece",
+   "section": "sec-6-1",
+   "page": 39
+  },
+  {
+   "route": "/ajouter-terminal",
+   "section": "sec-6-1",
+   "page": 39
+  },
+  {
+   "route": "/modifier-piece/:id",
+   "section": "sec-6-1",
+   "page": 39
+  },
+  {
+   "route": "/ajouter-stock",
+   "section": "sec-6-2",
+   "page": 39
+  },
+  {
+   "route": "/creer-stock",
+   "section": "sec-6-2",
+   "page": 39
+  },
+  {
+   "route": "/voir-stocks",
+   "section": "sec-6-2",
+   "page": 39
+  },
+  {
+   "route": "/details-stock/:id",
+   "section": "sec-6-2",
+   "page": 39
+  },
+  {
+   "route": "/nouvelle-demande",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/nouvelle-demande-terminal",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/toutes-les-demandes",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/demande-details/:id",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/modifier-demande/:id",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/valider-demande/:id",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/livraison-demande/:id",
+   "section": "sec-6-3",
+   "page": 40
+  },
+  {
+   "route": "/entree-sortie-stock",
+   "section": "sec-6-4",
+   "page": 43
+  },
+  {
+   "route": "/details-mouvement/:id",
+   "section": "sec-6-4",
+   "page": 43
+  },
+  {
+   "route": "/demande-qr",
+   "section": "sec-7-1",
+   "page": 44
+  },
+  {
+   "route": "/modifier-demande-qr/:id",
+   "section": "sec-7-1",
+   "page": 44
+  },
+  {
+   "route": "/toutes-les-demandes-qr",
+   "section": "sec-7-2",
+   "page": 44
+  },
+  {
+   "route": "/demande-qr-details/:id",
+   "section": "sec-7-2",
+   "page": 44
+  },
+  {
+   "route": "/tous-les-marchands-qr",
+   "section": "sec-7-4",
+   "page": 45
+  },
+  {
+   "route": "/nouveau-decommissionnement",
+   "section": "sec-8-1",
+   "page": 46
+  },
+  {
+   "route": "/modifier-decom/:id",
+   "section": "sec-8-1",
+   "page": 46
+  },
+  {
+   "route": "/tous-les-decommissionnements",
+   "section": "sec-8-2",
+   "page": 46
+  },
+  {
+   "route": "/decom-details/:id",
+   "section": "sec-8-2",
+   "page": 46
+  },
+  {
+   "route": "/validation-decom/:id",
+   "section": "sec-8-2",
+   "page": 46
+  },
+  {
+   "route": "/validation-transmission-decom/:id",
+   "section": "sec-8-2",
+   "page": 46
+  },
+  {
+   "route": "/verification-decom/:id",
+   "section": "sec-8-3",
+   "page": 47
+  },
+  {
+   "route": "/reg-verification-decom/:id",
+   "section": "sec-8-3",
+   "page": 47
+  },
+  {
+   "route": "/livraison-param-decom",
+   "section": "sec-8-5",
+   "page": 48
+  },
+  {
+   "route": "/livraisons-param-decom",
+   "section": "sec-8-5",
+   "page": 48
+  },
+  {
+   "route": "/livraison-param-decom-details/:id",
+   "section": "sec-8-5",
+   "page": 48
+  },
+  {
+   "route": "/reception-livraison-param-decom/:id",
+   "section": "sec-8-5",
+   "page": 48
+  },
+  {
+   "route": "/nouveau-rebut",
+   "section": "sec-9-1",
+   "page": 49
+  },
+  {
+   "route": "/toutes-les-demandes-rebut",
+   "section": "sec-9-1",
+   "page": 49
+  },
+  {
+   "route": "/demande-rebut-details/:id",
+   "section": "sec-9-1",
+   "page": 49
+  },
+  {
+   "route": "/modifier-rebut/:id",
+   "section": "sec-9-1",
+   "page": 49
+  },
+  {
+   "route": "/valider-rebut/:id",
+   "section": "sec-9-1",
+   "page": 49
+  },
+  {
+   "route": "/tpe-rebuts",
+   "section": "sec-9-2",
+   "page": 49
+  },
+  {
+   "route": "/tpe-rebut-details/:id",
+   "section": "sec-9-2",
+   "page": 49
+  },
+  {
+   "route": "/pieces-rebuts",
+   "section": "sec-9-4",
+   "page": 50
+  },
+  {
+   "route": "/mise-en-reparation",
+   "section": "sec-10-1",
+   "page": 51
+  },
+  {
+   "route": "/tpe-a-reparer",
+   "section": "sec-10-1",
+   "page": 51
+  },
+  {
+   "route": "/reparation-tpe",
+   "section": "sec-10-1",
+   "page": 51
+  },
+  {
+   "route": "/reparations-tpe",
+   "section": "sec-10-2",
+   "page": 51
+  },
+  {
+   "route": "/reparation-tpe-details/:id",
+   "section": "sec-10-2",
+   "page": 51
+  },
+  {
+   "route": "/validation-reparation-tpe/:id",
+   "section": "sec-10-2",
+   "page": 51
+  },
+  {
+   "route": "/update-reparation-tpe/:id",
+   "section": "sec-10-2",
+   "page": 51
+  },
+  {
+   "route": "/toutes-livraisons-reparation",
+   "section": "sec-10-3",
+   "page": 51
+  },
+  {
+   "route": "/livraison-reparation-details/:id",
+   "section": "sec-10-3",
+   "page": 51
+  },
+  {
+   "route": "/reception-livraison-reparation/:id",
+   "section": "sec-10-3",
+   "page": 51
+  },
+  {
+   "route": "/parc-tpe",
+   "section": "sec-11-1",
+   "page": 53
+  },
+  {
+   "route": "/historique-tpe/:id",
+   "section": "sec-11-2",
+   "page": 53
+  },
+  {
+   "route": "/manipulation-tpe",
+   "section": "sec-11-3",
+   "page": 54
+  },
+  {
+   "route": "/regularisation-livraison",
+   "section": "sec-12-2",
+   "page": 55
+  },
+  {
+   "route": "/regularisation-demande",
+   "section": "sec-12-2",
+   "page": 55
+  },
+  {
+   "route": "/regularisation-demande-qr",
+   "section": "sec-12-2",
+   "page": 55
+  },
+  {
+   "route": "/regularisation-remplacement",
+   "section": "sec-12-2",
+   "page": 55
+  },
+  {
+   "route": "/regularisation-decom",
+   "section": "sec-12-2",
+   "page": 55
+  },
+  {
+   "route": "/créer-utilisateur",
+   "section": "sec-13-1",
+   "page": 56
+  },
+  {
+   "route": "/tous-les-utilisateurs",
+   "section": "sec-13-1",
+   "page": 56
+  },
+  {
+   "route": "/modifier-profil/:id",
+   "section": "sec-13-1",
+   "page": 56
+  },
+  {
+   "route": "/types-livraison",
+   "section": "sec-13-2",
+   "page": 56
+  },
+  {
+   "route": "/ajouter-type-livraison",
+   "section": "sec-13-2",
+   "page": 56
+  },
+  {
+   "route": "/modifier-type-livraison/:id",
+   "section": "sec-13-2",
+   "page": 56
+  },
+  {
+   "route": "/modification-admin-demande/:id",
+   "section": "sec-13-3",
+   "page": 56
+  },
+  {
+   "route": "/liaison-tpe-pieces",
+   "section": "sec-9-5",
+   "page": 50
+  }
+ ]
+}

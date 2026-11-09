@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
   Tooltip
 } from 'recharts';
+import AideGuideButton from "../../components/guide/AideGuideButton";
 // @ts-ignore
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 // Utilisation de require pour éviter les problèmes d'import au runtime si le module n'est pas résolu.
@@ -432,6 +433,7 @@ export default function SousDashboardQRcode() {
           <path d="M12 2L2 7v10c0 5.55 3.84 9.74 9 11 5.16-1.26 9-5.45 9-11V7l-10-5z" />
         </svg>
         Dashboard QR Codes
+        <AideGuideButton className="ml-3" />
       </h1>
 
       <div className="bg-white p-6 rounded-xl shadow-lg mb-8">

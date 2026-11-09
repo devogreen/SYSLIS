@@ -16,6 +16,7 @@ import {
   CARTE, GRANULARITES, LABEL,
   borner, chartTheme, construireCouleurs, periodeParDefaut, periodeVersDates, toISO,
 } from "./parcTpeUtils";
+import AideGuideButton from "../../guide/AideGuideButton";
 
 // Instance du service d'API
 const statistiques = new Statistiques();
@@ -188,7 +189,10 @@ export default function StatsParcTpe() {
     <div className="flex flex-col gap-5">
       {/* En-tête */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">Statistiques du parc TPE</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold text-gray-800 dark:text-white/90">Statistiques du parc TPE</h1>
+          <AideGuideButton />
+        </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           État actuel du parc, passages par les statuts sur une période, parcours de statuts, temps passé dans chaque statut et chronologie d'un TPE.
         </p>

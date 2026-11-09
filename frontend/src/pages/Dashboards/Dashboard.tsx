@@ -15,6 +15,7 @@ import { Stock } from '../../backend/stock/Stock.js'
 
 // @ts-ignore
 import urlBase from '../../backend/const.js'
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 
 
@@ -169,7 +170,10 @@ export default function Dashboard() {
     <div className="space-y-8 p-6">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl">
-        <h1 className="text-3xl font-bold text-gray-800">📊 DASHBOARD GÉNÉRAL</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-gray-800">📊 DASHBOARD GÉNÉRAL</h1>
+          <AideGuideButton />
+        </div>
         <div className="text-right">
           <div className="text-2xl font-black text-blue-600">
             Semaine {currentWeek}

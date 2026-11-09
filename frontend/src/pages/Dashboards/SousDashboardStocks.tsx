@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import DatePicker from '../../components/form/date-picker';
 // @ts-ignore
 import urlBase from '../../backend/const.js'
+import AideGuideButton from "../../components/guide/AideGuideButton";
 type DateValue = string | Date | Date[];
 
 interface Item {
@@ -204,6 +205,7 @@ export default function SousDashboardStocks() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4l-8-4m-16 0l8 4m-8-4l8-4" />
         </svg>
         Dashboard Stocks
+        <AideGuideButton />
       </h1>
 
       {/* Date Filter */}

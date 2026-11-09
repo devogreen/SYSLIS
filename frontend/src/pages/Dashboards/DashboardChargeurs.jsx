@@ -9,6 +9,7 @@ import { Button } from "primereact/button";
 import { Tag } from "primereact/tag";
 import { Message } from "primereact/message";
 import { Statistiques } from "../../backend/statistiques/Statistiques";
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 // Instance du service d'API
 const statistiques = new Statistiques();
@@ -201,7 +202,10 @@ export default function ChargerWithdrawalsDashboard() {
         {/* Header */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", justifyContent: "space-between" }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>Sorties de chargeurs</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em" }}>Sorties de chargeurs</h1>
+              <AideGuideButton />
+            </div>
             <p style={{ margin: "6px 0 0", color: COLORS.muted, fontSize: 14 }}>
               Chargeurs sortis par canal — livraison (standard / décom) et mouvement de stock.
             </p>

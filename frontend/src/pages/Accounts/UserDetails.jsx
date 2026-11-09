@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Users } from "../../backend/users/Users";
 import { Tooltip } from 'primereact/tooltip';
 import { ProgressSpinner } from 'primereact/progressspinner';
+import AideGuideButton from "../../components/guide/AideGuideButton";
 
 export default function UserDetails() {
 
@@ -56,6 +57,9 @@ export default function UserDetails() {
     return (
         <>
             <div>
+                <div className="flex justify-end mb-2">
+                    <AideGuideButton />
+                </div>
                 <div className="border rounded-2xl bg-white">
                     {loading ? (
                         <>
