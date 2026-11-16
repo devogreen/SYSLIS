@@ -4,7 +4,6 @@ const prisma = require('../../prisma/client');
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
-const { envoyerEmail } = require("../../config/emailConfig")
 const cloudinary = require("../../config/clouddinaryConifg");
 const crypto = require("crypto")
 const { ROLE_SUPER_ADMIN } = require("../../middlewares/authMiddleware")
@@ -396,7 +395,13 @@ const forgotPassword = async (req, res) => {
             <p>Si vous n'avez pas fait cette demande, ignorez cet email.</p>
         `;
 
-        await envoyerEmail(users.email, "Réinitialisation de votre mot de passe", html);
+        // Même boîte d'envoi que les autres mails de l'application (NODEMAILER_*). L'ancienne configuration
+        // SMTP_* (Gmail) n'est plus utilisée. Un échec d'envoi ne change pas la réponse (pas d'énumération).
+        try {
+            await sendMail({ to: users.email, subject: "SYSLIS - Réinitialisation de votre mot de passe", html });
+        } catch (mailError) {
+            console.error("Erreur lors de l'envoi du mail de réinitialisation :", mailError?.message || mailError);
+        }
 
         res.status(200).json(reponseGenerique);
     } catch (error) {
@@ -679,4 +684,4 @@ module.exports = {
     getAllUserServices,
     getOneUser,
     getUserServices,
-}
+}
