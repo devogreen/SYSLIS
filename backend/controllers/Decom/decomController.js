@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 
 const puppeteer = require("puppeteer");
 const fs = require("fs");
@@ -186,8 +187,7 @@ const faireDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const receveurs = rolesReception.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.nouveauDecom.id}`;
 
@@ -253,7 +253,7 @@ const faireDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors du décommissionnement :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -283,7 +283,7 @@ const getAllDecoms = async (req, res) => {
         res.status(200).json(decoms);
     } catch (error) {
         console.error("Erreur lors de la récupération des décoms :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des décoms", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des décoms" });
     }
 }
 
@@ -325,7 +325,7 @@ const getOneDecom = async (req, res) => {
         res.status(200).json(decom);
     } catch (error) {
         console.error("Erreur lors de la récupération du décommissionnement : ", error)
-        res.status(500).json({ message: "Erreur lors de la récupération du décommissionnement : ", error });
+        res.status(500).json({ message: "Erreur lors de la récupération du décommissionnement : " });
     }
 }
 
@@ -459,8 +459,7 @@ const modifyDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const receveurs = rolesReception.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${updatedDecom.decom.id}`;
 
@@ -505,7 +504,7 @@ const modifyDecom = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la modification du décommissionnement :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -612,7 +611,7 @@ const cancelDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'annulation du décommissionnement :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -727,8 +726,7 @@ const receptionDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const decoms = rolesDecom.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.id}`;
 
@@ -736,7 +734,7 @@ const receptionDecom = async (req, res) => {
             // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
             const html = `
                 <p>Bonjour,</p>
-                <p>Les TPE du lot ${id} ont été réceptionnés par ${utilisateur.fullname}.</p>
+                <p>Les TPE du lot ${id} ont été réceptionnés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de TPE :</strong> ${detailsListe.length}</li>
                 </ul>
@@ -774,7 +772,7 @@ const receptionDecom = async (req, res) => {
 
     } catch (error) {
         console.error(`Erreur lors de la réception du lot de décommissionnement :`, error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -901,15 +899,14 @@ const transmisDecomMaintenance = async (req, res) => {
             const maintenance = rolesMaintenance.map(us => us.users.email)
             const superviseurs = rolesSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.id}`;
 
             const subject = `SYSLIS - TRANSMISSION TPE DECOM A LA MAINTENANCE`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Les TPE validés du lot ${id} ont été transmis à la maintenance par ${utilisateur.fullname}.</p>
+                <p>Les TPE validés du lot ${id} ont été transmis à la maintenance par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de TPE :</strong> ${listeValidee.length}</li>
                 </ul>
@@ -947,7 +944,7 @@ const transmisDecomMaintenance = async (req, res) => {
 
     } catch (error) {
         console.error(`Erreur lors de la transmission du lot de décommissionnement à la maintenance :`, error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1186,15 +1183,14 @@ const validationListeDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const decoms = rolesDecom.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.id}`;
 
             const subject = `SYSLIS - VALIDATION TPE DECOM`;
             const html = `
                 <p>Bonjour,</p>
-                <p>${detailsValidee.length} sur ${details.length} des TPE du lot ${id} ont été validés par ${utilisateur.fullname}.</p>
+                <p>${detailsValidee.length} sur ${details.length} des TPE du lot ${id} ont été validés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <br>
                 <p>Commentaire : ${commentaire_mail}<p>
                 <br>
@@ -1228,7 +1224,7 @@ const validationListeDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la validation du lot de décommissionnements :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1442,7 +1438,7 @@ const validationTransmissionDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const decoms = rolesDecom.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const totalTransmis = listeTransmise.length || (detailsValidee.length + detailsNonValidee.length)
 
             const url = GENERAL_URL
@@ -1451,7 +1447,7 @@ const validationTransmissionDecom = async (req, res) => {
             const subject = `SYSLIS - VALIDATION MAINTENANCE TPE DECOM`;
             const html = `
                 <p>Bonjour,</p>
-                <p>${detailsValidee.length} sur ${totalTransmis} des TPE transmis du lot ${id} ont été validés par la maintenance (${utilisateur.fullname}).</p>
+                <p>${detailsValidee.length} sur ${totalTransmis} des TPE transmis du lot ${id} ont été validés par la maintenance (${echapperHtml(utilisateur.fullname)}).</p>
                 <p>Le décommissionnement passe en vérification.</p>
                 <br>
                 <p>Commentaire : ${commentaire_mail}<p>
@@ -1486,7 +1482,7 @@ const validationTransmissionDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la validation maintenance du décommissionnement :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1583,8 +1579,7 @@ const returnDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const demandeurs = rolesDecom.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.id}`;
 
@@ -1628,7 +1623,7 @@ const returnDecom = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la réception :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1663,7 +1658,7 @@ const getSnDecom = async (req, res) => {
         res.status(200).json(listeSn);
     } catch (error) {
         console.error("Erreur lors de la récupération des sn décom :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des sn décom", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des sn décom" });
     }
 }
 
@@ -1928,8 +1923,7 @@ const verifyDecom = async (req, res) => {
                 const superviseurs = rolesSupervision.map(us => us.users.email)
                 const demandeurs = rolesDecom.map(us => us.users.email)
 
-                const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+                const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
                 const url = GENERAL_URL
                 const link = `${url}/decom-details/${decom.id}`;
 
@@ -1975,7 +1969,7 @@ const verifyDecom = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la vérification :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2130,8 +2124,7 @@ const regVerifyDecom = async (req, res) => {
                 const superviseurs = rolesSupervision.map(us => us.users.email)
                 const demandeurs = rolesDecom.map(us => us.users.email)
 
-                const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+                const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
                 const url = GENERAL_URL
                 const link = `${url}/decom-details/${decom.id}`;
 
@@ -2177,7 +2170,7 @@ const regVerifyDecom = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la vérification :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2305,12 +2298,12 @@ const confirmDiagnosticDecom = async (req, res) => {
 
         // Comptage par statut pour le mail
         const compte = (statut) => listeSn.filter((sn) => sn.statut == statut).length
-        const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+        const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
         const link = `${GENERAL_URL}/decom-details/${decom.id}`;
         const subject = `SYSLIS - DIAGNOSTIC DECOM CONFIRME`;
         const html = `
             <p>Bonjour,</p>
-            <p>Le diagnostic du décommissionnement ${decom.id} a été confirmé par ${utilisateur.fullname}. Le décommissionnement est prêt à être clôturé.</p>
+            <p>Le diagnostic du décommissionnement ${decom.id} a été confirmé par ${echapperHtml(utilisateur.fullname)}. Le décommissionnement est prêt à être clôturé.</p>
             <ul>
             <li><strong>Nombre de TPE :</strong> ${listeSn.length}</li>
             <li><strong>A réparer :</strong> ${compte('a_reparer')}</li>
@@ -2339,7 +2332,7 @@ const confirmDiagnosticDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la confirmation du diagnostic :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2411,12 +2404,12 @@ const cancelDiagnosticDecom = async (req, res) => {
             return { annulationForm, annulation }
         })
 
-        const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+        const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
         const link = `${GENERAL_URL}/decom-details/${decom.id}`;
         const subject = `SYSLIS - DIAGNOSTIC DECOM ANNULE`;
         const html = `
             <p>Bonjour,</p>
-            <p>Le diagnostic du décommissionnement ${decom.id} a été annulé par ${utilisateur.fullname}. Une nouvelle vérification technique va être effectuée : la clôture n'est plus possible pour le moment.</p>
+            <p>Le diagnostic du décommissionnement ${decom.id} a été annulé par ${echapperHtml(utilisateur.fullname)}. Une nouvelle vérification technique va être effectuée : la clôture n'est plus possible pour le moment.</p>
             <br>
             <p>Motif : ${commentaire_mail}<p>
             <br>
@@ -2439,7 +2432,7 @@ const cancelDiagnosticDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'annulation du diagnostic :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2780,8 +2773,7 @@ const clotureDecom = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const demandeurs = rolesDecom.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/decom-details/${decom.id}`;
 
@@ -3024,7 +3016,7 @@ const extractDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -3348,7 +3340,7 @@ const getAllTpeRepare = async (req, res) => {
         res.status(200).json(tpe);
     } catch (error) {
         console.error("Erreur lors de la récupération des TPE à réparer :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des TPE à réparer", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE à réparer" });
     }
 }
 
@@ -3431,7 +3423,7 @@ const getAllTpeRepare = async (req, res) => {
 //         });
 //     } catch (error) {
 //         console.error("Erreur lors de l'opération :", error);
-//         res.status(500).json({ message: "Erreur interne", error });
+//         res.status(500).json({ message: "Erreur interne" });
 //     }
 // }
 
@@ -3589,7 +3581,7 @@ const extractSnReparation = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -3616,7 +3608,7 @@ const getAllLivraisonReparation = async (req, res) => {
         res.status(200).json(livraisons);
     } catch (error) {
         console.error("Erreur lors de la récupération des livraisons de TPE réparés :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de TPE réparés", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de TPE réparés" });
     }
 }
 
@@ -3647,7 +3639,7 @@ const getOneLivraisonReparation = async (req, res) => {
         res.status(200).json(livraison);
     } catch (error) {
         console.error("Erreur lors de la récupération de la livraison : ", error)
-        res.status(500).json({ message: "Erreur lors de la récupération de la livraison : ", error });
+        res.status(500).json({ message: "Erreur lors de la récupération de la livraison : " });
     }
 }
 
@@ -3806,8 +3798,7 @@ const receptionLivraisonReparation = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const livreurs = rolesLivraison.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/livraison-tpe-repare/${livraison.id}`;
 
@@ -3815,7 +3806,7 @@ const receptionLivraisonReparation = async (req, res) => {
             // FIX #1: was ${quantite} (undefined in this scope → ReferenceError).
             const html = `
                 <p>Bonjour,</p>
-                <p>La livraison ${id} des TPEs réparés a été réceptionné par ${utilisateur.fullname}.</p>
+                <p>La livraison ${id} des TPEs réparés a été réceptionné par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de TPE :</strong> ${detailsValidee.length}</li>
                 </ul>
@@ -3852,7 +3843,7 @@ const receptionLivraisonReparation = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la validation de la demande de mise au rebut :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -4379,7 +4370,7 @@ const extractMiseEnReparation = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -4627,7 +4618,7 @@ const extractLiaisonTpePiecesData = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -5094,7 +5085,7 @@ const getPieceDefectueuseTpe = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces défectueuses : ", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des pièces défectueuses : ", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des pièces défectueuses : " });
     }
 }
 
@@ -5179,7 +5170,7 @@ const getPieceDefectueuseListeTpe = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la récuparation des pièces :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 

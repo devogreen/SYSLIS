@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 
 const prisma = require('../../prisma/client');
 const sendMail = require("../../utils/emailSender");
@@ -103,12 +104,12 @@ const lienLivraison = (id) => `${GENERAL_URL}/livraison-param-decom-details/${id
 
 const mailHtml = (paragraphes, nombre, commentaire, lien) => `
     <p>Bonjour,</p>
-    ${paragraphes.map((p) => `<p>${p}</p>`).join('')}
+    ${paragraphes.map((p) => `<p>${echapperHtml(p)}</p>`).join('')}
     <ul>
     <li><strong>Nombre de TPE :</strong> ${nombre}</li>
     </ul>
     <br>
-    <p>Commentaire : ${commentaire ? commentaire : '(sans commentaire)'}<p>
+    <p>Commentaire : ${echapperHtml(commentaire ? commentaire : '(sans commentaire)')}<p>
     <br>
     <p>Retrouvez la livraison à ce lien :
     <span>
@@ -181,7 +182,7 @@ const getTpeParamMaintenance = async (req, res) => {
         res.status(200).json(resultat)
     } catch (error) {
         console.error("Erreur lors de la récupération des TPE en param maintenance :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des TPE en param maintenance", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE en param maintenance" });
     }
 }
 
@@ -318,7 +319,7 @@ const livrerParamDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la création de la livraison param :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -340,7 +341,7 @@ const getAllLivraisonParamDecom = async (req, res) => {
         res.status(200).json(livraisons);
     } catch (error) {
         console.error("Erreur lors de la récupération des livraisons param :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des livraisons param", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons param" });
     }
 }
 
@@ -370,7 +371,7 @@ const getOneLivraisonParamDecom = async (req, res) => {
         res.status(200).json(livraison);
     } catch (error) {
         console.error("Erreur lors de la récupération de la livraison param : ", error)
-        res.status(500).json({ message: "Erreur lors de la récupération de la livraison param", error });
+        res.status(500).json({ message: "Erreur lors de la récupération de la livraison param" });
     }
 }
 
@@ -493,7 +494,7 @@ const receptionLivraisonParamDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la réception de la livraison param :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -620,7 +621,7 @@ const cloturerLivraisonParamDecom = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la clôture de la livraison param :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 

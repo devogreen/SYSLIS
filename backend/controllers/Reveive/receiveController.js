@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 const prisma = require('../../prisma/client');
 const cloudinary = require("../../config/clouddinaryConifg");
 const sendMail = require("../../utils/emailSender");
@@ -205,14 +206,13 @@ const createValidation = async (req, res) => {
 
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const subject = `SYSLIS - RECEPTION LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${livraison.id_livraison} a été réceptionnée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -437,14 +437,13 @@ const returnDelivery = async (req, res) => {
 
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
-      const commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire_return ? commentaire_return : '(sans commentaire)');
       const subject = `SYSLIS - RETOUR DE LIVRAISON (${livraisonTypeName})`;
       const html = `
         <p>Bonjour,</p>
         <p>La livraison ${livraison.id_livraison} a été retournée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -791,10 +790,10 @@ const returnDemandeDelivery = async (req, res) => {
       <p>Bonjour,</p>
       <p>La livraison ${livraison.id_livraison} a été retournée.</p>
       <ul>
-        <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+        <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
         <li><strong>Nombre de produits:</strong> ${produits.length}</li>
       </ul>
-      <p>Pour raison : <strong>${commentaire_return}</strong></p>
+      <p>Pour raison : <strong>${echapperHtml(commentaire_return)}</strong></p>
       </br>
       <p>Retrouvez la livraison à ce lien : 
         <span>

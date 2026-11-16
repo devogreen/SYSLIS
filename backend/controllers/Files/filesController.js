@@ -57,7 +57,7 @@ const getAllFormFiles = async (req, res) => {
     } catch (error) {
         console.log("Erreur serveur: ", error)
         console.error("Erreur :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des fichiers", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des fichiers" });
     }
 }
 

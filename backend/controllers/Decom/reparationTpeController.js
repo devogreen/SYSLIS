@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 
 const prisma = require('../../prisma/client');
 const sendMail = require("../../utils/emailSender");
@@ -87,12 +88,12 @@ const snDe = (item) => String(item?.sn ?? item?.serial_number ?? item?.terminalS
 
 const mailHtml = (paragraphes, nombre, commentaire, lien) => `
     <p>Bonjour,</p>
-    ${paragraphes.map((p) => `<p>${p}</p>`).join('')}
+    ${paragraphes.map((p) => `<p>${echapperHtml(p)}</p>`).join('')}
     <ul>
     <li><strong>Nombre de TPE :</strong> ${nombre}</li>
     </ul>
     <br>
-    <p>Commentaire : ${commentaire ? commentaire : '(sans commentaire)'}<p>
+    <p>Commentaire : ${echapperHtml(commentaire ? commentaire : '(sans commentaire)')}<p>
     <br>
     <p>Retrouvez le détail à ce lien :
     <span>
@@ -361,7 +362,7 @@ const reparerListeTpe = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la création du lot de réparation :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -389,7 +390,7 @@ const getAllReparationTpe = async (req, res) => {
         res.status(200).json(lots.map((lot) => ({ ...lot, livraison: livraisonParLot.get(lot.id) || null })));
     } catch (error) {
         console.error("Erreur lors de la récupération des lots de réparation :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des lots de réparation", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des lots de réparation" });
     }
 }
 
@@ -424,7 +425,7 @@ const getOneReparationTpe = async (req, res) => {
         res.status(200).json({ ...lot, livraison });
     } catch (error) {
         console.error("Erreur lors de la récupération du lot de réparation :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération du lot de réparation", error });
+        res.status(500).json({ message: "Erreur lors de la récupération du lot de réparation" });
     }
 }
 
@@ -601,7 +602,7 @@ const validerReparationTpe = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la validation du lot de réparation :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -697,7 +698,7 @@ const livrerReparationTpe = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la livraison du lot de réparation :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 

@@ -179,7 +179,7 @@ const getRepartitionParcTpe = async (req, res) => {
         });
     } catch (error) {
         console.error('Erreur lors de la récupération de la répartition du parc TPE :', error);
-        res.status(500).json({ message: 'Erreur lors de la récupération de la répartition du parc TPE', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la récupération de la répartition du parc TPE' });
     }
 };
 
@@ -237,7 +237,7 @@ const getFluxParcTpe = async (req, res) => {
         });
     } catch (error) {
         console.error('Erreur lors de la récupération des flux du parc TPE :', error);
-        res.status(500).json({ message: 'Erreur lors de la récupération des flux du parc TPE', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la récupération des flux du parc TPE' });
     }
 };
 
@@ -336,7 +336,7 @@ const getTpesParStatut = async (req, res) => {
         res.status(200).json(data);
     } catch (error) {
         console.error('Erreur lors de la récupération des TPE par statut :', error);
-        res.status(500).json({ message: 'Erreur lors de la récupération des TPE par statut', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la récupération des TPE par statut' });
     }
 };
 
@@ -394,7 +394,7 @@ const getDureesParcTpe = async (req, res) => {
         res.status(200).json(data);
     } catch (error) {
         console.error('Erreur lors du calcul des durées par statut :', error);
-        res.status(500).json({ message: 'Erreur lors du calcul des durées par statut', error: error.message });
+        res.status(500).json({ message: 'Erreur lors du calcul des durées par statut' });
     }
 };
 
@@ -457,7 +457,7 @@ const getTimelineTpe = async (req, res) => {
         });
     } catch (error) {
         console.error('Erreur lors de la récupération de la chronologie du TPE :', error);
-        res.status(500).json({ message: 'Erreur lors de la récupération de la chronologie du TPE', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la récupération de la chronologie du TPE' });
     }
 };
 
@@ -475,7 +475,7 @@ const getModelesParcTpe = async (req, res) => {
         res.status(200).json(modeles.map((m) => ({ id: m.id_model, nom: m.nom_model || `Modèle ${m.id_model}` })));
     } catch (error) {
         console.error('Erreur lors de la récupération des modèles du parc :', error);
-        res.status(500).json({ message: 'Erreur lors de la récupération des modèles du parc', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la récupération des modèles du parc' });
     }
 };
 
@@ -660,7 +660,7 @@ const getParcoursTpe = async (req, res) => {
         });
     } catch (error) {
         console.error('Erreur lors de la recherche de parcours de statuts :', error);
-        res.status(500).json({ message: 'Erreur lors de la recherche de parcours de statuts', error: error.message });
+        res.status(500).json({ message: 'Erreur lors de la recherche de parcours de statuts' });
     }
 };
 

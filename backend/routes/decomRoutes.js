@@ -1,5 +1,7 @@
 const express = require("express")
 const router = express.Router();
+// Fiches, fichiers et exports : réservés aux rôles du module (voir middlewares/droitsModules.js)
+const { accesModule, accesDemande, accesFichier, accesFichiersFormulaire } = require("../middlewares/droitsModules");
 const upload = require("../middlewares/uploads");
 const uploadAll = require("../middlewares/uploadAll")
 const uploadExcel = require("../middlewares/uploadExcel");
@@ -26,7 +28,7 @@ router.post('/faireDecom', uploadAll.fields([
     { name: 'files' },
 ]), faireDecom); 
 router.get('/getAllDecoms', getAllDecoms);
-router.get('/getOneDecom/:id', getOneDecom);
+router.get('/getOneDecom/:id', accesModule('decom'), getOneDecom);
 router.put('/modifyDecom/:id', uploadAll.fields([
     { name: 'files' },
 ]), modifyDecom);
@@ -35,19 +37,19 @@ router.put('/validationListeDecom/:id',uploadAll.fields([
     { name: 'files' },
 ]), validationListeDecom);
 router.put('/returnDecom/:id', returnDecom);
-router.get('/getSnDecom/:id', getSnDecom);
+router.get('/getSnDecom/:id', accesModule('decom'), getSnDecom);
 router.put('/verifyDecom/:id', verifyDecom);
 router.put('/clotureDecom/:id', clotureDecom);
 router.put('/regVerifyDecom/:id', regVerifyDecom);
 router.post('/extractDecom', uploadExcel.single('file'), extractDecom);
 router.post('/downloadTemplateDecom', downloadTemplateDecom);
-router.get('/exportOneDecomToExcel/:id', exportOneDecomToExcel);
+router.get('/exportOneDecomToExcel/:id', accesModule('decom'), exportOneDecomToExcel);
 router.get('/getAllTpeRepare', getAllTpeRepare);
 // router.put('/reparerTpe/:sn', reparerTpe);
 router.post('/extractSnReparation', uploadExcel.single('file'), extractSnReparation);
 router.post('/reparerListeTpe', reparerListeTpe);
 router.get('/getAllLivraisonReparation', getAllLivraisonReparation);
-router.get('/getOneLivraisonReparation/:id', getOneLivraisonReparation);
+router.get('/getOneLivraisonReparation/:id', accesModule('decom'), getOneLivraisonReparation);
 router.put('/receptionLivraisonReparation/:id', uploadAll.fields([
     { name: 'files' },
 ]), receptionLivraisonReparation);
@@ -59,7 +61,7 @@ router.post('/extractMiseEnReparation', uploadExcel.single('file'), extractMiseE
 router.post('/downloadTemplateLiaisonTpePieces', downloadTemplateLiaisonTpePieces);
 router.post('/extractLiaisonTpePiecesData', uploadExcel.single('file'), extractLiaisonTpePiecesData);
 router.post('/liaisonTpePieces', liaisonTpePieces);
-router.post('/exportAllDecomToExcel', exportAllDecomToExcel);
+router.post('/exportAllDecomToExcel', accesModule('decom'), exportAllDecomToExcel);
 router.get('/getPieceDefectueuseTpe/:serial', getPieceDefectueuseTpe);
 router.get('/getPieceDefectueuseListeTpe/:listeSn', getPieceDefectueuseListeTpe);
 router.put('/receptionDecom/:id', receptionDecom);
@@ -73,12 +75,12 @@ router.put('/cancelDiagnosticDecom/:id', cancelDiagnosticDecom);
 router.get('/getTpeParamMaintenance', getTpeParamMaintenance);
 router.post('/livrerParamDecom', livrerParamDecom);
 router.get('/getAllLivraisonParamDecom', getAllLivraisonParamDecom);
-router.get('/getOneLivraisonParamDecom/:id', getOneLivraisonParamDecom);
+router.get('/getOneLivraisonParamDecom/:id', accesModule('decom'), getOneLivraisonParamDecom);
 router.put('/receptionLivraisonParamDecom/:id', receptionLivraisonParamDecom);
 router.put('/cloturerLivraisonParamDecom/:id', cloturerLivraisonParamDecom);
 // Réparation des TPE par lots (création -> validation -> livraison)
 router.get('/getAllReparationTpe', getAllReparationTpe);
-router.get('/getOneReparationTpe/:id', getOneReparationTpe);
+router.get('/getOneReparationTpe/:id', accesModule('decom'), getOneReparationTpe);
 router.put('/validerReparationTpe/:id', validerReparationTpe);
 router.put('/livrerReparationTpe/:id', livrerReparationTpe);
 module.exports = router

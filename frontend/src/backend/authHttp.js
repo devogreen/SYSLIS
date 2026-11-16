@@ -1,17 +1,18 @@
 // backend/authHttp.js
-// Ajoute le token de connexion (localStorage 'token') à tous les appels de l'API, via axios ou fetch,
-// et renvoie vers la page de connexion quand l'API répond 401 (session absente ou expirée).
-// Importé une seule fois dans main.tsx.
+// La session est un cookie HttpOnly posé par l'API au login : le JavaScript de la page ne voit jamais le token.
+// Ce module, importé une seule fois dans main.tsx :
+// - envoie le cookie avec tous les appels de l'API (axios et fetch), y compris en dev (front et API sur deux ports) ;
+// - ajoute l'en-tête X-Requested-With exigé par l'API sur les requêtes qui modifient des données (protection CSRF) ;
+// - renvoie vers la page de connexion quand l'API répond 401 (session absente ou expirée).
 import axios from "axios";
 import urlBase from "./const";
 
-const lireToken = () => {
-    try {
-        return localStorage.getItem("token");
-    } catch (e) {
-        return null;
-    }
-};
+// Ancien stockage du token (avant le cookie HttpOnly) : supprimé s'il existe encore
+try {
+    localStorage.removeItem("token");
+} catch (e) {
+    // stockage indisponible
+}
 
 const urlDeLApi = (url) => {
     if (!url) return false;
@@ -21,24 +22,33 @@ const urlDeLApi = (url) => {
 
 const estLogin = (url) => String(url || "").includes("/api/auth/login");
 
+// Identité affichée par l'interface (pas un secret : l'API vérifie tout à partir du cookie)
+export const CLES_IDENTITE = ["id", "email", "username"];
+export const effacerIdentiteLocale = () => {
+    try {
+        [...CLES_IDENTITE, "token"].forEach((cle) => localStorage.removeItem(cle));
+    } catch (e) {
+        // stockage indisponible
+    }
+};
+
 let redirectionEnCours = false;
 const renvoyerVersConnexion = () => {
-    if (redirectionEnCours || window.location.pathname === "/signin") return;
+    // Pas de redirection depuis les pages publiques (connexion, mot de passe oublié, lien reçu par mail)
+    const chemin = window.location.pathname;
+    const pagePublique = chemin === "/signin" || chemin === "/mot-de-passe-oublie" || chemin.startsWith("/password/");
+    if (redirectionEnCours || pagePublique) return;
     redirectionEnCours = true;
-    try {
-        ["token", "id", "email", "username"].forEach((cle) => localStorage.removeItem(cle));
-    } catch (e) {
-        // stockage indisponible : la redirection suffit
-    }
+    effacerIdentiteLocale();
     window.location.assign("/signin");
 };
 
 // axios
 axios.interceptors.request.use((config) => {
-    const token = lireToken();
-    if (token && urlDeLApi(config.url)) {
+    if (urlDeLApi(config.url)) {
+        config.withCredentials = true;
         config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers["X-Requested-With"] = "XMLHttpRequest";
     }
     return config;
 });
@@ -58,12 +68,11 @@ axios.interceptors.response.use(
 const fetchOrigine = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
     const url = typeof input === "string" ? input : input?.url;
-    const token = lireToken();
     let options = init;
-    if (token && urlDeLApi(url)) {
+    if (urlDeLApi(url)) {
         const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-        if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
-        options = { ...init, headers };
+        headers.set("X-Requested-With", "XMLHttpRequest");
+        options = { ...init, headers, credentials: "include" };
     }
     return fetchOrigine(input, options).then((response) => {
         if (response.status === 401 && urlDeLApi(url) && !estLogin(url)) {

@@ -1,9 +1,10 @@
+// Adresse de l'API : choisie automatiquement par Vite
+// - "npm run dev"   : API locale
+// - "npm run build" : API servie par nginx sur le même domaine que le front (/api)
 const urlLocal = "http://localhost:5500"
-const urlOnline = "51.75.95.225:5500"
 const urlServer = '/api'
 
-// const urlGreenPay = "https://achats.greenpayci.com/"
-
-const urlBase = urlServer
+// @ts-ignore
+const urlBase = import.meta.env.DEV ? urlLocal : urlServer
 
 export default urlBase

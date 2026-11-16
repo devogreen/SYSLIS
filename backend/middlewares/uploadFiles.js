@@ -1,5 +1,7 @@
+const securiserUpload = require("./securiserUpload");
 const multer = require("multer");
 const path = require("path");
+const { DOCUMENTS, ErreurUpload, estAutorise, nomAleatoire } = require("./filtresUpload");
 
 const TEST_ENV = require("../utils/consts")
 
@@ -14,13 +16,15 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, `${baseUrl}/uploadsFiles/`);
   },
-  filename: (req, file, cb) => {
-    const uniqueName =
-      Date.now() + "-" + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
-    cb(null, uniqueName);
-  }
+  filename: nomAleatoire
 });
 
-const uploadFiles = multer({ storage });
+const uploadFiles = multer({
+  storage,
+  fileFilter: (req, file, cb) => estAutorise(file, DOCUMENTS)
+    ? cb(null, true)
+    : cb(new ErreurUpload("Type de fichier non autorisé.")),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
-module.exports = uploadFiles;
+module.exports = securiserUpload(uploadFiles);

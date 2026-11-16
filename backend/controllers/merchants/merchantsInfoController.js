@@ -1,19 +1,21 @@
 // import { createPool } from 'mysql2';
 const {createPool} = require("mysql2");
 
-// Create a connection pool to the database
+// Base PowerBI (marchands / TPE) : les accès sont lus dans le .env, jamais écrits dans le code
+// (POWERBI_DB_HOST, POWERBI_DB_PORT, POWERBI_DB_USER, POWERBI_DB_PASSWORD, POWERBI_DB_NAME).
+// Utiliser un compte MySQL en LECTURE SEULE limité aux tables POINT_MARCHAND, TPE et CHAINES.
 const pool = createPool({
-    host: '51.210.248.205', // e.g., 'localhost' or an IP address
-    port: 3306,
-    user: 'powerbi',
-    password: 'powerbi',
-    database: 'powerbi_gp',
+    host: process.env.POWERBI_DB_HOST,
+    port: Number(process.env.POWERBI_DB_PORT) || 3306,
+    user: process.env.POWERBI_DB_USER,
+    password: process.env.POWERBI_DB_PASSWORD,
+    database: process.env.POWERBI_DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
 });
 
-findMerchant =  async (req,res)=>{
+const findMerchant =  async (req,res)=>{
     // const {sn} = req.body
     try {
         // const query = 'SELECT DISTINCT POINT_MARCHAND.POINT_MARCHAND, TPE.SERIAL_NUMBER,TPE.TPE,POINT_MARCHAND.BANQUE,POINT_MARCHAND.NUM_ORANGE,POINT_MARCHAND.NUM_MTN, POINT_MARCHAND.NUM_MOOV  '+

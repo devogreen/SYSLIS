@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 
 const puppeteer = require("puppeteer");
 const fs = require("fs");
@@ -236,7 +237,7 @@ if (test_env) {
 
 //     } catch (error) {
 //         console.error("Erreur lors de la régularisation :", error);
-//         res.status(500).json({ message: "Erreur interne", error });
+//         res.status(500).json({ message: "Erreur interne" });
 //     }
 // }
 
@@ -335,8 +336,7 @@ const regularisationDemandeQrV2 = async (req, res) => {
             const livreurs = roleLivraison.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${newRegularisation.demande.id}`;
 
@@ -381,7 +381,7 @@ const regularisationDemandeQrV2 = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la régularisation :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -504,19 +504,18 @@ const faireDemandeQr = async (req, res) => {
             const imprimeurs = roleImpression.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${newDemandeQr.demande.id}`;
 
             const subject = `SYSLIS - NOUVELLE DEMANDE DE QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Une nouvelle demande de QR code(s) a été enregistrée par ${utilisateur.fullname}.</p>
+                <p>Une nouvelle demande de QR code(s) a été enregistrée par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de marchands :</strong> ${quantite_marchand}</li>
                 <li><strong>Nombre de QR Code :</strong> ${quantite_qr}</li>
-                <li><strong>Cette liste comprend :</strong> ${strTypes}</li>
+                <li><strong>Cette liste comprend :</strong> ${echapperHtml(strTypes)}</li>
                 </ul>
                 <br>
                 <p>Commentaire : ${commentaire_mail}<p>
@@ -551,7 +550,7 @@ const faireDemandeQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la demande :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -571,7 +570,7 @@ const getAllTypePaiement = async (req, res) => {
         res.status(200).json(typePaiement);
     } catch (error) {
         console.error("Erreur lors de la récupération des types de paiements :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des types de paiements", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des types de paiements" });
     }
 }
 
@@ -612,7 +611,7 @@ const getAllDemandesQr = async (req, res) => {
         res.status(200).json(demandes);
     } catch (error) {
         console.error("Erreur lors de la récupération des demandes de QR Codes :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des demandes de QR Codes", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des demandes de QR Codes" });
     }
 }
 
@@ -663,7 +662,7 @@ const getOneDemandeQr = async (req, res) => {
         res.status(200).json(demande);
     } catch (error) {
         console.error("Erreur lors de la récupération de la demande de QR Codes :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération de la demande de QR Codes", error });
+        res.status(500).json({ message: "Erreur lors de la récupération de la demande de QR Codes" });
     }
 
 }
@@ -776,15 +775,14 @@ const uploadDemandeQr = async (req, res) => {
             const imprimeurs = roleImpression.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
             const subject = `SYSLIS - QR CODE(S) GÉNÉNÉRÉ(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été générés par ${utilisateur.fullname}.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été générés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de marchands :</strong> ${demande.quantite_marchand}</li>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
@@ -822,7 +820,7 @@ const uploadDemandeQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la génération :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -961,15 +959,14 @@ const impressionDemandeQr = async (req, res) => {
             const generateurs = roleGenerateur.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
             const subject = `SYSLIS - IMPRESSION QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été imprimés par ${utilisateur.fullname}.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été imprimés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -1006,7 +1003,7 @@ const impressionDemandeQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'impression :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1102,15 +1099,14 @@ const livraisonDemandeQr = async (req, res) => {
             const recepteurs = roleReception.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
             const subject = `SYSLIS - LIVRAISON QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été livrés par ${utilisateur.fullname}.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été livrés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -1148,7 +1144,7 @@ const livraisonDemandeQr = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la livraison :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1273,15 +1269,14 @@ const receptionDemandeQr = async (req, res) => {
             const livreurs = roleLivraison.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
             const subject = `SYSLIS - RECEPTION QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>Les QR Codes de la demande ${demande.id} ont été réceptionnés par ${utilisateur.fullname}.</p>
+                <p>Les QR Codes de la demande ${demande.id} ont été réceptionnés par ${echapperHtml(utilisateur.fullname)}.</p>
                 <ul>
                 <li><strong>Nombre de QR Code :</strong> ${demande.quantite_qr}</li>
                 </ul>
@@ -1319,7 +1314,7 @@ const receptionDemandeQr = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la réception :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1333,7 +1328,7 @@ const getAllFormatsQr = async (req, res) => {
         res.status(200).json(formats);
     } catch (error) {
         console.error("Erreur lors de la récupération des formats de QR Codes :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des formats de QR Codes :", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des formats de QR Codes :" });
     }
 }
 
@@ -1370,7 +1365,7 @@ const getAllFormFiles = async (req, res) => {
     } catch (error) {
         console.log("Erreur serveur: ", error)
         console.error("Erreur :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des fichiers", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des fichiers" });
     }
 }
 
@@ -1487,8 +1482,7 @@ const modifyDemandeQr = async (req, res) => {
             const imprimeurs = roleImpression.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${updatedDemandeQr.demande.id}`;
 
@@ -1534,7 +1528,7 @@ const modifyDemandeQr = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la modification de la demande de QR Codes :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1647,8 +1641,8 @@ const cancelDemandeQr = async (req, res) => {
             const subject = `SYSLIS - ANNULATION DEMANDE DE QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
-                <p>Commentaire : <strong>${messageCancel}</strong</p>
+                <p>la demande de QR code(s) ${demande.id} a été annulée par ${echapperHtml(utilisateur.fullname)}.</p>
+                <p>Commentaire : <strong>${echapperHtml(messageCancel)}</strong</p>
                 <br>
                 <br>
                 <br>
@@ -1674,7 +1668,7 @@ const cancelDemandeQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'annulation de la demande de QR Codes :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1773,8 +1767,7 @@ const regularisationLivraisonDemandeQr = async (req, res) => {
             const recepteurs = roleReception.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
@@ -1819,7 +1812,7 @@ const regularisationLivraisonDemandeQr = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la livraison :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1947,8 +1940,7 @@ const regularisationReceptionDemandeQr = async (req, res) => {
             const livreurs = roleLivraison.map(us => us.users.email)
             const superviseurs = roleSupervision.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-qr-details/${demande.id}`;
 
@@ -1993,7 +1985,7 @@ const regularisationReceptionDemandeQr = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de la réception :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2172,7 +2164,7 @@ const extractMarchandsQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -2249,7 +2241,7 @@ const getAllMarchandsQr = async (req, res) => {
         res.status(200).json(marchandsQr);
     } catch (error) {
         console.error("Erreur lors de la récupération des QR Codes de marchands :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des QR Codes de marchands", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des QR Codes de marchands" });
     }
 }
 
@@ -2887,8 +2879,8 @@ const suspendreDemandeQr = async (req, res) => {
             const subject = `SYSLIS - SUSPENSION DEMANDE DE QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>La demande de QR code(s) ${demande.id} a été suspendue par ${utilisateur.fullname}.</p>
-                <p>Commentaire : <strong>${messageSuspension}</strong></p>
+                <p>La demande de QR code(s) ${demande.id} a été suspendue par ${echapperHtml(utilisateur.fullname)}.</p>
+                <p>Commentaire : <strong>${echapperHtml(messageSuspension)}</strong></p>
                 <br>
                 <br>
                 <p>Green - Pay vous remercie.</p>
@@ -2913,7 +2905,7 @@ const suspendreDemandeQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la suspension de la demande de QR Codes :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -3002,7 +2994,7 @@ const annulationSuspensionQr = async (req, res) => {
             const subject = `SYSLIS - ANNULATION SUSPENSION DEMANDE DE QR CODE(S)`;
             const html = `
                 <p>Bonjour,</p>
-                <p>La suspension de la demande de QR code(s) ${demande.id} a été annulée par ${utilisateur.fullname}.</p>
+                <p>La suspension de la demande de QR code(s) ${demande.id} a été annulée par ${echapperHtml(utilisateur.fullname)}.</p>
                 <p><strong>La demande reprend son statut initial.</strong></p>
                 <br>
                 <br>
@@ -3028,7 +3020,7 @@ const annulationSuspensionQr = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'annulation de la suspension de la demande de QR Codes :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 

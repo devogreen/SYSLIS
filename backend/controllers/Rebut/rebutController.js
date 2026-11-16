@@ -1,4 +1,5 @@
 const TEST_ENV = require("../../utils/consts")
+const { echapperHtml } = require("../../utils/securiteHtml");
 
 const puppeteer = require("puppeteer");
 const fs = require("fs");
@@ -399,7 +400,7 @@ const extractRebut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -501,8 +502,7 @@ const demandeRebut = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const validateurs = rolesValidation.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-rebut/${nouveauRebut.rebut.id}`;
 
@@ -568,7 +568,7 @@ const demandeRebut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la demande de mise au rebut :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -594,7 +594,7 @@ const getAllDemandesRebut = async (req, res) => {
         res.status(200).json(demandes);
     } catch (error) {
         console.error("Erreur lors de la récupération des demandes de mise au rebut :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des demandes de mise au rebut", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des demandes de mise au rebut" });
     }
 }
 
@@ -641,7 +641,7 @@ const getTpeRebutDetails = async (req, res) => {
         res.status(200).json(tpe);
     } catch (error) {
         console.error("Erreur lors de la récupération du TPE :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
+        res.status(500).json({ message: "Erreur lors de la récupération du TPE" });
     }
 }
 
@@ -669,7 +669,7 @@ const getAllTpeRebuts = async (req, res) => {
         res.status(200).json(tpe);
     } catch (error) {
         console.error("Erreur lors de la récupération des TPE au rebut :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des TPE au rebut", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des TPE au rebut" });
     }
 }
 
@@ -866,7 +866,7 @@ const changeLotPiece = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la modification de pièces :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1045,7 +1045,7 @@ const recupPieceFonc = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces fonctionnelles :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1079,7 +1079,7 @@ const getStocksPourRebut = async (req, res) => {
         res.status(200).json(stocks)
     } catch (error) {
         console.error("Erreur lors de la récupération des stocks pour le rebut :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des stocks", error })
+        res.status(500).json({ message: "Erreur lors de la récupération des stocks" })
     }
 }
 
@@ -1359,7 +1359,7 @@ const createStockFromRebut = async (req, res) => {
             return res.status(error.status).json({ message: error.message });
         }
         console.error("Erreur lors de la création du stock depuis le rebut :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1397,8 +1397,8 @@ const getTpePieceRebutHistory = async (req, res) => {
         res.status(200).json(history);
     } catch (error) {
         console.error("Erreur lors de la récupération de l'historique des pièces rebuts :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération de l'historique des pièces rebuts", error });
-    } res.status(500).json({ message: "Erreur lors de la récupération de l'historique", error });
+        res.status(500).json({ message: "Erreur lors de la récupération de l'historique des pièces rebuts" });
+    } res.status(500).json({ message: "Erreur lors de la récupération de l'historique" });
 }
 
 // Fonction pour récupérer facilement la liste des pièces au rebut (fonctionnelles/defectueuses)
@@ -1418,7 +1418,7 @@ const getAllPiecesRebut = async (req, res) => {
         res.status(200).json(pieces);
     } catch (error) {
         console.error("Erreur lors de la récupération des pièces au rebut :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des pièces au rebut", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des pièces au rebut" });
     }
 }
 
@@ -1451,7 +1451,7 @@ const getOneDemandeRebut = async (req, res) => {
         res.status(200).json(demande);
     } catch (error) {
         console.error("Erreur lors de la récupération d'une demande de mise au rebut :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération d'une demande de mise au rebut", error });
+        res.status(500).json({ message: "Erreur lors de la récupération d'une demande de mise au rebut" });
     }
 }
 
@@ -1585,8 +1585,7 @@ const updateDemandeRebut = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const validateurs = rolesValidation.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-rebut/${updateRebut.rebut.id}`;
 
@@ -1630,7 +1629,7 @@ const updateDemandeRebut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la modification de la demande de mise au rebut :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -1779,8 +1778,7 @@ const validateDemandeRebut = async (req, res) => {
             const superviseurs = rolesSupervision.map(us => us.users.email)
             const demandeurs = rolesDemandeur.map(us => us.users.email)
 
-            const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+            const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
             const url = GENERAL_URL
             const link = `${url}/demande-rebut/${validationRebut.rebut.id}`;
 
@@ -1824,7 +1822,7 @@ const validateDemandeRebut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la validation de la demande de mise au rebut :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 

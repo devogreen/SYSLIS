@@ -1,5 +1,6 @@
 const TEST_ENV = require("../../utils/consts")
 const puppeteer = require("puppeteer");
+const { echapperHtml, echapperHtml: e, urlImage, genererPdf } = require("../../utils/securiteHtml");
 const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
@@ -242,8 +243,7 @@ const regReception = async (req, res) => {
       const superviseurs = supervisionRole.map(us => us.users.email)
       const livreurs = roleLivraison.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.id_livraison}`;
 
@@ -252,7 +252,7 @@ const regReception = async (req, res) => {
         <p>Bonjour,</p>
         <p>La réception de la livraison ${livraison.id_livraison} a été régularisée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -499,8 +499,7 @@ const deliver = async (req, res) => {
       const service_users = userService.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
@@ -509,7 +508,7 @@ const deliver = async (req, res) => {
         <p>Bonjour,</p>
         <p>Une nouvelle livraison a été enregistrée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -553,7 +552,7 @@ const deliver = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -702,8 +701,7 @@ const regLivraison = async (req, res) => {
       const service_users = userService.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.nouvelleLivraison.id_livraison}`;
 
@@ -712,7 +710,7 @@ const regLivraison = async (req, res) => {
         <p>Bonjour,</p>
         <p>Une régularisation de livraison a été enregistrée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -749,7 +747,7 @@ const regLivraison = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -767,7 +765,7 @@ const getAllLivraisons = async (req, res) => {
 
     res.status(200).json(livraisons);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des livraisons", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des livraisons" });
   }
 };
 
@@ -789,7 +787,7 @@ const getOneLivraison = async (req, res) => {
 
     res.status(200).json(livraison);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
@@ -979,8 +977,7 @@ const updateLivraison = async (req, res) => {
       const service_users = userService.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/formulaire/${livraison.updated.id_livraison}`;
 
@@ -989,7 +986,7 @@ const updateLivraison = async (req, res) => {
         <p>Bonjour,</p>
         <p>La livraison ${livraison.updated.id_livraison} a été modifiée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -1032,7 +1029,7 @@ const updateLivraison = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la mise à jour", error });
+    return res.status(500).json({ message: "Erreur lors de la mise à jour" });
   }
 };
 
@@ -1050,7 +1047,7 @@ const deleteLivraison = async (req, res) => {
 
     res.status(200).json({ message: "Livraison supprimée (soft delete)", deleted });
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la suppression", error });
+    res.status(500).json({ message: "Erreur lors de la suppression" });
   }
 };
 
@@ -1185,7 +1182,7 @@ const deliverOld = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -1294,8 +1291,7 @@ const deliverStock = async (req, res) => {
       const livraisonTypeName = piece.nom_piece.toUpperCase();
       const serviceReception = service.nom_service.toUpperCase();
       const quantiteProduits = quantite
-      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : "(Sans commentaire)");
       const url = GENERAL_URL
       const deliveryLink = `${url}/demande-details/${demande_id}`;
 
@@ -1304,9 +1300,9 @@ const deliverStock = async (req, res) => {
         <p>Bonjour,</p>
         <p>Une nouvelle livraison a été enregistrée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${quantiteProduits}</li>
-          <li><strong>Service:</strong> ${serviceReception}</li>
+          <li><strong>Service:</strong> ${echapperHtml(serviceReception)}</li>
         </ul>
         <br>
           <p>Commentaire : ${commentaire_mail}<p>
@@ -1347,7 +1343,7 @@ const deliverStock = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -1359,7 +1355,7 @@ const getAllTypeLivraisonCommerciale = async (req, res) => {
 
     res.status(200).json(typeLivraison);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des types de livraison", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des types de livraison" });
   }
 }
 
@@ -1377,7 +1373,7 @@ const getAllStockDeliveries = async (req, res) => {
 
     res.status(200).json(stockDeliveries);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération de toutes les livraisons de pièces", error });
+    res.status(500).json({ message: "Erreur lors de la récupération de toutes les livraisons de pièces" });
   }
 }
 
@@ -1401,7 +1397,7 @@ const getOneLivraisonDemande = async (req, res) => {
 
     res.status(200).json(livraison);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -1498,7 +1494,7 @@ const receiveStock = async (req, res) => {
 
       const livraisonTypeName = piece.nom_piece.toUpperCase();
       const quantiteProduits = livraison.Livraisons.quantite_livraison
-      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : "(Sans commentaire)");
       const serviceReception = service.nom_service.toUpperCase();
 
       const url = GENERAL_URL
@@ -1509,9 +1505,9 @@ const receiveStock = async (req, res) => {
         <p>Bonjour,</p>
         <p>La livraison de stock ${livraison.id} a été réceptionnée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${quantiteProduits}</li>
-          <li><strong>Service:</strong> ${serviceReception}</li>
+          <li><strong>Service:</strong> ${echapperHtml(serviceReception)}</li>
         </ul>
         <br>
           <p>Commentaire : ${commentaire_mail}<p>
@@ -1588,7 +1584,7 @@ const addDeliveryType = async (req, res) => {
     });
   } catch (error) {
     console.log("Erreur lors de la création :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 }
 
@@ -1607,7 +1603,7 @@ const getOneTypeLivraison = async (req, res) => {
 
     res.status(200).json(typeLivraison);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -1656,7 +1652,7 @@ const updateTypeLivraison = async (req, res) => {
     return res.status(200).json(updatedType);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la mise à jour", error });
+    return res.status(500).json({ message: "Erreur lors de la mise à jour" });
   }
 }
 
@@ -1695,7 +1691,7 @@ const deleteTypeLivraison = async (req, res) => {
     return res.status(200).json(updatedType);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la mise à jour", error });
+    return res.status(500).json({ message: "Erreur lors de la mise à jour" });
   }
 }
 
@@ -1785,8 +1781,7 @@ const updateDeliveryStock = async (req, res) => {
       const livraisonTypeName = piece.nom_piece.toUpperCase();
       const serviceReception = service.nom_service.toUpperCase();
       const quantiteProduits = quantite
-      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : "(Sans commentaire)");
       const url = GENERAL_URL
       const deliveryLink = `${url}/demande-details/${updated.demande_id}`;
 
@@ -1795,9 +1790,9 @@ const updateDeliveryStock = async (req, res) => {
         <p>Bonjour,</p>
         <p>La livraison ${updated.id} a été modifiée.</p>
         <ul>
-          <li><strong>Type de livraison:</strong> ${livraisonTypeName}</li>
+          <li><strong>Type de livraison:</strong> ${echapperHtml(livraisonTypeName)}</li>
           <li><strong>Nombre de produits:</strong> ${quantiteProduits}</li>
-          <li><strong>Service:</strong> ${serviceReception}</li>
+          <li><strong>Service:</strong> ${echapperHtml(serviceReception)}</li>
         </ul>
         <br>
           <p>Commentaire : ${commentaire_mail}<p>
@@ -1828,7 +1823,7 @@ const updateDeliveryStock = async (req, res) => {
     return res.status(200).json(updated);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la mise à jour", error });
+    return res.status(500).json({ message: "Erreur lors de la mise à jour" });
   }
 }
 
@@ -1892,7 +1887,7 @@ const generateLivraisonPDF = async (req, res) => {
     const produitsRows = livraison.produitsLivre.map((p, index) => {
       let row = "";
       const has = (m) => p.mobile_money?.includes(m) ? "✔" : "";
-      row = `<tr><td>${p.pointMarchand || p.marchand}</td><td>${p.serialNumber || p.sn}</td><td>${p.caisse}</td><td>${p.banque}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td><td>${has("RNE")}</td></tr>`;
+      row = `<tr><td>${e(p.pointMarchand || p.marchand)}</td><td>${e(p.serialNumber || p.sn)}</td><td>${e(p.caisse)}</td><td>${e(p.banque)}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td><td>${has("RNE")}</td></tr>`;
       // ➕ Ajout du saut de page toutes les 20 lignes
       if ((index + 1) % 20 === 0) {
         row += `<tr class="page-break"></tr>`;
@@ -1911,17 +1906,17 @@ const generateLivraisonPDF = async (req, res) => {
     // 🧩 Remplacement des balises HTML
     let index = livraison.validations.length - 1
     html = html
-      .replaceAll("{{type_livraison}}", typeLivraison.nom_type_livraison.toUpperCase())
-      .replace("{{commentaire}}", livraison.commentaire || "")
-      .replace("{{commentaire_reception}}", livraison.validations[index].commentaire)
-      .replace("{{date_livraison}}", formatDate(livraison.date_livraison))
-      .replace("{{qte_totale_livraison}}", livraison.qte_totale_livraison || livraison.produitsLivre.length)
-      .replace("{{nom_expediteur}}", expediteurNom)
-      .replace("{{nom_recepteur}}", livraison.validations[index].nom_recepteur || "Receveur")
+      .replaceAll("{{type_livraison}}", e(typeLivraison.nom_type_livraison.toUpperCase()))
+      .replace("{{commentaire}}", e(livraison.commentaire || ""))
+      .replace("{{commentaire_reception}}", e(livraison.validations[index].commentaire))
+      .replace("{{date_livraison}}", e(formatDate(livraison.date_livraison)))
+      .replace("{{qte_totale_livraison}}", e(livraison.qte_totale_livraison || livraison.produitsLivre.length))
+      .replace("{{nom_expediteur}}", e(expediteurNom))
+      .replace("{{nom_recepteur}}", e(livraison.validations[index].nom_recepteur || "Receveur"))
       .replace("{{produitsRows}}", produitsRows)
-      .replace("{{signature}}", livraison.validations[index].signature || "Validé")
-      .replace("{{date_validation}}", livraison.validations[index].date_validation ? formatDate(livraison.validations[index].date_validation) : "N/A")
-      .replace("{{signature_expediteur}}", livraison.signature_expediteur || "Signé")
+      .replace("{{signature}}", urlImage(livraison.validations[index].signature || "Validé"))
+      .replace("{{date_validation}}", e(livraison.validations[index].date_validation ? formatDate(livraison.validations[index].date_validation) : "N/A"))
+      .replace("{{signature_expediteur}}", urlImage(livraison.signature_expediteur || "Signé"))
       .replace(/(\.title_type\s*\{)([\s\S]*?)(\})/gi, (match, open, content, close) => {
         let newContent = " background-color: white; color: black;";
         switch (livraison.type_livraison_id) {
@@ -1950,16 +1945,7 @@ const generateLivraisonPDF = async (req, res) => {
       })
 
     // 🖨️ Génération PDF
-    const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-    });
-
-    await browser.close();
+    const pdfBuffer = await genererPdf(html);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -2015,7 +2001,7 @@ const generateTotalLivraisonPDF = async (req, res) => {
       const produitsRows = livraison.produitsLivre.map((p, index) => {
         let row = "";
         const has = (m) => p.mobile_money?.includes(m) ? "✔" : "";
-        row = `<tr><td>${p.pointMarchand || p.marchand}</td><td>${p.serialNumber || p.sn}</td><td>${p.caisse}</td><td>${p.banque}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td></tr>`;
+        row = `<tr><td>${e(p.pointMarchand || p.marchand)}</td><td>${e(p.serialNumber || p.sn)}</td><td>${e(p.caisse)}</td><td>${e(p.banque)}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td></tr>`;
 
         // ➕ Ajout du saut de page toutes les 20 lignes
         if ((index + 1) % 20 === 0) {
@@ -2035,17 +2021,17 @@ const generateTotalLivraisonPDF = async (req, res) => {
       // 🧩 Remplacement des balises HTML
       let index = livraison.validations.length - 1
       html = html
-        .replaceAll("{{type_livraison}}", typeLivraison.nom_type_livraison.toUpperCase())
-        .replace("{{commentaire}}", livraison.commentaire || "")
-        .replace("{{commentaire_reception}}", livraison.validations[index].commentaire)
-        .replace("{{date_livraison}}", formatDate(livraison.date_livraison))
-        .replace("{{qte_totale_livraison}}", livraison.qte_totale_livraison || livraison.produitsLivre.length)
-        .replace("{{nom_expediteur}}", expediteurNom)
-        .replace("{{nom_recepteur}}", livraison.validations[index].nom_recepteur || "Receveur")
+        .replaceAll("{{type_livraison}}", e(typeLivraison.nom_type_livraison.toUpperCase()))
+        .replace("{{commentaire}}", e(livraison.commentaire || ""))
+        .replace("{{commentaire_reception}}", e(livraison.validations[index].commentaire))
+        .replace("{{date_livraison}}", e(formatDate(livraison.date_livraison)))
+        .replace("{{qte_totale_livraison}}", e(livraison.qte_totale_livraison || livraison.produitsLivre.length))
+        .replace("{{nom_expediteur}}", e(expediteurNom))
+        .replace("{{nom_recepteur}}", e(livraison.validations[index].nom_recepteur || "Receveur"))
         .replace("{{produitsRows}}", produitsRows)
-        .replace("{{signature}}", livraison.validations[index].signature || "Validé")
-        .replace("{{date_validation}}", livraison.validations[index].date_validation ? formatDate(livraison.validations[index].date_validation) : "N/A")
-        .replace("{{signature_expediteur}}", livraison.signature_expediteur || "Signé")
+        .replace("{{signature}}", urlImage(livraison.validations[index].signature || "Validé"))
+        .replace("{{date_validation}}", e(livraison.validations[index].date_validation ? formatDate(livraison.validations[index].date_validation) : "N/A"))
+        .replace("{{signature_expediteur}}", urlImage(livraison.signature_expediteur || "Signé"))
         .replace(/(\.title_type\s*\{)([\s\S]*?)(\})/gi, (match, open, content, close) => {
           let newContent = " background-color: white; color: black;";
           switch (livraison.type_livraison_id) {
@@ -2074,16 +2060,7 @@ const generateTotalLivraisonPDF = async (req, res) => {
         })
 
       // 🖨️ Génération PDF
-      const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle0" });
-
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-      });
-
-      await browser.close();
+      const pdfBuffer = await genererPdf(html);
       const date_text = new Date(livraison.validations[index].date_validation).toISOString().replace(/[:.]/g, "-")
 
       zip.file(`livraison_${livraison.id_livraison}_${typeLivraison.nom_type_livraison.toUpperCase()}_${date_text}.pdf`, pdfBuffer);
@@ -2114,7 +2091,7 @@ const getAllTypeParametrage = async (req, res) => {
 
     res.status(200).json(typeParametrage);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des types de paramétrage", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des types de paramétrage" });
   }
 }
 
@@ -2354,8 +2331,7 @@ const makeRemplacement = async (req, res) => {
       const recepteurs = recepteursRole.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
 
@@ -2364,8 +2340,8 @@ const makeRemplacement = async (req, res) => {
         <p>Bonjour,</p>
         <p>Un nouveau remplacement a été enregistré.</p>
         <ul>
-          <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
-          <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
+          <li><strong>Ancien model TPE:</strong> ${echapperHtml(ancienModel.nom_model.toUpperCase())}</li>
+          <li><strong>Nouveau model TPE:</strong> ${echapperHtml(nouveModel.nom_model.toUpperCase())}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -2401,7 +2377,7 @@ const makeRemplacement = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 }
 
@@ -2424,7 +2400,7 @@ const getAllRemplacements = async (req, res) => {
 
     res.status(200).json(remplacements);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des remplacements", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des remplacements" });
   }
 }
 
@@ -2450,7 +2426,7 @@ const getOneRemplacement = async (req, res) => {
 
     res.status(200).json(remplacement);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -2582,8 +2558,7 @@ const validateRemplacement = async (req, res) => {
       const superviseurs = supervisionRole.map(us => us.users.email)
       const livreurs = roleLivraison.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
 
@@ -2592,8 +2567,8 @@ const validateRemplacement = async (req, res) => {
         <p>Bonjour,</p>
         <p>Le remplacement ${remplacement.id} a été validé.</p>
         <ul>
-          <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
-          <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
+          <li><strong>Ancien model TPE:</strong> ${echapperHtml(ancienModel.nom_model.toUpperCase())}</li>
+          <li><strong>Nouveau model TPE:</strong> ${echapperHtml(nouveModel.nom_model.toUpperCase())}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -3304,8 +3279,7 @@ const updateRemplacement = async (req, res) => {
       const recepteurs = recepteursRole.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/remplacement-details/${newRemplacement.nouveauRemplacement.id}`;
 
@@ -3314,8 +3288,8 @@ const updateRemplacement = async (req, res) => {
         <p>Bonjour,</p>
         <p>Le formulaire de remplacement ${newRemplacement.nouveauRemplacement.id} a été modifié.</p>
         <ul>
-          <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
-          <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
+          <li><strong>Ancien model TPE:</strong> ${echapperHtml(ancienModel.nom_model.toUpperCase())}</li>
+          <li><strong>Nouveau model TPE:</strong> ${echapperHtml(nouveModel.nom_model.toUpperCase())}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -3352,7 +3326,7 @@ const updateRemplacement = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 }
 
@@ -3426,8 +3400,7 @@ const returnRemplacement = async (req, res) => {
       const superviseurs = supervisionRole.map(us => us.users.email)
       const livreurs = roleLivraison.map(us => us.users.email)
 
-      const commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire_return ? commentaire_return : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/remplacement-details/${remplacement.id}`;
 
@@ -3436,8 +3409,8 @@ const returnRemplacement = async (req, res) => {
         <p>Bonjour,</p>
         <p>Le remplacement ${remplacement.id} a été retourné.</p>
         <ul>
-          <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
-          <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
+          <li><strong>Ancien model TPE:</strong> ${echapperHtml(ancienModel.nom_model.toUpperCase())}</li>
+          <li><strong>Nouveau model TPE:</strong> ${echapperHtml(nouveModel.nom_model.toUpperCase())}</li>
           <li><strong>Nombre de produits:</strong> ${remplacement.quantite}</li>
         </ul>
         <br>
@@ -3523,7 +3496,7 @@ const generateRemplacementPDF = async (req, res) => {
     const produitsRows = livraison.details_remplacement.map((p, index) => {
       let row = "";
       const has = (m) => p.mobile_money?.includes(m) ? "✔" : "";
-      row = `<tr><td>${p.pointMarchand}</td><td>${p.ancienSN}</td><td>${p.nouvelSN}</td><td>${p.caisse}</td><td>${p.banque}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td><td>${has("RNE")}</td></tr>`;
+      row = `<tr><td>${e(p.pointMarchand)}</td><td>${e(p.ancienSN)}</td><td>${e(p.nouvelSN)}</td><td>${e(p.caisse)}</td><td>${e(p.banque)}</td><td>${has("OM")}</td><td>${has("MTN")}</td><td>${has("MOOV")}</td><td>${has("RNE")}</td></tr>`;
 
       // ➕ Ajout du saut de page toutes les 20 lignes
       if ((index + 1) % 20 === 0) {
@@ -3549,30 +3522,21 @@ const generateRemplacementPDF = async (req, res) => {
     // 🧩 Remplacement des balises HTML
     let index = livraison.validation_remplacement.length - 1
     html = html
-      .replace("{{ancien_tpe}}", ancien_model.nom_model.toUpperCase())
-      .replace("{{nouveau_tpe}}", nouveau_model.nom_model.toUpperCase())
-      .replace("{{commentaire}}", livraison.commentaire || "")
-      .replace("{{commentaire_reception}}", livraison.validation_remplacement[index].commentaire)
-      .replace("{{date_livraison}}", formatDate(livraison.date_remplacement))
-      .replace("{{qte_totale_livraison}}", livraison.quantite)
-      .replace("{{nom_expediteur}}", expediteurNom)
-      .replace("{{nom_recepteur}}", livraison.validation_remplacement[index].nom_recepteur || "Receveur")
+      .replace("{{ancien_tpe}}", e(ancien_model.nom_model.toUpperCase()))
+      .replace("{{nouveau_tpe}}", e(nouveau_model.nom_model.toUpperCase()))
+      .replace("{{commentaire}}", e(livraison.commentaire || ""))
+      .replace("{{commentaire_reception}}", e(livraison.validation_remplacement[index].commentaire))
+      .replace("{{date_livraison}}", e(formatDate(livraison.date_remplacement)))
+      .replace("{{qte_totale_livraison}}", e(livraison.quantite))
+      .replace("{{nom_expediteur}}", e(expediteurNom))
+      .replace("{{nom_recepteur}}", e(livraison.validation_remplacement[index].nom_recepteur || "Receveur"))
       .replace("{{produitsRows}}", produitsRows)
-      .replace("{{signature}}", livraison.validation_remplacement[index].signature || "Validé")
-      .replace("{{date_validation}}", livraison.validation_remplacement[index].date_validation ? formatDate(livraison.validation_remplacement[index].date_validation) : "N/A")
-      .replace("{{signature_expediteur}}", livraison.signature_expediteur || "Signé")
+      .replace("{{signature}}", urlImage(livraison.validation_remplacement[index].signature || "Validé"))
+      .replace("{{date_validation}}", e(livraison.validation_remplacement[index].date_validation ? formatDate(livraison.validation_remplacement[index].date_validation) : "N/A"))
+      .replace("{{signature_expediteur}}", urlImage(livraison.signature_expediteur || "Signé"))
 
     // 🖨️ Génération PDF
-    const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-    });
-
-    await browser.close();
+    const pdfBuffer = await genererPdf(html);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -3608,7 +3572,7 @@ const getLivraisonsByWeek = async (req, res) => {
 
     res.json(livraisons);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
@@ -3667,7 +3631,7 @@ const getStatsLivraisons = async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error('Erreur stats:', error);
-    res.status(500).json({ message: 'Erreur serveur stats', error: error.message });
+    res.status(500).json({ message: 'Erreur serveur stats' });
   } finally {
     await prisma.$disconnect();
   }
@@ -3914,8 +3878,7 @@ const regRemplacement = async (req, res) => {
       const recepteurs = recepteursRole.map(us => us.users.email)
       const superviseurs = supervisionRole.map(us => us.users.email)
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)'
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const deliveryLink = `${url}/remplacement-details/${remplacement.nouveauRemplacement.id}`;
 
@@ -3924,8 +3887,8 @@ const regRemplacement = async (req, res) => {
         <p>Bonjour,</p>
         <p>Une regularisation de remplacement a été enregistrée.</p>
         <ul>
-          <li><strong>Ancien model TPE:</strong> ${ancienModel.nom_model.toUpperCase()}</li>
-          <li><strong>Nouveau model TPE:</strong> ${nouveModel.nom_model.toUpperCase()}</li>
+          <li><strong>Ancien model TPE:</strong> ${echapperHtml(ancienModel.nom_model.toUpperCase())}</li>
+          <li><strong>Nouveau model TPE:</strong> ${echapperHtml(nouveModel.nom_model.toUpperCase())}</li>
           <li><strong>Nombre de produits:</strong> ${produits.length}</li>
         </ul>
         <br>
@@ -3961,7 +3924,7 @@ const regRemplacement = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la livraison :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 }
 

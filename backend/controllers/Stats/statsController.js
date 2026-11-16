@@ -1303,7 +1303,7 @@ const getChargerLivraisonWithdrawals = async (req, res) => {
         res.status(200).json(livraisons);
     } catch (error) {
         console.error("Erreur lors de la récupération des livraisons de chargeurs :", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de chargeurs", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des livraisons de chargeurs" });
     }
 };
 
@@ -1338,7 +1338,7 @@ const getChargerStockWithdrawals = async (req, res) => {
         res.status(200).json(mouvements);
     } catch (error) {
         console.error("Erreur lors de la récupération des sorties de stock de chargeurs :", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des sorties de stock de chargeurs", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des sorties de stock de chargeurs" });
     }
 };
 
@@ -1373,7 +1373,7 @@ const getChargerMovementServiceOptions = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la récupération des services de mouvement :", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des services", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des services" });
     }
 };
 
@@ -1449,7 +1449,7 @@ const getChargerWithdrawalsTimeSeries = async (req, res) => {
         res.status(200).json(series);
     } catch (error) {
         console.error("Erreur lors de la récupération des sorties de chargeurs :", error);
-        res.status(500).json({ message: "Erreur lors de la récupération des sorties de chargeurs", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des sorties de chargeurs" });
     }
 };
 

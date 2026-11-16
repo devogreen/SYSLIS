@@ -1,5 +1,7 @@
 const express = require("express")
 const router = express.Router();
+// Fiches, fichiers et exports : réservés aux rôles du module (voir middlewares/droitsModules.js)
+const { accesModule, accesDemande, accesFichier, accesFichiersFormulaire } = require("../middlewares/droitsModules");
 const { authentifier, verifierUtilisateur } = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploads");
 const uploadAll = require("../middlewares/uploadAll")
@@ -21,22 +23,22 @@ router.post('/faireDemande', uploadAll.fields([
     { name: 'files', maxCount: 10 },
 ]), verifierUtilisateur, faireDemande);
 router.get('/getAllDemandes', getAllDemandes);
-router.get('/getOneDemande/:id', getOneDemande);
+router.get('/getOneDemande/:id', accesDemande('id'), getOneDemande);
 router.post('/livraisonDemande', livraisonDemande);
 router.post('/returnDemande', returnDemande);
 router.post('/cancelDemande', cancelDemande);
 router.put('/updateDemande/:id', uploadAll.fields([
     { name: 'files', maxCount: 10 },
 ]), verifierUtilisateur, updateDemande);
-router.get('/getPdf/:id', generateDemandePDF);
+router.get('/getPdf/:id', accesDemande('id'), generateDemandePDF);
 router.post('/receivePiece', uploadAll.fields([
     { name: 'signature'},
 ]), verifierUtilisateur, receivePiece);
 router.post('/validateDemande', uploadAll.fields([
     { name: 'signature'},
 ]), verifierUtilisateur, validateDemande);
-router.get('/getAllDemandeFiles/:idDemande', getAllDemandeFiles);
-router.get("/downloadFile/:id", downloadFile);
+router.get('/getAllDemandeFiles/:idDemande', accesDemande('idDemande'), getAllDemandeFiles);
+router.get("/downloadFile/:id", accesFichier('id'), downloadFile);
 router.get('/getDemandesEnAttente', getDemandesEnAttente);
 router.get('/getDemandesValidees', getDemandesValideesNonLivrees);
 router.post('/regularisationDemande', uploadAll.fields([

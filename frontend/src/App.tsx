@@ -1,6 +1,10 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router";
 import SignIn from "./pages/AuthPages/SignIn";
 import SignUp from "./pages/AuthPages/SignUp";
+// @ts-ignore
+import MotDePasseOublie from "./pages/AuthPages/MotDePasseOublie";
+// @ts-ignore
+import DefinirMotDePasse from "./pages/AuthPages/DefinirMotDePasse";
 import NotFound from "./pages/OtherPage/NotFound";
 import UserProfiles from "./pages/UserProfiles";
 import Videos from "./pages/UiElements/Videos";
@@ -443,6 +447,9 @@ export default function App() {
 
           {/* Auth Layout */}
           <Route path="/signin" element={<SignIn />} />
+          {/* Pages publiques : mot de passe oublié et lien reçu par mail (création de compte / réinitialisation) */}
+          <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+          <Route path="/password/reset-password/:token" element={<DefinirMotDePasse />} />
           <Route path="/signup" element={<SignUp />} />
           
 

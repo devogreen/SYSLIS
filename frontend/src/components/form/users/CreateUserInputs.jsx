@@ -25,7 +25,6 @@ export default function CreateUserInputs() {
     const [nomUser, setNomUser] = useState('')
     const [prenomUser, setPrenomUser] = useState('')
     const [emailUser, setEmailUser] = useState('')
-    const [passwordUser, setPasswordUser] = useState('password123')
     const [fullName, setFullName] = useState('')
     const [userName, setUserName] = useState('')
 
@@ -36,7 +35,6 @@ export default function CreateUserInputs() {
 
     const [isModalConfirmOpen, setIsModalConfirmOpen] = useState(false)
 
-    const [mailChecked, setMailCheck] = useState(true)
 
 
     useEffect( ()=>{
@@ -101,10 +99,6 @@ export default function CreateUserInputs() {
             return
         }
 
-        if(!passwordUser){
-            setErrorInput("Vous devez saisir un mot de passe !")
-            return
-        }
         
         
         setIsModalConfirmOpen(true)
@@ -126,10 +120,8 @@ export default function CreateUserInputs() {
             fullname: fullName,
             username: userName,
             email: emailUser,
-            password: passwordUser,
             userServices: selectedServices,
-            userRoles: selectedRoles, 
-            mailChecked: mailChecked,
+            userRoles: selectedRoles,
         };
         try{
             setLoadindCreate(true) 
@@ -138,17 +130,21 @@ export default function CreateUserInputs() {
 
             const response =  await userData.register(payload)
 
-            console.log(response)
-            Swal.fire({
+            // Pas de mot de passe choisi par l'administrateur : l'utilisateur reçoit un lien (24 h) pour le définir
+            Swal.fire(response?.invitationEnvoyee === false ? {
+                title: "Utilisateur créé",
+                text: "Le mail d'invitation n'a pas pu être envoyé. L'utilisateur peut utiliser « Mot de passe oublié ? » sur la page de connexion pour choisir son mot de passe.",
+                icon: "warning"
+            } : {
                 title: "Succès",
-                text: "Nouvel utilisateur créé.",
+                text: "Nouvel utilisateur créé. Il a reçu un mail pour choisir son mot de passe (lien valable 24 h).",
                 icon: "success"
             });
             navigate('/tous-les-utilisateurs');
         } catch(error){
             Swal.fire({
                 title: "Attention",
-                text: "Une erreur est survenue lors de la création",
+                text: error?.message || "Une erreur est survenue lors de la création",
                 icon: "warning"
             });
             navigate('/tous-les-utilisateurs');
@@ -202,13 +198,9 @@ export default function CreateUserInputs() {
                                                         setEmailUser(value)
                                                     }} />
                                                 </div>
-                                                <div>
-                                                    <Label htmlFor="input">Mot de passe <span className="text-red-700">*</span></Label>
-                                                    <Input type="text" value={passwordUser} onChange={(e) =>{
-                                                        const value = e.target.value
-                                                        setPasswordUser(value)
-                                                    }}  />
-                                                </div>
+                                                <p className="text-sm text-gray-600">
+                                                    L'utilisateur recevra un mail avec un lien pour choisir son mot de passe.
+                                                </p>
                                                 <div>
                                                     <span className="text-md text-gray-700 font-medium px-0.5 border border-gray-500 rounded">Services utilisateur</span>
                                                     <div className="grid grid-cols-2">
@@ -299,10 +291,6 @@ export default function CreateUserInputs() {
                             <span className="font-medium text-gray-600">{emailUser}</span>
                         </div>
                         <div className="grid grid-cols-2 border px-1">
-                            <span className="text-sm flex items-center">Mot de passe : </span>
-                            <span className="font-medium text-gray-600"> <i>{passwordUser}</i></span>
-                        </div>
-                        <div className="grid grid-cols-2 border px-1">
                             <span className="text-sm flex items-center">Services : </span>
                             <div className="grid grid-cols-2">
                                 {selectedServices.map((id) =>{
@@ -342,18 +330,9 @@ export default function CreateUserInputs() {
                             </div>
                         </div>
                     </div>
-                    <div>
-                        <Checkbox
-                            label="Envoyer mail de nouvelle création"
-                            checked={mailChecked}
-                            onChange={() => {
-                                if(mailChecked){
-                                    setMailCheck(false)
-                                } else{
-                                    setMailCheck(true)
-                                }
-                            }}/>
-                    </div>
+                    <p className="text-sm text-gray-600 px-1">
+                        Un mail sera envoyé à {emailUser} avec un lien pour choisir son mot de passe (valable 24 h).
+                    </p>
                     <div className='w-full flex justify-center items-center'>
                         <button className='w-1/3 mx-3 bg-gray-400 rounded-2xl h-10 flex justify-center items-center'
                             onClick={() =>{

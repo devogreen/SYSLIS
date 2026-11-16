@@ -13,14 +13,6 @@ export const EVENEMENT_RAFRAICHIR = "syslis:notifications-refresh";
 
 const api = new Notifications();
 
-const lireToken = () => {
-    try {
-        return localStorage.getItem("token");
-    } catch (e) {
-        return null;
-    }
-};
-
 export default function useSidebarNotifications(actif = true) {
     const [notifications, setNotifications] = useState(VIDE);
     const enCours = useRef(false);
@@ -28,7 +20,8 @@ export default function useSidebarNotifications(actif = true) {
     const location = useLocation();
 
     const rafraichir = useCallback(async () => {
-        if (!actif || enCours.current || !lireToken()) return;
+        // actif = utilisateur connecté (session chargée par AuthContext)
+        if (!actif || enCours.current) return;
         enCours.current = true;
         try {
             const data = await api.getSidebar();

@@ -489,7 +489,7 @@ const getEntonnoirDecom = async (req, res) => {
         res.status(200).json({ resume, delais, lignes });
     } catch (error) {
         console.error('Erreur lors du calcul du tableau de bord décom :', error);
-        res.status(500).json({ message: 'Erreur lors du calcul du tableau de bord décom', error: error.message });
+        res.status(500).json({ message: 'Erreur lors du calcul du tableau de bord décom' });
     }
 };
 

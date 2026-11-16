@@ -157,7 +157,7 @@ const getParcTpe = async (req, res) => {
         res.status(200).json(listeTpe);
     } catch (error) {
         console.error("Erreur lors de la récupération des TPEs du parc :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des TPEs du parc", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des TPEs du parc" });
     }
 }
 
@@ -172,7 +172,7 @@ const getAllStatut = async (req, res) => {
         res.status(200).json(status);
     } catch (error) {
         console.error("Erreur lors de la récupération des statuts TPEs du parc :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération des statuts TPEs du parc", error });
+        res.status(500).json({ message: "Erreur lors de la récupération des statuts TPEs du parc" });
     }
 }
 
@@ -200,7 +200,7 @@ const getTpeHistory = async (req, res) => {
         res.status(200).json(history);
     } catch (error) {
         console.error("Erreur lors de la récupération de l'historique du TPE :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération de l'historique du TPE", error });
+        res.status(500).json({ message: "Erreur lors de la récupération de l'historique du TPE" });
     }
 }
 
@@ -231,7 +231,7 @@ const getTpeInfos = async (req, res) => {
         res.status(200).json(tpe);
     } catch (error) {
         console.error("Erreur lors de la récupération du TPE :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
+        res.status(500).json({ message: "Erreur lors de la récupération du TPE" });
     }
 }
 
@@ -346,7 +346,7 @@ const changeTpeStatut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'opération :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -507,7 +507,7 @@ const extractSn = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de l'extraction du fichier Excel :", error);
-        return res.status(500).json({ message: "Erreur interne", error });
+        return res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -639,7 +639,7 @@ const changeListeStatut = async (req, res) => {
         });
     } catch (error) {
         console.error("Erreur lors de la modification :", error);
-        res.status(500).json({ message: "Erreur interne", error });
+        res.status(500).json({ message: "Erreur interne" });
     }
 }
 
@@ -670,7 +670,7 @@ const getTpe = async (req, res) => {
         res.status(200).json(tpe);
     } catch (error) {
         console.error("Erreur lors de la récupération du TPE :", error)
-        res.status(500).json({ message: "Erreur lors de la récupération du TPE", error });
+        res.status(500).json({ message: "Erreur lors de la récupération du TPE" });
     }
 }
 
@@ -759,7 +759,7 @@ const exportTpeToExcel = async (req, res) => {
 
     } catch (error) {
         console.error("Erreur lors de l'exportation des TPE vers Excel :", error);
-        res.status(500).json({ message: "Erreur lors de l'exportation des TPE vers Excel", error });
+        res.status(500).json({ message: "Erreur lors de l'exportation des TPE vers Excel" });
     }
 }
 // POST /api/gestion-tpe/checkSerials
@@ -819,7 +819,7 @@ const checkSerials = async (req, res) => {
         return res.status(200).json({ message: "Vérification effectuée", data: resultat });
     } catch (error) {
         console.error("Erreur lors de la vérification des S/N :", error);
-        return res.status(500).json({ message: "Erreur lors de la vérification des S/N", error });
+        return res.status(500).json({ message: "Erreur lors de la vérification des S/N" });
     }
 }
 

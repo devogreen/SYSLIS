@@ -20,10 +20,7 @@ const transporter = nodemailer.createTransport({
  * @param {Array} ccEmails - Liste des emails en copie (CC)
  */
 const envoyerEmail = async (destinataire, sujet, message, attachments = [], ccEmails = []) => {
-    console.log("📧 Envoi d'un email...");
-    console.log("🎯 Destinataire :", destinataire);
-    console.log("📎 Pièces jointes :", attachments.length > 0 ? attachments.map(a => a.filename) : "Aucune");
-    console.log("📩 CC :", ccEmails.length > 0 ? ccEmails.join(", ") : "Aucun");
+    // Pas d'adresses e-mail dans les journaux (données personnelles)
 
     const mailOptions = {
         from: process.env.EMAIL_USER,
@@ -36,9 +33,9 @@ const envoyerEmail = async (destinataire, sujet, message, attachments = [], ccEm
 
     try {
         await transporter.sendMail(mailOptions);
-        console.log(`✅ Email envoyé à ${destinataire} ${ccEmails.length > 0 ? `avec CC: ${ccEmails.join(", ")}` : ""}`);
+        console.log(`Email envoyé (${1 + ccEmails.length} destinataire(s))`);
     } catch (error) {
-        console.error("❌ Erreur lors de l'envoi de l'email :", error);
+        console.error("Erreur lors de l'envoi de l'email :", error?.message || error);
     }
 };
 

@@ -40,36 +40,30 @@ export default function ResetPasswordForm() {
             setError("Nouveau mot de passe incorrect !")
             setErrorNew(true)
             return;
-        }  
+        }
+        // Même règle que l'API : 10 caractères minimum, au moins une lettre et un chiffre
+        if(newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)){
+            setError("Le mot de passe doit contenir au moins 10 caractères, dont une lettre et un chiffre.")
+            setErrorNew(true)
+            return;
+        }
         setLoading(true)
         const response = await changePassword(currentPassword, newPassword);
         console.log('API Response:', response);
-        localStorage.removeItem('token');
-        localStorage.removeItem('username');
-        Swal.fire({
+        ['token', 'username', 'id', 'email'].forEach((cle) => localStorage.removeItem(cle));
+        // Toutes les sessions sont fermées par l'API : reconnexion avec le nouveau mot de passe
+        await Swal.fire({
             title: "Succès",
-            text: "Mot de passe modifié avec succès",
+            text: "Mot de passe modifié avec succès. Reconnectez-vous avec votre nouveau mot de passe.",
             icon: "success"
         });
-        navigate('/signin');
+        window.location.assign('/signin');
         } catch (err) {
-        if (err.response) {
-            const status = err.response.status;
-            const msg = err.response.data?.message || "Une erreur s'est produite.";
-
-            if (status === 400) {
-            setError("Mot de passe actuel incorrect.");
-            setErrorOld(true)
-            } else if (status === 401) {
-            setError("Vous devez vous reconnecter.");
-            } else if (status === 500) {
-            setError("Erreur serveur. Réessayez plus tard.");
-            } else {
-            setError(msg);
-            }
-        } else {
-            setError("Impossible de se connecter au serveur.");
-        }
+        // changePassword renvoie le corps de la réponse de l'API ({ message })
+        const msg = err?.message || "Une erreur s'est produite.";
+        setError(msg);
+        if (/actuel/i.test(msg)) setErrorOld(true)
+        else setErrorNew(true)
         }
         finally{
         setLoading(false)

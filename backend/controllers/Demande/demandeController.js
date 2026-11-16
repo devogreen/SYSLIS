@@ -1,6 +1,7 @@
 const TEST_ENV = require("../../utils/consts")
 
 const puppeteer = require("puppeteer");
+const { echapperHtml, urlImage, genererPdf } = require("../../utils/securiteHtml");
 const fs = require("fs");
 const path = require("path");
 const prisma = require('../../prisma/client');
@@ -338,7 +339,7 @@ if (test_env) {
 //   } catch (error) {
 //     console.log("Erreur serveur: ",error)
 //     console.error("Erreur lors de la demande :", error);
-//     res.status(500).json({ message: "Erreur interne", error });
+//     res.status(500).json({ message: "Erreur interne" });
 //   }
 // };
 
@@ -517,7 +518,7 @@ if (test_env) {
 //   } catch (error) {
 //     console.log("Erreur serveur: ", error)
 //     console.error("Erreur lors de la demande :", error);
-//     res.status(500).json({ message: "Erreur interne", error });
+//     res.status(500).json({ message: "Erreur interne" });
 //   }
 // };
 
@@ -662,8 +663,7 @@ const faireDemande = async (req, res) => {
 
       const quantiteDemande = quantite;
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const demandeLink = `${url}/demande-details/${nouvelleDemande.demande.id}`;
 
@@ -672,13 +672,13 @@ const faireDemande = async (req, res) => {
       <p>Bonjour,</p>
       <p>Une nouvelle demande a été enregistrée.</p>
       <ul>
-        <li><strong>Demande de :</strong> ${nomPiece}</li>
-        <li><strong>${details.typeDemande}</strong></li>
+        <li><strong>Demande de :</strong> ${echapperHtml(nomPiece)}</li>
+        <li><strong>${echapperHtml(details.typeDemande)}</strong></li>
         <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${nomService}</li>
-        <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(nomService)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(nomUser)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -715,7 +715,7 @@ const faireDemande = async (req, res) => {
   } catch (error) {
     console.log("Erreur serveur: ", error)
     console.error("Erreur lors de la demande :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -779,7 +779,7 @@ const getAllDemandes = async (req, res) => {
   } catch (error) {
     console.log("Erreur serveur: ", error)
     console.error("Erreur :", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des demandes", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des demandes" });
   }
 };
 
@@ -820,7 +820,7 @@ const getOneDemande = async (req, res) => {
   } catch (error) {
     console.log('Error : ', error)
     console.error('Error : ', error)
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -960,7 +960,7 @@ const validateDemande = async (req, res) => {
       const nomServiceDemandeur = service.nom_service.toUpperCase();
 
       const quantite = quantiteValidee;
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const demandeLink = `${url}/demande-details/${demande.id}`;
       const subject = `SYSLIS - VALIDATION DEMANDE DE ${nomPiece}`;
@@ -968,12 +968,12 @@ const validateDemande = async (req, res) => {
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été validée.</p>
       <ul>
-        <li><strong>Motif :</strong> ${motif}</li>
+        <li><strong>Motif :</strong> ${echapperHtml(motif)}</li>
         <li><strong>Quantité validée :</strong> ${quantite}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-        <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(nomServiceDemandeur)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -993,12 +993,12 @@ const validateDemande = async (req, res) => {
       <p>La demande ${demande.id} a été validée.</p>
       <p><strong>Vous êtes propiétaire d'un stock de cette catégorie.</strong></p>
       <ul>
-        <li><strong>Motif :</strong> ${motif}</li>
+        <li><strong>Motif :</strong> ${echapperHtml(motif)}</li>
         <li><strong>Quantité validée :</strong> ${quantite}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-        <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(nomServiceDemandeur)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -1300,23 +1300,23 @@ const traiterLivraison = async (req, res, { isReg }) => {
       const service_users = userService.map(us => us.users.email)
       const nomPiece = String(piece?.nom_piece || '').toUpperCase()
       const nomServiceDemandeur = String(service?.nom_service || '').toUpperCase();
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const demandeLink = `${GENERAL_URL}/demande-details/${demande.id}`;
       const subject = isReg ? `SYSLIS - REGULARISATION LIVRAISON STOCK DE ${nomPiece}` : `SYSLIS - LIVRAISON STOCK DE ${nomPiece}`;
       const html = `
         <p>Bonjour,</p>
         <p>La demande ${demande.id} a été livrée${resultat.bilan.livraisonFinale ? '' : ' partiellement'}.</p>
         <ul>
-          <li><strong>Motif :</strong> ${demande.motif_demande}</li>
-          <li><strong>${mouvement ? mouvement.titre : ''}</strong></li>
+          <li><strong>Motif :</strong> ${echapperHtml(demande.motif_demande)}</li>
+          <li><strong>${echapperHtml(mouvement ? mouvement.titre : '')}</strong></li>
           <li><strong>Quantité :</strong> ${resultat.quantite} (${resultat.contenuLivre.quantitePiece} pièce(s))</li>
           ${resultat.bilan.livraisonFinale
             ? `<li><strong>Livraison finale${resultat.bilan.numero > 1 ? ` (livraison n°${resultat.bilan.numero})` : ''}</strong>${resultat.bilan.cloturee ? ' : demande clôturée par le livreur' : ''}</li>`
             : `<li><strong>Livraison partielle n°${resultat.bilan.numero}</strong>${resultat.bilan.reste !== null ? ` : reste ${resultat.bilan.reste} ${resultat.bilan.libelleUnite} à livrer` : ''}</li>`}
         </ul>
         <ul>
-          <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-          <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+          <li><strong>Service demandeur:</strong> ${echapperHtml(nomServiceDemandeur)}</li>
+          <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
         </ul>
         <br>
         <p>Commentaire : ${commentaire_mail}<p>
@@ -1505,21 +1505,21 @@ const returnDemande = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     let quantite = demande.qte_total_demande;
-    let commentaire_mail = commentaire_return ? commentaire_return : '(sans commentaire)';
+    let commentaire_mail = echapperHtml(commentaire_return ? commentaire_return : '(sans commentaire)');
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
     if ((service_users && service_users.length > 0) || demandeur) {
       const subject = `SYSLIS - DEMANDE RETOURNÉE`;
       const html = `
       <p>Bonjour,</p>
-      <p>La demande ${demande.id} pour ${motif} a été retournée.</p>
+      <p>La demande ${demande.id} pour ${echapperHtml(motif)} a été retournée.</p>
       <ul>
-        <li><strong>Type de demande:</strong> ${demandeTypeName}</li>
+        <li><strong>Type de demande:</strong> ${echapperHtml(demandeTypeName)}</li>
         <li><strong>Nombre de produits:</strong> ${quantite}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${serviceDemandeur}</li>
-        <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(serviceDemandeur)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -1656,7 +1656,7 @@ const cancelDemande = async (req, res) => {
     let serviceDemandeur = service.nom_service.toUpperCase();
 
     let quantite = demande.qte_total_demande;
-    let commentaire_mail = commentaire_refus ? commentaire_refus : '(sans commentaire)';
+    let commentaire_mail = echapperHtml(commentaire_refus ? commentaire_refus : '(sans commentaire)');
     const url = GENERAL_URL
     let demandeLink = `${url}/demande-details/${demande.id}`;
     // const demandeLink = `https://livraisons.greenpayci.com/formulaire-recu/${nouvelleLivraison.id_demande}`
@@ -1664,14 +1664,14 @@ const cancelDemande = async (req, res) => {
       const subject = `SYSLIS - DEMANDE REFUSÉE`;
       const html = `
       <p>Bonjour,</p>
-      <p>La demande ${demande.id} pour ${motif} a été refusée.</p>
+      <p>La demande ${demande.id} pour ${echapperHtml(motif)} a été refusée.</p>
       <ul>
-        <li><strong>Type de demande:</strong> ${demandeTypeName}</li>
+        <li><strong>Type de demande:</strong> ${echapperHtml(demandeTypeName)}</li>
         <li><strong>Nombre de produits:</strong> ${quantite}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${serviceDemandeur}</li>
-        <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(serviceDemandeur)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -1897,8 +1897,7 @@ const updateDemande = async (req, res) => {
 
       const quantiteDemande = quantite;
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const demandeLink = `${url}/demande-details/${demande.id}`;
 
@@ -1907,13 +1906,13 @@ const updateDemande = async (req, res) => {
       <p>Bonjour,</p>
       <p>La demande ${demande.id} a été modifiée.</p>
       <ul>
-        <li><strong>Demande de :</strong> ${nomPiece}</li>
-        <li><strong>${details.typeDemande}</strong></li>
+        <li><strong>Demande de :</strong> ${echapperHtml(nomPiece)}</li>
+        <li><strong>${echapperHtml(details.typeDemande)}</strong></li>
         <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${nomService}</li>
-        <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(nomService)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(nomUser)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>
@@ -1949,7 +1948,7 @@ const updateDemande = async (req, res) => {
 
   } catch (error) {
     console.error("Erreur lors de la demande :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -2164,7 +2163,7 @@ const traiterReception = async (req, res, { isReg }) => {
         : null
       const piece = await prisma.items.findUnique({ where: { id_piece: demande.item_id } })
 
-      const commentaire_mail = commentaire ? commentaire : "(Sans commentaire)"
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : "(Sans commentaire)");
       const deliveryLink = `${GENERAL_URL}/demande-details/${demande.id}`;
       const ligneStock = reception.stock
         ? `${LIBELLES_ACTION_RECEPTION[action]} : ${reception.stock.code_stock}`
@@ -2174,10 +2173,10 @@ const traiterReception = async (req, res, { isReg }) => {
       <p>Bonjour,</p>
       <p>La demande de stock ${demande.id} a été réceptionnée.</p>
       <ul>
-        <li><strong>Pièce demandée:</strong> ${piece ? piece.nom_piece : ''}</li>
-        <li><strong>Livraison:</strong> ${contenu ? contenu.quantitePiece + ' pièce(s)' : demande.qte_total_demande} ${typeMouvement ? '- ' + typeMouvement.titre : ''}</li>
-        <li><strong>Service:</strong> ${service ? service.nom_service : ''}</li>
-        <li><strong>Mise en stock:</strong> ${ligneStock}</li>
+        <li><strong>Pièce demandée:</strong> ${echapperHtml(piece ? piece.nom_piece : '')}</li>
+        <li><strong>Livraison:</strong> ${contenu ? contenu.quantitePiece + ' pièce(s)' : demande.qte_total_demande} ${echapperHtml(typeMouvement ? '- ' + typeMouvement.titre : '')}</li>
+        <li><strong>Service:</strong> ${echapperHtml(service ? service.nom_service : '')}</li>
+        <li><strong>Mise en stock:</strong> ${echapperHtml(ligneStock)}</li>
       </ul>
       <br>
         <p>Commentaire : ${commentaire_mail}</p>
@@ -2318,17 +2317,10 @@ const getAllReceptionsPiece = async (req, res) => {
 
     res.status(200).json(receptions);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des receptions", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des receptions" });
   }
 }
 
-// Échappement HTML des textes insérés dans les PDF
-const echapperHtml = (valeur) => String(valeur ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
 
 // Tableau des livraisons d'une demande pour le PDF (une ligne par livraison, avec sa réception)
 const construireTableauLivraisonsPdf = (demande, suivi) => {
@@ -2572,33 +2564,21 @@ const generateDemandePDF = async (req, res) => {
       .replaceAll("{{quantite_livraison}}", e(quantite_livraison))
       .replaceAll("{{stock_initial}}", e(stock_depart ?? ''))
       .replaceAll("{{stock_final}}", e(stock_final ?? ''))
-      .replaceAll("{{signature}}", signature_validation ? e(signature_validation) : '#')
+      .replaceAll("{{signature}}", urlImage(signature_validation))
       .replaceAll("{{date_validation_demande}}", dateOuVide(date_validation))
       .replaceAll("{{nom_livreur}}", e(nom_livreur))
-      .replaceAll("{{signature_livraison}}", signature_livraison && signature_livraison !== 'N/A' ? e(signature_livraison) : '#')
+      .replaceAll("{{signature_livraison}}", urlImage(signature_livraison))
       .replaceAll("{{date_livraison}}", dateOuVide(date_livraison))
       .replaceAll("{{nom_recepteur}}", e(nom_recepteur || ''))
-      .replaceAll("{{signature_reception}}", signature_reception && signature_reception !== 'N/A' ? e(signature_reception) : '#')
+      .replaceAll("{{signature_reception}}", urlImage(signature_reception))
       .replaceAll("{{date_reception}}", dateOuVide(date_reception))
       .replace("{{autre_champs}}", autresChamps ? autresChamps : '')
       .replace("{{autre_champs_livraison}}", '')
       .replace("{{tableau_livraisons}}", tableauLivraisons)
 
     // 🖨️ Génération PDF
-    // Le navigateur est toujours fermé, même si la génération échoue (sinon un process Chrome reste ouvert à chaque erreur)
-    const browser = await puppeteer.launch({ headless: "new", args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    let pdfBuffer
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle0" });
-
-      pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-      });
-    } finally {
-      await browser.close();
-    }
+    // JavaScript désactivé et réseau bloqué pendant la génération (voir utils/securiteHtml.js)
+    const pdfBuffer = await genererPdf(html);
 
     res.set({
       "Content-Type": "application/pdf",
@@ -2646,7 +2626,7 @@ const getAllDemandeFiles = async (req, res) => {
   } catch (error) {
     console.log("Erreur serveur: ", error)
     console.error("Erreur :", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des fichiers", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des fichiers" });
   }
 }
 
@@ -2702,7 +2682,7 @@ const getDemandesEnAttente = async (req, res) => {
     res.status(200).json(demandes);
   } catch (error) {
     console.log("Erreur serveur: ", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des demandes en attente", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des demandes en attente" });
   }
 };
 
@@ -2725,7 +2705,7 @@ const getDemandesValideesNonLivrees = async (req, res) => {
     res.status(200).json(demandes);
   } catch (error) {
     console.log("Erreur serveur: ", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des demandes validées non livrées", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des demandes validées non livrées" });
   }
 };
 
@@ -2877,8 +2857,7 @@ const regularisationDemande = async (req, res) => {
 
       const quantiteDemande = quantite;
 
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
-
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const demandeLink = `${url}/demande-details/${newRegularisation.nouvelleDemande.id}`;
 
@@ -2887,13 +2866,13 @@ const regularisationDemande = async (req, res) => {
         <p>Bonjour,</p>
         <p>Une nouvelle demande a été enregistrée.</p>
         <ul>
-          <li><strong>Demande de :</strong> ${nomPiece}</li>
-          <li><strong>${details.typeDemande}</strong></li>
+          <li><strong>Demande de :</strong> ${echapperHtml(nomPiece)}</li>
+          <li><strong>${echapperHtml(details.typeDemande)}</strong></li>
           <li><strong>Nombre de produits:</strong> ${quantiteDemande}</li>
         </ul>
         <ul>
-          <li><strong>Service demandeur:</strong> ${nomService}</li>
-          <li><strong>Nom demandeur:</strong> ${nomUser}</li>
+          <li><strong>Service demandeur:</strong> ${echapperHtml(nomService)}</li>
+          <li><strong>Nom demandeur:</strong> ${echapperHtml(nomUser)}</li>
         </ul>
         <br>
         <p>Commentaire : ${commentaire_mail}<p>
@@ -2930,7 +2909,7 @@ const regularisationDemande = async (req, res) => {
   } catch (error) {
     console.log("Erreur serveur: ", error)
     console.error("Erreur lors de la demande :", error);
-    res.status(500).json({ message: "Erreur interne", error });
+    res.status(500).json({ message: "Erreur interne" });
   }
 };
 
@@ -3066,7 +3045,7 @@ const regValidateDemande = async (req, res) => {
       const nomServiceDemandeur = service.nom_service.toUpperCase();
 
       const quantite = quantiteValidee;
-      const commentaire_mail = commentaire ? commentaire : '(sans commentaire)';
+      const commentaire_mail = echapperHtml(commentaire ? commentaire : '(sans commentaire)');
       const url = GENERAL_URL
       const demandeLink = `${url}/demande-details/${demande.id}`;
       const subject = `SYSLIS - REGULARISATION VALIDATION DEMANDE DE ${nomPiece}`;
@@ -3074,12 +3053,12 @@ const regValidateDemande = async (req, res) => {
       <p>Bonjour,</p>
       <p>La régularisation de la validation de la demande ${demande.id} a été éffectuée.</p>
       <ul>
-        <li><strong>Motif :</strong> ${motif}</li>
+        <li><strong>Motif :</strong> ${echapperHtml(motif)}</li>
         <li><strong>Quantité validée :</strong> ${quantite}</li>
       </ul>
       <ul>
-        <li><strong>Service demandeur:</strong> ${nomServiceDemandeur}</li>
-        <li><strong>Nom demandeur:</strong> ${demande.nom_demandeur}</li>
+        <li><strong>Service demandeur:</strong> ${echapperHtml(nomServiceDemandeur)}</li>
+        <li><strong>Nom demandeur:</strong> ${echapperHtml(demande.nom_demandeur)}</li>
       </ul>
       <br>
       <p>Commentaire : ${commentaire_mail}<p>

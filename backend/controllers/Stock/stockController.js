@@ -142,7 +142,7 @@ const getAllItems = async (req, res) => {
 
     res.status(200).json(items);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération du stock", error });
+    res.status(500).json({ message: "Erreur lors de la récupération du stock" });
   }
 }
 
@@ -398,7 +398,7 @@ const getAllStocks = async (req, res) => {
 
     res.status(200).json(stocks);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des stocks", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des stocks" });
   }
 }
 
@@ -423,7 +423,7 @@ const getOneStock = async (req, res) => {
 
     return res.status(200).json(stock)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -443,7 +443,7 @@ const getPiece = async (req, res) => {
 
     return res.status(200).json(piece)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -521,7 +521,7 @@ const getAllModels = async (req, res) => {
 
     res.status(200).json(models);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des models", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des models" });
   }
 }
 
@@ -538,7 +538,7 @@ const getItemModels = async (req, res) => {
       model_piece: items_models.map(m => m.model_piece)
     });
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -555,7 +555,7 @@ const getItemServices = async (req, res) => {
       services: items_services.map(s => s.services)
     });
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 }
 
@@ -618,7 +618,9 @@ const setStockSn = async (req, res) => {
        1️⃣ LOAD EXCEL
     ========================== */
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(file.buffer);
+    // multer enregistre le fichier sur le disque (pas de file.buffer)
+    if (file.buffer) await workbook.xlsx.load(file.buffer);
+    else await workbook.xlsx.readFile(file.path);
     const worksheet = workbook.worksheets[0];
 
     if (!worksheet) {
@@ -998,7 +1000,7 @@ const getAllMouvementStock = async (req, res) => {
     res.status(200).json(mouvement);
   } catch (error) {
     console.log("Error : ", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des entrées sorties", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des entrées sorties" });
   }
 }
 
@@ -1017,7 +1019,7 @@ const getOneMouvement = async (req, res) => {
 
     return res.status(200).json(mouvement)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1053,7 +1055,7 @@ const getOneStockMouvements = async (req, res) => {
 
     return res.status(200).json(mouvements)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1078,7 +1080,7 @@ const getLotPiece = async (req, res) => {
 
     return res.status(200).json(lot)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1098,7 +1100,7 @@ const getCartonLot = async (req, res) => {
 
     return res.status(200).json(carton)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1124,7 +1126,7 @@ const getCartonPiece = async (req, res) => {
 
     return res.status(200).json(cartons)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1138,7 +1140,7 @@ const getAllTypeMouvementStock = async (req, res) => {
     res.status(200).json(types);
   } catch (error) {
     console.log("Error : ", error)
-    res.status(500).json({ message: "Erreur lors de la récupération des types de mouvement stock", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des types de mouvement stock" });
   }
 }
 
@@ -1150,7 +1152,7 @@ const getAllItemModels = async (req, res) => {
 
     res.status(200).json(models);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des modèles pièces ", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des modèles pièces " });
   }
 }
 
@@ -1162,7 +1164,7 @@ const getAllItemServices = async (req, res) => {
 
     res.status(200).json(services);
   } catch (error) {
-    res.status(500).json({ message: "Erreur lors de la récupération des services pièces ", error });
+    res.status(500).json({ message: "Erreur lors de la récupération des services pièces " });
   }
 }
 
@@ -1185,7 +1187,7 @@ const getCartonStock = async (req, res) => {
 
     return res.status(200).json(cartons)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1208,7 +1210,7 @@ const getLotStock = async (req, res) => {
 
     return res.status(200).json(lot)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1233,7 +1235,7 @@ const getStockParPiece = async (req, res) => {
 
     return res.status(200).json(stock)
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error })
+    res.status(500).json({ message: "Erreur serveur" })
     console.log(error)
   }
 }
@@ -1505,7 +1507,7 @@ const createMouvementStock = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la création du mouvement de stock", error });
+    return res.status(500).json({ message: "Erreur lors de la création du mouvement de stock" });
   }
 }
 
@@ -1630,7 +1632,7 @@ const getAllStockSubOwners = async (req, res) => {
     return res.status(200).json(subOwners);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Erreur lors de la récupération des sous-propriétaires du stock", error });
+    return res.status(500).json({ message: "Erreur lors de la récupération des sous-propriétaires du stock" });
   }
 }
 

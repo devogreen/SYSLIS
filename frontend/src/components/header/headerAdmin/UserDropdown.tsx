@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { DropdownItem } from "../../ui/dropdown/DropdownItem";
 import { Dropdown } from "../../ui/dropdown/Dropdown";
-import { useNavigate } from "react-router";
+// @ts-ignore
+import { logout } from "../../../backend/services/authService";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -17,14 +18,16 @@ export default function UserDropdown() {
     setIsOpen(false);
   }
 
-  const navigate = useNavigate()
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    // Ferme la session côté serveur (le token ne sera plus accepté), puis nettoie le navigateur
+    await logout();
+    localStorage.removeItem('token'); // ancien stockage, au cas où
     localStorage.removeItem('username');
     localStorage.removeItem('id');
     localStorage.removeItem('email');
-    navigate('/signin');
+    // Rechargement complet : l'état de session de l'application (AuthContext) repart de zéro
+    window.location.assign('/signin');
   };
   return (
     <div className="relative">

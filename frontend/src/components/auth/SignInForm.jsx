@@ -34,18 +34,19 @@ export default function SignInForm() {
       const response = await login(email, password);
       console.log('API Response:', response);
       const connectMessage = response.message;
-      localStorage.setItem('token', response.token);
+      // La session est un cookie HttpOnly posé par l'API : aucun token n'est stocké dans le navigateur
       localStorage.setItem('id', response.user.id_user);
       localStorage.setItem('email', response.user.email);
       localStorage.setItem('username', response.user.username)
       const user_id = localStorage.getItem('id');
       console.log(connectMessage)
       console.log("USER ID CONNECTED : ", user_id)
-      refreshUser();
+      await refreshUser();
       navigate(from, { replace: true });
     } catch (error) {
       console.log('error')
-      setError('Utilisateur ou mot de passe incorrects');
+      // Trop de tentatives : le serveur indique le délai d'attente
+      setError(/^Trop de/.test(error?.message || '') ? error.message : 'Utilisateur ou mot de passe incorrects');
     }
     finally{
       setLoading(false)
@@ -181,12 +182,12 @@ export default function SignInForm() {
                       Keep me logged in
                     </span>
                   </div> */}
-                  {/* <Link
-                    to="/reset-password"
+                  <Link
+                    to="/mot-de-passe-oublie"
                     className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
                   >
-                    Forgot password?
-                  </Link> */}
+                    Mot de passe oublié ?
+                  </Link>
                 </div>
                 <div>
                   {loading? 

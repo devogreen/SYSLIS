@@ -1,6 +1,8 @@
+const securiserUpload = require("./securiserUpload");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { IMAGES, DOCUMENTS, filtrerParChamp, nomAleatoire } = require("./filtresUpload");
 const TEST_ENV = require("../utils/consts")
 
 const localUrl = "uploads"
@@ -29,68 +31,21 @@ const storage = multer.diskStorage({
     cb(null, dir);
   },
 
-  filename: (req, file, cb) => {
-    const uniqueName =
-      Date.now() +
-      "-" +
-      Math.round(Math.random() * 1e9) +
-      path.extname(file.originalname);
-
-    cb(null, uniqueName);
-  }
+  filename: nomAleatoire
 });
 
-const fileFilterUpload = (req, file, cb) => {
-
-  const allowedDocs = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-outlook",   // .msg
-    "message/rfc822"                // .eml
-  ];
-
-  if (file.fieldname === "signature") {
-    if (file.mimetype.startsWith("image/")) {
-      cb(null, true);
-    } else {
-      cb(new Error("Signature must be an image"));
-    }
-
-  } else if (file.fieldname === "files" || file.fieldname == "qrCodes") {
-
-    const ext = path.extname(file.originalname).toLowerCase();
-
-    const allowedExtensions = [
-      ".pdf", ".doc", ".docx",
-      ".xls", ".xlsx",
-      ".jpg", ".jpeg", ".png",
-      ".eml", ".msg"
-    ];
-
-    if (
-      file.mimetype.startsWith("image/") ||
-      allowedDocs.includes(file.mimetype) ||
-      allowedExtensions.includes(ext)
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error("Unsupported file type"));
-    }
-
-  } else {
-    cb(null, false);
-  }
-};
-
+const MESSAGE_DOCUMENTS = "Type de fichier non autorisé (PDF, Word, Excel, CSV, image PNG/JPG/WEBP, mail .eml/.msg)."
 const uploadAll = multer({
   storage,
-  fileFilterUpload,
+  // Le filtre s'appelle obligatoirement "fileFilter" pour que multer l'applique
+  fileFilter: filtrerParChamp({
+    signature: { types: IMAGES, message: "La signature doit être une image PNG, JPG ou WEBP." },
+    files: { types: DOCUMENTS, message: MESSAGE_DOCUMENTS },
+    qrCodes: { types: DOCUMENTS, message: MESSAGE_DOCUMENTS },
+  }),
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
+    fileSize: 10 * 1024 * 1024, // 10MB
   }
 });
 
-module.exports = uploadAll
+module.exports = securiserUpload(uploadAll);

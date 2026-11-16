@@ -1,5 +1,7 @@
+const securiserUpload = require("./securiserUpload");
 const multer = require('multer');
 const path = require('path');
+const { IMAGES, ErreurUpload, estAutorise, nomAleatoire } = require('./filtresUpload');
 
 const TEST_ENV = require("../utils/consts")
 
@@ -15,21 +17,18 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, `${baseUrl}/`); // Dossier temporaire
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+  filename: nomAleatoire
 });
 
-// Filtre sur les types de fichiers acceptés (optionnel)
+// Images uniquement (signatures) : PNG, JPG ou WEBP, extension et type MIME vérifiés
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
+  if (estAutorise(file, IMAGES)) {
     cb(null, true);
   } else {
-    cb(new Error('Fichier non supporté. Merci de fournir une image.'));
+    cb(new ErreurUpload('Fichier non supporté. Merci de fournir une image PNG, JPG ou WEBP.'));
   }
 };
 
-const upload = multer({ storage, fileFilter });
+const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024, files: 5 } });
 
-module.exports = upload;
+module.exports = securiserUpload(upload);
